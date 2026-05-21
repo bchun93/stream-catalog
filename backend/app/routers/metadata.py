@@ -2,9 +2,19 @@ from fastapi import APIRouter, Query
 
 from app.models.title import TitleType
 from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
-from app.services.tmdb_service import fetch_metadata, parse_external_id, search_metadata
+from app.services.tmdb_service import (
+    check_tmdb_connectivity,
+    fetch_metadata,
+    parse_external_id,
+    search_metadata,
+)
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
+
+
+@router.get("/health")
+async def metadata_health():
+    return await check_tmdb_connectivity()
 
 
 @router.get("/search", response_model=list[MetadataSearchResult])

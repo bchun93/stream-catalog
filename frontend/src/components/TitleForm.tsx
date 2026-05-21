@@ -121,10 +121,7 @@ export function TitleForm({
     <form onSubmit={handleSubmit}>
       {error && <div className="error-banner">{error}</div>}
       {isCreate && (
-        <MetadataLookup
-          titleType={form.title_type as TitleType}
-          onApply={applyMetadata}
-        />
+        <MetadataLookup onApply={applyMetadata} />
       )}
       {metadataApplied && (
         <div className="metadata-applied-banner">

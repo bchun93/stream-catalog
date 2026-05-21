@@ -13,25 +13,22 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = Field(default_factory=_default_sqlite_url)
-    cors_origins: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    cors_origins_raw: str = Field(
+        default="http://localhost:5173,http://127.0.0.1:5173",
+        validation_alias="CORS_ORIGINS",
+    )
     api_prefix: str = "/api/v1"
     seed_on_startup: bool = False
     port: int = 8000
     tmdb_api_key: str | None = None
     tmdb_base_url: str = "https://api.themoviedb.org/3"
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors(cls, value):
-        if isinstance(value, str):
-            value = value.strip()
-            if value.startswith("["):
-                return json.loads(value)
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    @property
+    def cors_origins(self) -> list[str]:
+        raw = self.cors_origins_raw.strip()
+        if raw.startswith("["):
+            return json.loads(raw)
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 settings = Settings()

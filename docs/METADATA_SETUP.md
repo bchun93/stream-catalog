@@ -125,11 +125,40 @@ Redeploy App Runner after adding `TMDB_API_KEY`.
 
 ---
 
+## Errno 8 / "nodename nor servname provided, or not known"
+
+This means the **API process cannot resolve** `api.themoviedb.org` (DNS/network).
+
+**Fix:** Start the API from **macOS Terminal.app** (not Cursor's terminal):
+
+```bash
+cd /Users/brianchun/stream-catalog
+chmod +x scripts/start-backend.sh
+PORT=8003 ./scripts/start-backend.sh
+```
+
+Then test:
+
+```bash
+curl http://127.0.0.1:8003/api/v1/metadata/health
+```
+
+You want `{"ok":true,...}`. If `ok` is false, check Wi‑Fi, VPN, or try another network.
+
+The frontend proxies to port **8003** (`vite.config.ts`). Restart Vite after changes:
+
+```bash
+cd frontend && npm run dev
+```
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|--------|-----|
-| **Not Found** | Old API process or API not running | Restart uvicorn (Step 4); check port 8000 |
+| **Errno 8 / nodename nor servname** | API started in Cursor sandbox or DNS blocked | Run `./scripts/start-backend.sh` in **Terminal.app** |
+| **Not Found** | Old API process or API not running | Restart uvicorn; check port 8003 |
 | **TMDB API key not configured** | Missing `TMDB_API_KEY` in `.env` | Step 2 + restart |
 | **Invalid TMDB API key** | Wrong key pasted | Copy v3 key again from TMDB settings |
 | **No matches found** | Typo or type filter | Try `movie` type; search `Gladiator` |

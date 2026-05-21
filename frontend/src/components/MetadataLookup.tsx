@@ -1,21 +1,17 @@
 import { useState } from "react";
 import { metadataApi } from "../api/client";
-import type { MetadataSearchResult, TitleMetadataImport, TitleType } from "../types";
+import type { MetadataSearchResult, TitleMetadataImport } from "../types";
 
 interface MetadataLookupProps {
-  titleType: TitleType;
   onApply: (metadata: TitleMetadataImport) => void;
 }
 
-export function MetadataLookup({ titleType, onApply }: MetadataLookupProps) {
+export function MetadataLookup({ onApply }: MetadataLookupProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MetadataSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const searchType =
-    titleType === "movie" ? "movie" : titleType === "series" ? "series" : undefined;
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -23,7 +19,8 @@ export function MetadataLookup({ titleType, onApply }: MetadataLookupProps) {
     setError(null);
     setResults([]);
     try {
-      const data = await metadataApi.search(query.trim(), searchType);
+      // Always search movies + TV; many titles (e.g. House of David) are series.
+      const data = await metadataApi.search(query.trim());
       setResults(data);
       if (data.length === 0) {
         setError("No matches found. Try a different title or type.");
