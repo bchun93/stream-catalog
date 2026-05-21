@@ -1,4 +1,5 @@
 import type {
+  ArtworkItem,
   MediaAsset,
   MetadataSearchResult,
   Title,
@@ -67,6 +68,10 @@ export const metadataApi = {
   import: (externalId: string) =>
     request<TitleMetadataImport>(
       `/metadata/import/${encodeURIComponent(externalId)}`
+    ),
+  importArtwork: (externalId: string) =>
+    request<ArtworkItem[]>(
+      `/metadata/import/${encodeURIComponent(externalId)}/artwork`
     ),
 };
 

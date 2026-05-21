@@ -98,11 +98,12 @@ def _resolution(item: dict) -> str | None:
     return None
 
 
-def _artwork_filename(asset_type: AssetType, file_path: str, **parts: str) -> str:
-    base = file_path.strip("/").replace("/", "_")
+def _artwork_filename(asset_type: AssetType, file_path: str, *parts: str) -> str:
+    base = (file_path or "image").strip("/").replace("/", "_")
     suffix = "_".join(p for p in parts if p)
     name = asset_type.value
-    return f"{name}_{suffix}_{base}" if suffix else f"{name}_{base}"
+    raw = f"{name}_{suffix}_{base}" if suffix else f"{name}_{base}"
+    return raw[:255]
 
 
 def _sorted_images(images: list[dict]) -> list[dict]:
@@ -200,9 +201,11 @@ async def search_metadata(
         path = "/search/movie" if media_type == "movie" else "/search/tv"
         data = await _get(path, query=query.strip())
         for item in data.get("results", [])[:8]:
+            tmdb_id = item.get("id")
+            if tmdb_id is None:
+                continue
             date_field = item.get("release_date") or item.get("first_air_date")
             year = _parse_year(date_field)
-            tmdb_id = item["id"]
             results.append(
                 MetadataSearchResult(
                     external_id=f"tmdb:{media_type}:{tmdb_id}",
@@ -384,7 +387,6 @@ async def fetch_metadata(
             release_date_value = date_str
 
     external_id = f"tmdb:{media_type}:{tmdb_id}"
-    artwork = await collect_artwork_from_tmdb(media_type, tmdb_id)
 
     return TitleMetadataImport(
         external_id=external_id,
@@ -404,7 +406,7 @@ async def fetch_metadata(
         cast=_format_cast(credits),
         crew=_format_crew(credits),
         poster_url=_poster(data.get("poster_path")),
-        artwork=artwork,
+        artwork=[],
     )
 
 

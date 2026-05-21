@@ -2,8 +2,10 @@ from fastapi import APIRouter, Query
 
 from app.models.title import TitleType
 from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
+from app.schemas.artwork import ArtworkItem
 from app.services.tmdb_service import (
     check_tmdb_connectivity,
+    collect_artwork_from_tmdb,
     fetch_metadata,
     parse_external_id,
     search_metadata,
@@ -31,3 +33,9 @@ async def metadata_search(
 async def metadata_import(external_id: str):
     media_type, tmdb_id = parse_external_id(external_id)
     return await fetch_metadata(media_type, tmdb_id)
+
+
+@router.get("/import/{external_id:path}/artwork", response_model=list[ArtworkItem])
+async def metadata_import_artwork(external_id: str):
+    media_type, tmdb_id = parse_external_id(external_id)
+    return await collect_artwork_from_tmdb(media_type, tmdb_id)

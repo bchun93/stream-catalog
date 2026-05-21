@@ -36,8 +36,19 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
     setImporting(item.external_id);
     setError(null);
     try {
-      const full = await metadataApi.import(item.external_id);
-      onApply(full);
+      const meta = await metadataApi.import(item.external_id);
+      let artwork = meta.artwork ?? [];
+      try {
+        artwork = await metadataApi.importArtwork(item.external_id);
+      } catch {
+        setError(
+          "Metadata imported, but artwork failed to load. Save the title and use Refresh from TMDB on the Artwork tab."
+        );
+      }
+      onApply({ ...meta, artwork });
+      if (artwork.length > 0) {
+        setError(null);
+      }
       setResults([]);
       setQuery("");
     } catch (err) {
