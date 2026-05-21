@@ -19,7 +19,6 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
     setError(null);
     setResults([]);
     try {
-      // Always search movies + TV; many titles (e.g. House of David) are series.
       const data = await metadataApi.search(query.trim());
       setResults(data);
       if (data.length === 0) {
@@ -37,18 +36,7 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
     setError(null);
     try {
       const meta = await metadataApi.import(item.external_id);
-      let artwork = meta.artwork ?? [];
-      try {
-        artwork = await metadataApi.importArtwork(item.external_id);
-      } catch {
-        setError(
-          "Metadata imported, but artwork failed to load. Save the title and use Refresh from TMDB on the Artwork tab."
-        );
-      }
-      onApply({ ...meta, artwork });
-      if (artwork.length > 0) {
-        setError(null);
-      }
+      onApply({ ...meta, artwork: [] });
       setResults([]);
       setQuery("");
     } catch (err) {
@@ -62,7 +50,9 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
     <div className="metadata-lookup">
       <div className="metadata-lookup-header">
         <strong>Import metadata</strong>
-        <span className="metadata-hint">Powered by TMDB — genre, cast, synopsis, and more</span>
+        <span className="metadata-hint">
+          Powered by TMDB — descriptive fields only; fetch artwork on the Artwork tab
+        </span>
       </div>
       <div className="metadata-search-row">
         <input

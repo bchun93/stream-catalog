@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArtworkTab } from "./ArtworkTab";
 import { MetadataLookup } from "./MetadataLookup";
 import type {
-  ArtworkItem,
   Title,
   TitleMetadataImport,
   TitleStatus,
@@ -65,8 +64,16 @@ export function TitleForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [metadataApplied, setMetadataApplied] = useState(false);
-  const [artworkPreview, setArtworkPreview] = useState<ArtworkItem[]>([]);
   const [savedTitleId, setSavedTitleId] = useState<number | undefined>(titleId);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    setSavedTitleId(titleId);
+  }, [titleId]);
 
   const set = (key: string, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -91,18 +98,25 @@ export function TitleForm({
       external_id: meta.external_id,
       metadata_source: meta.source,
     }));
-    setArtworkPreview(meta.artwork ?? []);
     setMetadataApplied(true);
     setError(null);
-    if ((meta.artwork?.length ?? 0) > 0) {
-      setTab("artwork");
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.name.trim()) {
+      setError("Name is required — switch to the Details tab to fill it in.");
+      setTab("details");
+      return;
+    }
+    if (!form.slug.trim()) {
+      setError("Slug is required — switch to the Details tab to fill it in.");
+      setTab("details");
+      return;
+    }
     setSaving(true);
     setError(null);
+    setSuccess(null);
     try {
       const payload: Partial<Title> = {
         slug: form.slug,
@@ -131,8 +145,9 @@ export function TitleForm({
       const result = await onSubmit(payload);
       if (result && "id" in result) {
         setSavedTitleId(result.id);
-        setArtworkPreview([]);
-        setTab("artwork");
+        setSuccess("Title saved. Use Fetch artwork on the Artwork tab when ready.");
+      } else {
+        setSuccess("Title saved.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -142,11 +157,11 @@ export function TitleForm({
   };
 
   const activeTitleId = savedTitleId ?? titleId;
-  const showArtworkPreview = isCreate && !activeTitleId && artworkPreview.length > 0;
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} noValidate>
       {error && <div className="error-banner">{error}</div>}
+      {success && !error && <div className="metadata-applied-banner">{success}</div>}
 
       <div className="title-tabs">
         <button
@@ -162,11 +177,6 @@ export function TitleForm({
           onClick={() => setTab("artwork")}
         >
           Artwork
-          {(showArtworkPreview || activeTitleId) && (
-            <span className="title-tab-badge">
-              {showArtworkPreview ? artworkPreview.length : " "}
-            </span>
-          )}
         </button>
       </div>
 
@@ -176,8 +186,7 @@ export function TitleForm({
           {metadataApplied && (
             <div className="metadata-applied-banner">
               Metadata imported — review fields below, add licensor if needed, then save.
-              {(artworkPreview.length > 0 || activeTitleId) &&
-                " Artwork is on the Artwork tab."}
+              Fetch artwork separately on the Artwork tab.
             </div>
           )}
           <div className="form-grid">
@@ -319,10 +328,9 @@ export function TitleForm({
 
       {tab === "artwork" && (
         <ArtworkTab
+          key={activeTitleId ?? form.external_id ?? "new"}
           titleId={activeTitleId}
           externalId={form.external_id}
-          preview={artworkPreview}
-          isPreview={showArtworkPreview}
         />
       )}
 
@@ -331,7 +339,7 @@ export function TitleForm({
           Cancel
         </button>
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? "Saving…" : activeTitleId && isCreate ? "Saved" : "Save"}
+          {saving ? "Saving…" : "Save title"}
         </button>
       </div>
     </form>

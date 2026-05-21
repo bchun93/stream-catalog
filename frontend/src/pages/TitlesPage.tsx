@@ -156,7 +156,6 @@ export function TitlesPage() {
                 const created = await titlesApi.create(data);
                 setEditing(created);
                 setModal("edit");
-                setFormTab("artwork");
                 load();
                 return created;
               }

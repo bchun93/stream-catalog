@@ -46,14 +46,11 @@ def get_title(title_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=TitleRead, status_code=201)
-async def create_title(payload: TitleCreate, db: Session = Depends(get_db)):
+def create_title(payload: TitleCreate, db: Session = Depends(get_db)):
     existing = db.query(Title).filter(Title.slug == payload.slug).first()
     if existing:
         raise HTTPException(status_code=409, detail="Slug already exists")
-    title = title_service.create_title(db, payload)
-    if title.external_id and title.external_id.startswith("tmdb:"):
-        await sync_artwork_for_title(db, title)
-    return title
+    return title_service.create_title(db, payload)
 
 
 @router.post("/{title_id}/artwork/sync", response_model=list[MediaAssetRead])

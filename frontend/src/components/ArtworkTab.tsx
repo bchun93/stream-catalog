@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { assetsApi, titlesApi } from "../api/client";
+import { assetsApi, metadataApi, titlesApi } from "../api/client";
 import {
   ARTWORK_LABELS,
   ARTWORK_TYPES,
@@ -11,8 +11,6 @@ import {
 interface ArtworkTabProps {
   titleId?: number;
   externalId?: string | null;
-  preview?: ArtworkItem[];
-  isPreview?: boolean;
 }
 
 function isArtworkAsset(a: MediaAsset): a is MediaAsset & { asset_type: ArtworkType } {
@@ -34,44 +32,70 @@ function previewLabel(item: ArtworkItem | MediaAsset): string {
   return item.filename;
 }
 
-export function ArtworkTab({
-  titleId,
-  externalId,
-  preview = [],
-  isPreview = false,
-}: ArtworkTabProps) {
+export function ArtworkTab({ titleId, externalId }: ArtworkTabProps) {
   const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [preview, setPreview] = useState<ArtworkItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetched, setFetched] = useState(false);
 
-  const load = useCallback(() => {
+  const canFetch = Boolean(externalId?.startsWith("tmdb:"));
+
+  const loadSaved = useCallback(() => {
     if (!titleId) return;
     setLoading(true);
     setError(null);
     assetsApi
       .list({ title_id: String(titleId) })
-      .then((list) => setAssets(list.filter(isArtworkAsset)))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load artwork"))
+      .then((list) => {
+        const artwork = list.filter(isArtworkAsset);
+        setAssets(artwork);
+        if (artwork.length > 0) {
+          setFetched(true);
+          setPreview([]);
+        }
+      })
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Failed to load artwork")
+      )
       .finally(() => setLoading(false));
   }, [titleId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadSaved();
+  }, [loadSaved]);
+
+  const handleFetch = async () => {
+    if (!canFetch || !externalId) {
+      setError("Import TMDB metadata on the Details tab first.");
+      return;
+    }
+    setFetching(true);
+    setError(null);
+    try {
+      if (titleId) {
+        const synced = await titlesApi.syncArtwork(titleId);
+        setAssets(synced.filter(isArtworkAsset));
+        setPreview([]);
+        setFetched(true);
+      } else {
+        const items = await metadataApi.importArtwork(externalId);
+        setPreview(items);
+        setAssets([]);
+        setFetched(true);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to fetch artwork");
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const grouped = useMemo(() => {
-    const source = titleId
+    const source: (ArtworkItem | MediaAsset)[] = titleId && assets.length > 0
       ? assets
-      : preview.map((p) => ({
-          ...p,
-          id: 0,
-          title_id: 0,
-          status: "ready" as const,
-          version: 1,
-          created_at: "",
-          updated_at: "",
-        }));
+      : preview;
     const map = new Map<ArtworkType, (ArtworkItem | MediaAsset)[]>();
     for (const type of ARTWORK_TYPES) {
       map.set(type, []);
@@ -85,58 +109,49 @@ export function ArtworkTab({
     return map;
   }, [assets, preview, titleId]);
 
-  const totalCount = titleId
-    ? assets.length
-    : preview.length;
+  const totalCount =
+    titleId && assets.length > 0 ? assets.length : preview.length;
 
-  const handleSync = async () => {
-    if (!titleId) return;
-    setSyncing(true);
-    setError(null);
-    try {
-      await titlesApi.syncArtwork(titleId);
-      load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Sync failed");
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const canSync =
-    Boolean(titleId) &&
-    Boolean(externalId?.startsWith("tmdb:"));
-
-  if (!titleId && preview.length === 0) {
-    return (
-      <div className="artwork-empty">
-        <p>Import metadata from TMDB on the Details tab to load artwork previews.</p>
-      </div>
-    );
-  }
+  const isPreviewOnly = !titleId && preview.length > 0;
 
   return (
     <div className="artwork-tab">
       <div className="artwork-toolbar">
         <p className="artwork-summary">
-          {isPreview
-            ? `${preview.length} images from TMDB — saved when you create the title`
-            : `${totalCount} artwork assets`}
+          {!fetched && !loading
+            ? "Artwork is loaded on demand from TMDB."
+            : isPreviewOnly
+              ? `${preview.length} images loaded — save the title, then Fetch artwork again to store them`
+              : `${totalCount} artwork assets`}
         </p>
-        {canSync && (
+        {canFetch && (
           <button
             type="button"
-            className="btn btn-ghost"
-            disabled={syncing || loading}
-            onClick={handleSync}
+            className="btn btn-primary"
+            disabled={fetching || loading}
+            onClick={handleFetch}
           >
-            {syncing ? "Syncing…" : "Refresh from TMDB"}
+            {fetching ? "Fetching…" : "Fetch artwork"}
           </button>
         )}
       </div>
       {error && <div className="error-banner">{error}</div>}
-      {loading && <p className="empty">Loading artwork…</p>}
+      {loading && <p className="empty">Loading saved artwork…</p>}
+      {!loading && !canFetch && (
+        <div className="artwork-empty">
+          <p>Import metadata from TMDB on the Details tab, then return here to fetch artwork.</p>
+        </div>
+      )}
       {!loading &&
+        canFetch &&
+        !fetched &&
+        !fetching && (
+          <div className="artwork-empty">
+            <p>Click Fetch artwork to load posters, backdrops, logos, and more from TMDB.</p>
+          </div>
+        )}
+      {!loading &&
+        fetched &&
         ARTWORK_TYPES.map((type) => {
           const items = grouped.get(type) ?? [];
           if (items.length === 0) return null;
@@ -164,8 +179,8 @@ export function ArtworkTab({
             </section>
           );
         })}
-      {!loading && totalCount === 0 && (
-        <p className="empty">No artwork for this title yet.</p>
+      {!loading && fetched && totalCount === 0 && (
+        <p className="empty">No artwork found for this title on TMDB.</p>
       )}
     </div>
   );

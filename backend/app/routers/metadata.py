@@ -29,13 +29,22 @@ async def metadata_search(
     return await search_metadata(q, title_type)
 
 
-@router.get("/import/{external_id:path}", response_model=TitleMetadataImport)
-async def metadata_import(external_id: str):
+@router.get("/artwork", response_model=list[ArtworkItem])
+async def metadata_artwork(
+    external_id: str = Query(..., description="TMDB id, e.g. tmdb:movie:550"),
+):
     media_type, tmdb_id = parse_external_id(external_id)
-    return await fetch_metadata(media_type, tmdb_id)
+    return await collect_artwork_from_tmdb(media_type, tmdb_id)
 
 
+# Artwork path must be registered before the greedy /import/{external_id:path} route.
 @router.get("/import/{external_id:path}/artwork", response_model=list[ArtworkItem])
 async def metadata_import_artwork(external_id: str):
     media_type, tmdb_id = parse_external_id(external_id)
     return await collect_artwork_from_tmdb(media_type, tmdb_id)
+
+
+@router.get("/import/{external_id:path}", response_model=TitleMetadataImport)
+async def metadata_import(external_id: str):
+    media_type, tmdb_id = parse_external_id(external_id)
+    return await fetch_metadata(media_type, tmdb_id)

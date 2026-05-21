@@ -411,10 +411,17 @@ async def fetch_metadata(
 
 
 def parse_external_id(external_id: str) -> tuple[str, int]:
-    parts = external_id.split(":")
+    from urllib.parse import unquote
+
+    normalized = unquote(external_id).strip().rstrip("/")
+    if normalized.endswith("/artwork"):
+        normalized = normalized[: -len("/artwork")]
+    parts = normalized.split(":")
     if len(parts) != 3 or parts[0] != "tmdb":
         raise HTTPException(status_code=400, detail="Invalid external_id format")
     media_type, raw_id = parts[1], parts[2]
+    if media_type not in ("movie", "tv"):
+        raise HTTPException(status_code=400, detail="media_type must be movie or tv")
     try:
         return media_type, int(raw_id)
     except ValueError as exc:

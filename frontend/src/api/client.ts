@@ -69,10 +69,10 @@ export const metadataApi = {
     request<TitleMetadataImport>(
       `/metadata/import/${encodeURIComponent(externalId)}`
     ),
-  importArtwork: (externalId: string) =>
-    request<ArtworkItem[]>(
-      `/metadata/import/${encodeURIComponent(externalId)}/artwork`
-    ),
+  importArtwork: (externalId: string) => {
+    const params = new URLSearchParams({ external_id: externalId });
+    return request<ArtworkItem[]>(`/metadata/artwork?${params}`);
+  },
 };
 
 export const assetsApi = {
