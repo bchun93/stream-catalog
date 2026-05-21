@@ -11,7 +11,7 @@ AWS **App Runner** is in [maintenance mode](https://docs.aws.amazon.com/apprunne
 ```
 GitHub repo
     ├── Amplify     →  https://main.xxxxx.amplifyapp.com
-    └── Render      →  https://stream-catalog-api.onrender.com
+    └── Render      →  https://stream-catalog.onrender.com (your dashboard URL)
               │
               └── Neon PostgreSQL
 ```
@@ -44,11 +44,11 @@ Uses `render.yaml` in the repo root.
 4. When prompted, set secrets:
    - `DATABASE_URL` — Neon URL
    - `TMDB_API_KEY` — [TMDB v3 key](https://www.themoviedb.org/settings/api)
-5. Deploy. Copy the service URL, e.g. `https://stream-catalog-api.onrender.com`.
+5. Deploy. Copy the service URL from the Render dashboard (e.g. `https://stream-catalog.onrender.com`).
 6. Verify:
 
 ```bash
-./scripts/verify-cloud.sh https://stream-catalog-api.onrender.com
+./scripts/verify-cloud.sh https://stream-catalog.onrender.com
 ```
 
 Expect `{"ok":true}` for metadata health.
@@ -84,7 +84,7 @@ Render was building from the repo root but looking for `Dockerfile` there. The r
 
 | Name | Value |
 |------|--------|
-| `VITE_API_URL` | `https://stream-catalog-api.onrender.com` (your Render URL, no trailing slash) |
+| `VITE_API_URL` | `https://stream-catalog.onrender.com` (your Render URL, no trailing slash) |
 
 4. Deploy. Build **fails** if `VITE_API_URL` is missing (by design).
 
@@ -151,7 +151,7 @@ Other options: standard **ECS Fargate**, **Lambda + API Gateway** (requires [Man
 | Metadata works locally, not on Amplify | Set `VITE_API_URL` to Render URL; redeploy Amplify |
 | API status shows error | Check Render logs; verify `/health` |
 | Slow first search | Render free tier cold start — wait or upgrade plan |
-| CORS error | Confirm Amplify URL matches `*.amplifyapp.com` pattern |
+| CORS error / "Failed to fetch" on Amplify | Redeploy **Render** after CORS fix; Amplify URLs look like `main.xxxx.amplifyapp.com` |
 | Build fails on Amplify | Set `VITE_API_URL` in Amplify env vars |
 | Render: `Application startup failed` + SQLAlchemy link | Wrong `DATABASE_URL`, or reset Neon DB (see below) |
 

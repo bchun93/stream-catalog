@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     )
     # Auto-allow Amplify preview/production URLs (set to empty to disable).
     cors_origin_regex: str = Field(
-        default=r"https://([a-z0-9-]+\.)?(amplifyapp\.com|onrender\.com)",
+        # Amplify uses multi-level hosts, e.g. main.d1abc2def3.amplifyapp.com
+        default=r"https://([a-z0-9-]+\.)*(amplifyapp\.com|onrender\.com)",
         validation_alias="CORS_ORIGIN_REGEX",
     )
     api_prefix: str = "/api/v1"
