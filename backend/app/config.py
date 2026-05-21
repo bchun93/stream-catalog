@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     seed_on_startup: bool = False
     port: int = 8000
+    tmdb_api_key: str | None = None
+    tmdb_base_url: str = "https://api.themoviedb.org/3"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

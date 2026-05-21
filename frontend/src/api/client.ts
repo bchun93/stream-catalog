@@ -1,4 +1,11 @@
-import type { MediaAsset, Title, TitleTree } from "../types";
+import type {
+  MediaAsset,
+  MetadataSearchResult,
+  Title,
+  TitleMetadataImport,
+  TitleTree,
+  TitleType,
+} from "../types";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const API = `${API_BASE}/api/v1`;
@@ -10,11 +17,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(
+    const detail =
       typeof err.detail === "string"
         ? err.detail
-        : JSON.stringify(err.detail ?? err)
-    );
+        : JSON.stringify(err.detail ?? err);
+    if (res.status === 404 && detail === "Not Found") {
+      throw new Error(
+        "Metadata API not found. Restart the backend (uvicorn) after pulling latest code, and ensure it runs on port 8000."
+      );
+    }
+    throw new Error(detail);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -36,6 +48,18 @@ export const titlesApi = {
     }),
   delete: (id: number) =>
     request<void>(`/titles/${id}`, { method: "DELETE" }),
+};
+
+export const metadataApi = {
+  search: (q: string, titleType?: TitleType) => {
+    const params = new URLSearchParams({ q });
+    if (titleType) params.set("title_type", titleType);
+    return request<MetadataSearchResult[]>(`/metadata/search?${params}`);
+  },
+  import: (externalId: string) =>
+    request<TitleMetadataImport>(
+      `/metadata/import/${encodeURIComponent(externalId)}`
+    ),
 };
 
 export const assetsApi = {

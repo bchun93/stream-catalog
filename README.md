@@ -46,6 +46,16 @@ Admin UI: http://localhost:5173
 
 Sample data (series *Neon Drift*, movie *Midnight Express Lane*, linked assets) is seeded on first API startup.
 
+### Metadata import (New Title)
+
+When creating a title, use **Import metadata** to pull genre, release year, studio, cast, crew, synopsis, and more from [TMDB](https://www.themoviedb.org/). Add a free API key to `backend/.env`:
+
+```
+TMDB_API_KEY=your_key_here
+```
+
+Get a key at https://www.themoviedb.org/settings/api — licensor is left for manual entry (not in TMDB).
+
 ## API overview
 
 | Method | Path | Description |

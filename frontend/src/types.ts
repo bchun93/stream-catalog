@@ -31,11 +31,18 @@ export interface Title {
   synopsis?: string | null;
   short_description?: string | null;
   release_date?: string | null;
+  release_year?: number | null;
   rating?: string | null;
   genres?: string | null;
   territories?: string | null;
   availability_start?: string | null;
   availability_end?: string | null;
+  licensor?: string | null;
+  studio?: string | null;
+  cast?: string | null;
+  crew?: string | null;
+  external_id?: string | null;
+  metadata_source?: string | null;
   parent_id?: number | null;
   season_number?: number | null;
   episode_number?: number | null;
@@ -66,4 +73,36 @@ export interface MediaAsset {
   notes?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface MetadataSearchResult {
+  external_id: string;
+  source: string;
+  media_type: string;
+  title_type: TitleType;
+  name: string;
+  release_year?: number | null;
+  overview?: string | null;
+  poster_url?: string | null;
+}
+
+export interface TitleMetadataImport {
+  source: string;
+  external_id: string;
+  media_type: string;
+  title_type: TitleType;
+  name: string;
+  slug?: string | null;
+  synopsis?: string | null;
+  short_description?: string | null;
+  release_date?: string | null;
+  release_year?: number | null;
+  rating?: string | null;
+  genres?: string | null;
+  runtime_minutes?: number | null;
+  studio?: string | null;
+  licensor?: string | null;
+  cast?: string | null;
+  crew?: string | null;
+  poster_url?: string | null;
 }

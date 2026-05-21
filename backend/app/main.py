@@ -5,13 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import media_assets, titles
+from app.migrate import run_migrations
+from app.routers import media_assets, metadata, titles
 from app.seed import seed
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    run_migrations()
     if settings.seed_on_startup:
         seed()
     yield
@@ -33,6 +35,7 @@ app.add_middleware(
 )
 
 api = settings.api_prefix
+app.include_router(metadata.router, prefix=api)
 app.include_router(titles.router, prefix=api)
 app.include_router(media_assets.router, prefix=api)
 

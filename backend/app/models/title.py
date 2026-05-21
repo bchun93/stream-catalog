@@ -46,6 +46,13 @@ class Title(Base):
     season_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     episode_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     runtime_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    release_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    licensor: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    studio: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cast: Mapped[str | None] = mapped_column(Text, nullable=True)
+    crew: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )

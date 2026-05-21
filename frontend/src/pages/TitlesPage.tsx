@@ -85,7 +85,8 @@ export function TitlesPage() {
                 <th>Slug</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Release</th>
+                <th>Year</th>
+                <th>Studio</th>
                 <th></th>
               </tr>
             </thead>
@@ -107,7 +108,10 @@ export function TitlesPage() {
                   <td>
                     <Badge value={t.status} />
                   </td>
-                  <td>{t.release_date ?? "—"}</td>
+                  <td>{t.release_year ?? "—"}</td>
+                  <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {t.studio ?? "—"}
+                  </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button
                       className="btn btn-ghost"
@@ -137,6 +141,7 @@ export function TitlesPage() {
         >
           <TitleForm
             initial={editing ?? undefined}
+            isCreate={modal === "create"}
             parents={titles.filter((t) => t.id !== editing?.id)}
             onCancel={closeModal}
             onSubmit={async (data) => {

@@ -22,6 +22,13 @@ class TitleBase(BaseModel):
     season_number: int | None = None
     episode_number: int | None = None
     runtime_minutes: int | None = None
+    release_year: int | None = None
+    licensor: str | None = None
+    studio: str | None = None
+    cast: str | None = None
+    crew: str | None = None
+    external_id: str | None = None
+    metadata_source: str | None = None
 
 
 class TitleCreate(TitleBase):
@@ -45,6 +52,13 @@ class TitleUpdate(BaseModel):
     season_number: int | None = None
     episode_number: int | None = None
     runtime_minutes: int | None = None
+    release_year: int | None = None
+    licensor: str | None = None
+    studio: str | None = None
+    cast: str | None = None
+    crew: str | None = None
+    external_id: str | None = None
+    metadata_source: str | None = None
 
 
 class TitleRead(TitleBase):
