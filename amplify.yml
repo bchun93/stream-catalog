@@ -12,7 +12,7 @@ applications:
                 echo "ERROR: VITE_API_URL is not set."
                 echo "Amplify Console → App settings → Environment variables"
                 echo "  Name:  VITE_API_URL"
-                echo "  Value: https://YOUR-SERVICE.us-east-1.awsapprunner.com"
+                echo "  Value: https://your-service.onrender.com"
                 echo "Then redeploy. See DEPLOYMENT.md"
                 echo "============================================================"
                 exit 1

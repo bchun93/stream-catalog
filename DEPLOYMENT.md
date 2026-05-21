@@ -1,161 +1,133 @@
-# Deploy Stream Catalog (GitHub + Amplify + AWS)
+# Deploy Stream Catalog (Amplify + Render)
 
-Amplify hosts the **React admin UI**. The **FastAPI API** runs on **AWS App Runner** (Amplify does not run Python APIs). Both connect to the same **PostgreSQL** database so your catalog persists and is reachable from any computer.
+AWS **App Runner** is in [maintenance mode](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html) (no new customers). This project uses:
+
+| Layer | Service | Role |
+|-------|---------|------|
+| **UI** | **AWS Amplify** | React admin (static hosting) |
+| **API** | **[Render](https://render.com)** | FastAPI via `backend/Dockerfile` |
+| **DB** | **Neon Postgres** | Shared cloud database |
 
 ```
 GitHub repo
-    ├── Amplify Hosting  →  https://main.xxxxx.amplifyapp.com  (frontend)
-    └── App Runner       →  https://xxxxx.awsapprunner.com       (API)
+    ├── Amplify     →  https://main.xxxxx.amplifyapp.com
+    └── Render      →  https://stream-catalog-api.onrender.com
               │
-              └── Neon / RDS PostgreSQL (shared data)
+              └── Neon PostgreSQL
 ```
 
 ---
 
-## 1. Push the project to GitHub
+## 1. Push code to GitHub
 
 ```bash
-cd /Users/brianchun/stream-catalog
-git init
-git add .
-git commit -m "Initial Stream Catalog — TM + MAM platform"
+cd stream-catalog
+git push origin main
 ```
 
-Create a new repo on GitHub (e.g. `stream-catalog`), then:
+---
+
+## 2. Create PostgreSQL (Neon)
+
+1. [neon.tech](https://neon.tech) → new project → copy connection string.
+2. Format: `postgresql://user:pass@host.neon.tech/db?sslmode=require`
+
+---
+
+## 3. Deploy the API on Render (recommended)
+
+Uses `render.yaml` in the repo root.
+
+1. [dashboard.render.com](https://dashboard.render.com) → **New +** → **Blueprint**.
+2. Connect **GitHub** → select `stream-catalog`.
+3. Render reads `render.yaml` and creates **stream-catalog-api**.
+4. When prompted, set secrets:
+   - `DATABASE_URL` — Neon URL
+   - `TMDB_API_KEY` — [TMDB v3 key](https://www.themoviedb.org/settings/api)
+5. Deploy. Copy the service URL, e.g. `https://stream-catalog-api.onrender.com`.
+6. Verify:
 
 ```bash
-git remote add origin git@github.com:YOUR_USER/stream-catalog.git
-git branch -M main
-git push -u origin main
+./scripts/verify-cloud.sh https://stream-catalog-api.onrender.com
 ```
 
----
+Expect `{"ok":true}` for metadata health.
 
-## 2. Create a cloud database (PostgreSQL)
+7. After first deploy, set `SEED_ON_STARTUP` to `false` in Render → Environment.
 
-SQLite is local-only. Use a free **Neon** Postgres (or RDS):
+**Free tier note:** Render free web services spin down after inactivity; first request may take ~30s.
 
-1. Go to [neon.tech](https://neon.tech) → create project → copy the connection string.
-2. It looks like:
-   `postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require`
+### Manual deploy (without Blueprint)
 
-You will use this as `DATABASE_URL` on App Runner.
+**New +** → **Web Service** → Docker → root directory `backend` → add the same env vars.
 
 ---
 
-## 3. Deploy the API on AWS App Runner
+## 4. Deploy the frontend on Amplify
 
-App Runner builds the `backend/Dockerfile` from your GitHub repo.
+1. AWS Amplify → **Host web app** → connect GitHub → `stream-catalog` → branch `main`.
+2. `amplify.yml` sets `appRoot: frontend`.
+3. **Environment variables** (required):
 
-1. AWS Console → **App Runner** → **Create service**.
-2. **Source**: Repository → connect **GitHub** → select `stream-catalog`.
-3. **Root directory**: `backend`
-4. **Build**: Dockerfile (automatic).
-5. **Port**: `8000`
-6. **Environment variables**:
+| Name | Value |
+|------|--------|
+| `VITE_API_URL` | `https://stream-catalog-api.onrender.com` (your Render URL, no trailing slash) |
 
-   | Name | Value |
-   |------|--------|
-   | `DATABASE_URL` | Your Neon Postgres URL |
-   | `TMDB_API_KEY` | Your TMDB v3 API key (required for metadata search) |
-   | `SEED_ON_STARTUP` | `true` (first deploy only; set `false` later) |
-
-   CORS for `*.amplifyapp.com` is automatic. Optionally set `CORS_ORIGINS` for custom domains.
-
-7. Deploy. Copy the **default domain**, e.g. `https://abc123.us-east-1.awsapprunner.com`.
-8. Verify: open `https://YOUR-APP-RUNNER-URL/health` → `{"status":"ok"}`.
+4. Deploy. Build **fails** if `VITE_API_URL` is missing (by design).
 
 ---
 
-## 4. Deploy the frontend on AWS Amplify
-
-1. AWS Console → **Amplify** → **Create new app** → **Host web app**.
-2. Connect **GitHub** → select `stream-catalog` → branch `main`.
-3. Amplify detects `amplify.yml` and sets **app root** to `frontend`.
-4. **Environment variables** (Amplify → App settings → Environment variables):
-
-   | Name | Value |
-   |------|--------|
-   | `VITE_API_URL` | `https://YOUR-APP-RUNNER-URL` (no trailing slash) |
-
-5. Save and deploy.
-6. Copy your Amplify URL, e.g. `https://main.d1234abcdef.amplifyapp.com`.
-
----
-
-## 5. CORS
-
-The API **automatically allows** `*.amplifyapp.com` origins (no manual CORS entry required for standard Amplify URLs).
-
-Optionally add custom domains to `CORS_ORIGINS` on App Runner:
-```
-https://catalog.yourdomain.com
-```
-
----
-
-## 5b. One-command cloud setup (recommended)
-
-After App Runner exists and you have its URL:
+## 5. Wire Amplify to Render (script)
 
 ```bash
 cp deploy.env.example deploy.env
-# Edit deploy.env: AMPLIFY_APP_ID, APP_RUNNER_URL, DATABASE_URL, TMDB_API_KEY
+# Set AMPLIFY_APP_ID, API_URL (Render), DATABASE_URL, TMDB_API_KEY
 
 chmod +x scripts/deploy-cloud.sh scripts/verify-cloud.sh
 ./scripts/deploy-cloud.sh
 ```
 
-This sets Amplify `VITE_API_URL`, starts a rebuild, and updates App Runner env vars (if `APP_RUNNER_SERVICE_ARN` is set).
+---
 
-Verify:
+## 6. CORS
 
-```bash
-./scripts/verify-cloud.sh https://YOUR-APP-RUNNER-URL
-```
+The API automatically allows:
+
+- `*.amplifyapp.com`
+- `*.onrender.com`
+
+Optional `CORS_ORIGINS` for custom domains.
 
 ---
 
-## 6. Use from any computer
+## 7. Verify in the browser
 
-| What | URL |
-|------|-----|
-| Admin UI | Amplify URL |
-| API docs | `https://YOUR-APP-RUNNER-URL/docs` |
-| Code | `github.com/YOUR_USER/stream-catalog` |
+Open your Amplify URL. Sidebar should show **API · Connected · TMDB ok**.
 
-**Workflow on a new machine:**
-
-```bash
-git clone git@github.com:YOUR_USER/stream-catalog.git
-cd stream-catalog
-# optional local dev:
-cd backend && python3.13 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env && uvicorn app.main:app --reload
-```
-
-Cloud UI/API already use the shared Postgres DB — no need to copy `catalog.db`.
+**Titles → + New title →** search `gladiator`.
 
 ---
 
-## 7. Custom domain (optional)
+## AWS-native alternative (ECS Express Mode)
 
-**Amplify**: Domain management → add domain → follow DNS steps.
+If you must stay on AWS, AWS recommends **[ECS Express Mode](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-mode.html)** instead of App Runner:
 
-**App Runner**: Custom domains → add subdomain (e.g. `api.catalog.example.com`).
+- Provisions Fargate + load balancer from a container image
+- Use the same `backend/Dockerfile`
+- Set the same env vars (`DATABASE_URL`, `TMDB_API_KEY`, etc.)
+- Put the ALB URL in Amplify `VITE_API_URL`
 
-Update `CORS_ORIGINS` and `VITE_API_URL` accordingly, then redeploy both.
+Other options: standard **ECS Fargate**, **Lambda + API Gateway** (requires [Mangum](https://mangum.io/) adapter), **Lightsail containers**.
 
 ---
 
-## 8. Ongoing deploys
+## Ongoing deploys
 
-| Change | What redeploys |
-|--------|----------------|
-| Push to `main` (frontend files) | Amplify auto-builds |
-| Push to `main` (backend files) | App Runner auto-rebuilds (if auto-deploy enabled) |
-| Env var change | Redeploy in Amplify / App Runner console |
+| Change | Redeploys |
+|--------|-----------|
+| Frontend push to `main` | Amplify |
+| Backend push to `main` | Render |
+| `VITE_API_URL` change | Amplify rebuild required |
 
 ---
 
@@ -163,18 +135,16 @@ Update `CORS_ORIGINS` and `VITE_API_URL` accordingly, then redeploy both.
 
 | Symptom | Fix |
 |---------|-----|
-| UI loads but API errors | Check `VITE_API_URL` in Amplify matches App Runner URL |
-| CORS error in browser | Add exact Amplify URL to `CORS_ORIGINS` on App Runner |
-| Empty catalog in cloud | Set `SEED_ON_STARTUP=true`, redeploy once, then `false` |
-| 404 on `/titles` refresh | `_redirects` in `frontend/public/` handles SPA routes |
-| Build fails on Amplify | Ensure `appRoot: frontend` in `amplify.yml` |
+| Metadata works locally, not on Amplify | Set `VITE_API_URL` to Render URL; redeploy Amplify |
+| API status shows error | Check Render logs; verify `/health` |
+| Slow first search | Render free tier cold start — wait or upgrade plan |
+| CORS error | Confirm Amplify URL matches `*.amplifyapp.com` pattern |
+| Build fails on Amplify | Set `VITE_API_URL` in Amplify env vars |
 
 ---
 
-## Cost note
+## Cost (typical)
 
-- **Amplify Hosting**: free tier for low traffic.
-- **App Runner**: ~$5+/mo when always on.
-- **Neon Postgres**: free tier available.
-
-For minimal cost, use Amplify + App Runner + Neon free tiers while building.
+- **Amplify** — free tier for low traffic
+- **Render** — free web service available; paid from ~$7/mo always-on
+- **Neon** — free tier available

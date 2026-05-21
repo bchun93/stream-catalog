@@ -118,10 +118,10 @@ curl -s "http://127.0.0.1:8000/api/v1/metadata/search?q=gladiator&title_type=mov
 | Where | What to set |
 |--------|-------------|
 | **GitHub** | Do **not** commit `.env` |
-| **App Runner** (API) | Env var `TMDB_API_KEY` = your v3 key |
-| **Amplify** (UI) | `VITE_API_URL` = your App Runner URL (no code change for TMDB — key stays on API only) |
+| **Render** (API) | Env var `TMDB_API_KEY` = your v3 key |
+| **Amplify** (UI) | `VITE_API_URL` = your Render API URL |
 
-Redeploy App Runner after adding `TMDB_API_KEY`.
+Redeploy Render after adding `TMDB_API_KEY`.
 
 ---
 

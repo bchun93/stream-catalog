@@ -66,14 +66,14 @@ Get a key at https://www.themoviedb.org/settings/api — licensor is left for ma
 | `GET` | `/api/v1/assets` | List assets (`?title_id=`, `?asset_type=`, `?status=`) |
 | `POST` | `/api/v1/assets` | Register asset |
 
-## Cloud deployment (GitHub + Amplify)
+## Cloud deployment (GitHub + Amplify + Render)
 
 See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for step-by-step setup:
 
-- **GitHub** — source of truth, clone on any machine
-- **Amplify** — hosts the React admin UI
-- **App Runner** — hosts the FastAPI API (Amplify does not run Python backends)
-- **PostgreSQL (Neon)** — shared database in the cloud
+- **GitHub** — source of truth
+- **Amplify** — React admin UI
+- **Render** — FastAPI API (replaces AWS App Runner, which is in maintenance mode)
+- **Neon Postgres** — shared cloud database
 
 ## Production extensions
 

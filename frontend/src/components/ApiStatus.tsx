@@ -48,7 +48,7 @@ export function ApiStatus() {
       {health === "loading" && <p>Checking…</p>}
       {health === "ok" && <p>Connected · {metaHealth}</p>}
       {health === "error" && (
-        <p>Cannot reach API — deploy App Runner and set VITE_API_URL.</p>
+        <p>Cannot reach API — deploy on Render and set VITE_API_URL in Amplify.</p>
       )}
     </div>
   );

@@ -14,7 +14,7 @@ const IS_PROD = import.meta.env.PROD;
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (IS_PROD && !API_BASE) {
     throw new Error(
-      "API URL not configured. In Amplify, set VITE_API_URL to your App Runner URL and redeploy."
+      "API URL not configured. In Amplify, set VITE_API_URL to your Render API URL and redeploy."
     );
   }
   const res = await fetch(`${API}${path}`, {
