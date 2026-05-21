@@ -11,6 +11,7 @@ export function TitlesPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<Title | null>(null);
+  const [formTab, setFormTab] = useState<"details" | "artwork">("details");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -27,6 +28,7 @@ export function TitlesPage() {
   const closeModal = () => {
     setModal(null);
     setEditing(null);
+    setFormTab("details");
   };
 
   const handleDelete = async (t: Title) => {
@@ -50,6 +52,7 @@ export function TitlesPage() {
           className="btn btn-primary"
           onClick={() => {
             setEditing(null);
+            setFormTab("details");
             setModal("create");
           }}
         >
@@ -118,6 +121,7 @@ export function TitlesPage() {
                       style={{ marginRight: "0.35rem" }}
                       onClick={() => {
                         setEditing(t);
+                        setFormTab("details");
                         setModal("edit");
                       }}
                     >
@@ -136,19 +140,31 @@ export function TitlesPage() {
 
       {modal && (
         <Modal
+          wide
           title={modal === "create" ? "Create title" : "Edit title"}
           onClose={closeModal}
         >
           <TitleForm
             initial={editing ?? undefined}
+            titleId={editing?.id}
             isCreate={modal === "create"}
+            initialTab={formTab}
             parents={titles.filter((t) => t.id !== editing?.id)}
             onCancel={closeModal}
             onSubmit={async (data) => {
-              if (modal === "create") await titlesApi.create(data);
-              else if (editing) await titlesApi.update(editing.id, data);
-              closeModal();
-              load();
+              if (modal === "create") {
+                const created = await titlesApi.create(data);
+                setEditing(created);
+                setModal("edit");
+                setFormTab("artwork");
+                load();
+                return created;
+              }
+              if (editing) {
+                const updated = await titlesApi.update(editing.id, data);
+                load();
+                return updated;
+              }
             }}
           />
         </Modal>

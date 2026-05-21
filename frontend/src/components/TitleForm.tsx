@@ -1,12 +1,21 @@
 import { useState } from "react";
+import { ArtworkTab } from "./ArtworkTab";
 import { MetadataLookup } from "./MetadataLookup";
-import type { Title, TitleMetadataImport, TitleStatus, TitleType } from "../types";
+import type {
+  ArtworkItem,
+  Title,
+  TitleMetadataImport,
+  TitleStatus,
+  TitleType,
+} from "../types";
 
 interface TitleFormProps {
   initial?: Partial<Title>;
+  titleId?: number;
   parents?: Title[];
   isCreate?: boolean;
-  onSubmit: (data: Partial<Title>) => Promise<void>;
+  initialTab?: "details" | "artwork";
+  onSubmit: (data: Partial<Title>) => Promise<Title | void>;
   onCancel: () => void;
 }
 
@@ -44,15 +53,20 @@ const emptyForm = (initial?: Partial<Title>) => ({
 
 export function TitleForm({
   initial,
+  titleId,
   parents = [],
   isCreate = false,
+  initialTab = "details",
   onSubmit,
   onCancel,
 }: TitleFormProps) {
+  const [tab, setTab] = useState<"details" | "artwork">(initialTab);
   const [form, setForm] = useState(emptyForm(initial));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [metadataApplied, setMetadataApplied] = useState(false);
+  const [artworkPreview, setArtworkPreview] = useState<ArtworkItem[]>([]);
+  const [savedTitleId, setSavedTitleId] = useState<number | undefined>(titleId);
 
   const set = (key: string, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -77,8 +91,12 @@ export function TitleForm({
       external_id: meta.external_id,
       metadata_source: meta.source,
     }));
+    setArtworkPreview(meta.artwork ?? []);
     setMetadataApplied(true);
     setError(null);
+    if ((meta.artwork?.length ?? 0) > 0) {
+      setTab("artwork");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,7 +104,7 @@ export function TitleForm({
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({
+      const payload: Partial<Title> = {
         slug: form.slug,
         name: form.name,
         title_type: form.title_type as TitleType,
@@ -109,7 +127,13 @@ export function TitleForm({
         runtime_minutes: form.runtime_minutes
           ? Number(form.runtime_minutes)
           : null,
-      });
+      };
+      const result = await onSubmit(payload);
+      if (result && "id" in result) {
+        setSavedTitleId(result.id);
+        setArtworkPreview([]);
+        setTab("artwork");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -117,157 +141,197 @@ export function TitleForm({
     }
   };
 
+  const activeTitleId = savedTitleId ?? titleId;
+  const showArtworkPreview = isCreate && !activeTitleId && artworkPreview.length > 0;
+
   return (
     <form onSubmit={handleSubmit}>
       {error && <div className="error-banner">{error}</div>}
-      {isCreate && (
-        <MetadataLookup onApply={applyMetadata} />
-      )}
-      {metadataApplied && (
-        <div className="metadata-applied-banner">
-          Metadata imported — review fields below, add licensor if needed, then save.
-        </div>
-      )}
-      <div className="form-grid">
-        <label>
-          Name
-          <input required value={form.name} onChange={(e) => set("name", e.target.value)} />
-        </label>
-        <label>
-          Slug
-          <input required value={form.slug} onChange={(e) => set("slug", e.target.value)} />
-        </label>
-        <label>
-          Type
-          <select
-            value={form.title_type}
-            onChange={(e) => set("title_type", e.target.value)}
-          >
-            {TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Status
-          <select value={form.status} onChange={(e) => set("status", e.target.value)}>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replace(/_/g, " ")}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Release year
-          <input
-            type="number"
-            value={form.release_year}
-            onChange={(e) => set("release_year", e.target.value)}
-          />
-        </label>
-        <label>
-          Release date
-          <input
-            type="date"
-            value={form.release_date}
-            onChange={(e) => set("release_date", e.target.value)}
-          />
-        </label>
-        <label>
-          Genres
-          <input value={form.genres} onChange={(e) => set("genres", e.target.value)} />
-        </label>
-        <label>
-          Content rating
-          <input value={form.rating} onChange={(e) => set("rating", e.target.value)} />
-        </label>
-        <label>
-          Studio
-          <input value={form.studio} onChange={(e) => set("studio", e.target.value)} />
-        </label>
-        <label>
-          Licensor
-          <input
-            value={form.licensor}
-            onChange={(e) => set("licensor", e.target.value)}
-            placeholder="Your distribution / rights holder"
-          />
-        </label>
-        <label>
-          Runtime (minutes)
-          <input
-            type="number"
-            value={form.runtime_minutes}
-            onChange={(e) => set("runtime_minutes", e.target.value)}
-          />
-        </label>
-        <label>
-          Parent title
-          <select
-            value={form.parent_id}
-            onChange={(e) => set("parent_id", e.target.value)}
-          >
-            <option value="">— None —</option>
-            {parents.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.title_type})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Season #
-          <input
-            type="number"
-            value={form.season_number}
-            onChange={(e) => set("season_number", e.target.value)}
-          />
-        </label>
-        <label>
-          Episode #
-          <input
-            type="number"
-            value={form.episode_number}
-            onChange={(e) => set("episode_number", e.target.value)}
-          />
-        </label>
-        <label className="form-span-2">
-          Tagline / short description
-          <input
-            value={form.short_description}
-            onChange={(e) => set("short_description", e.target.value)}
-          />
-        </label>
-        <label className="form-span-2">
-          Synopsis
-          <textarea value={form.synopsis} onChange={(e) => set("synopsis", e.target.value)} />
-        </label>
-        <label className="form-span-2">
-          Cast
-          <textarea
-            value={form.cast}
-            onChange={(e) => set("cast", e.target.value)}
-            rows={3}
-          />
-        </label>
-        <label className="form-span-2">
-          Crew
-          <textarea
-            value={form.crew}
-            onChange={(e) => set("crew", e.target.value)}
-            rows={2}
-          />
-        </label>
+
+      <div className="title-tabs">
+        <button
+          type="button"
+          className={`title-tab ${tab === "details" ? "active" : ""}`}
+          onClick={() => setTab("details")}
+        >
+          Details
+        </button>
+        <button
+          type="button"
+          className={`title-tab ${tab === "artwork" ? "active" : ""}`}
+          onClick={() => setTab("artwork")}
+        >
+          Artwork
+          {(showArtworkPreview || activeTitleId) && (
+            <span className="title-tab-badge">
+              {showArtworkPreview ? artworkPreview.length : " "}
+            </span>
+          )}
+        </button>
       </div>
+
+      {tab === "details" && (
+        <>
+          {isCreate && <MetadataLookup onApply={applyMetadata} />}
+          {metadataApplied && (
+            <div className="metadata-applied-banner">
+              Metadata imported — review fields below, add licensor if needed, then save.
+              {(artworkPreview.length > 0 || activeTitleId) &&
+                " Artwork is on the Artwork tab."}
+            </div>
+          )}
+          <div className="form-grid">
+            <label>
+              Name
+              <input required value={form.name} onChange={(e) => set("name", e.target.value)} />
+            </label>
+            <label>
+              Slug
+              <input required value={form.slug} onChange={(e) => set("slug", e.target.value)} />
+            </label>
+            <label>
+              Type
+              <select
+                value={form.title_type}
+                onChange={(e) => set("title_type", e.target.value)}
+              >
+                {TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Status
+              <select value={form.status} onChange={(e) => set("status", e.target.value)}>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Release year
+              <input
+                type="number"
+                value={form.release_year}
+                onChange={(e) => set("release_year", e.target.value)}
+              />
+            </label>
+            <label>
+              Release date
+              <input
+                type="date"
+                value={form.release_date}
+                onChange={(e) => set("release_date", e.target.value)}
+              />
+            </label>
+            <label>
+              Genres
+              <input value={form.genres} onChange={(e) => set("genres", e.target.value)} />
+            </label>
+            <label>
+              Content rating
+              <input value={form.rating} onChange={(e) => set("rating", e.target.value)} />
+            </label>
+            <label>
+              Studio
+              <input value={form.studio} onChange={(e) => set("studio", e.target.value)} />
+            </label>
+            <label>
+              Licensor
+              <input
+                value={form.licensor}
+                onChange={(e) => set("licensor", e.target.value)}
+                placeholder="Your distribution / rights holder"
+              />
+            </label>
+            <label>
+              Runtime (minutes)
+              <input
+                type="number"
+                value={form.runtime_minutes}
+                onChange={(e) => set("runtime_minutes", e.target.value)}
+              />
+            </label>
+            <label>
+              Parent title
+              <select
+                value={form.parent_id}
+                onChange={(e) => set("parent_id", e.target.value)}
+              >
+                <option value="">— None —</option>
+                {parents.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.title_type})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Season #
+              <input
+                type="number"
+                value={form.season_number}
+                onChange={(e) => set("season_number", e.target.value)}
+              />
+            </label>
+            <label>
+              Episode #
+              <input
+                type="number"
+                value={form.episode_number}
+                onChange={(e) => set("episode_number", e.target.value)}
+              />
+            </label>
+            <label className="form-span-2">
+              Tagline / short description
+              <input
+                value={form.short_description}
+                onChange={(e) => set("short_description", e.target.value)}
+              />
+            </label>
+            <label className="form-span-2">
+              Synopsis
+              <textarea value={form.synopsis} onChange={(e) => set("synopsis", e.target.value)} />
+            </label>
+            <label className="form-span-2">
+              Cast
+              <textarea
+                value={form.cast}
+                onChange={(e) => set("cast", e.target.value)}
+                rows={3}
+              />
+            </label>
+            <label className="form-span-2">
+              Crew
+              <textarea
+                value={form.crew}
+                onChange={(e) => set("crew", e.target.value)}
+                rows={2}
+              />
+            </label>
+          </div>
+        </>
+      )}
+
+      {tab === "artwork" && (
+        <ArtworkTab
+          titleId={activeTitleId}
+          externalId={form.external_id}
+          preview={artworkPreview}
+          isPreview={showArtworkPreview}
+        />
+      )}
+
       <div className="form-actions">
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
           Cancel
         </button>
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Saving…" : activeTitleId && isCreate ? "Saved" : "Save"}
         </button>
       </div>
     </form>

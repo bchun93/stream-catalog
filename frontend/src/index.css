@@ -530,3 +530,124 @@ tr:hover td {
 .api-status-unset p {
   color: #ffc9c9;
 }
+
+.modal-wide {
+  max-width: 920px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.title-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+
+.title-tab {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.title-tab.active {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.title-tab-badge {
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+.artwork-tab {
+  min-height: 200px;
+}
+
+.artwork-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.artwork-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.artwork-section {
+  margin-bottom: 1.25rem;
+}
+
+.artwork-section-title {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.artwork-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.artwork-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.65rem;
+}
+
+.artwork-card {
+  margin: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.artwork-card img {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  display: block;
+  background: #111;
+}
+
+.artwork-card-backdrop img,
+.artwork-card-still img {
+  aspect-ratio: 16 / 9;
+}
+
+.artwork-card-logo img {
+  aspect-ratio: 3 / 2;
+  object-fit: contain;
+  padding: 0.35rem;
+  background: #0a0a0a;
+}
+
+.artwork-card figcaption {
+  font-size: 0.68rem;
+  color: var(--muted);
+  padding: 0.35rem 0.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artwork-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}

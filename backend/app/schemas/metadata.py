@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 
 from app.models.title import TitleType
+from app.schemas.artwork import ArtworkItem
 
 
 class MetadataSearchResult(BaseModel):
@@ -35,3 +36,4 @@ class TitleMetadataImport(BaseModel):
     cast: str | None = None
     crew: str | None = None
     poster_url: str | None = None
+    artwork: list[ArtworkItem] = Field(default_factory=list)

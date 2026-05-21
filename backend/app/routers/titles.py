@@ -3,8 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.title import Title, TitleType
+from app.schemas.media_asset import MediaAssetRead
 from app.schemas.title import TitleCreate, TitleRead, TitleTree, TitleUpdate
 from app.services import title_service
+from app.services.artwork_service import sync_artwork_for_title
 
 router = APIRouter(prefix="/titles", tags=["titles"])
 
@@ -44,11 +46,27 @@ def get_title(title_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=TitleRead, status_code=201)
-def create_title(payload: TitleCreate, db: Session = Depends(get_db)):
+async def create_title(payload: TitleCreate, db: Session = Depends(get_db)):
     existing = db.query(Title).filter(Title.slug == payload.slug).first()
     if existing:
         raise HTTPException(status_code=409, detail="Slug already exists")
-    return title_service.create_title(db, payload)
+    title = title_service.create_title(db, payload)
+    if title.external_id and title.external_id.startswith("tmdb:"):
+        await sync_artwork_for_title(db, title)
+    return title
+
+
+@router.post("/{title_id}/artwork/sync", response_model=list[MediaAssetRead])
+async def sync_title_artwork(title_id: int, db: Session = Depends(get_db)):
+    title = title_service.get_title(db, title_id)
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    if not title.external_id or not title.external_id.startswith("tmdb:"):
+        raise HTTPException(
+            status_code=400,
+            detail="Title has no TMDB external_id — import metadata first",
+        )
+    return await sync_artwork_for_title(db, title)
 
 
 @router.patch("/{title_id}", response_model=TitleRead)

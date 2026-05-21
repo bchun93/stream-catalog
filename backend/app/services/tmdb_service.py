@@ -9,10 +9,38 @@ from datetime import date
 from fastapi import HTTPException
 
 from app.config import settings
+from app.models.media_asset import AssetType
 from app.models.title import TitleType
+from app.schemas.artwork import ArtworkItem
 from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
 
 _TMDB_IMAGE = "https://image.tmdb.org/t/p/w185"
+TMDB_SOURCE_NOTE = "source:tmdb"
+
+_IMAGE_SIZE = {
+    AssetType.POSTER: "w500",
+    AssetType.BACKDROP: "w780",
+    AssetType.LOGO: "w500",
+    AssetType.STILL: "w780",
+    AssetType.CAST_PHOTO: "w185",
+    AssetType.SEASON_POSTER: "w500",
+}
+
+_IMAGE_LIMITS = {
+    AssetType.POSTER: 8,
+    AssetType.BACKDROP: 6,
+    AssetType.LOGO: 6,
+    AssetType.STILL: 8,
+    AssetType.CAST_PHOTO: 15,
+    AssetType.SEASON_POSTER: 30,
+}
+
+_IMAGES_KEY_TO_TYPE = {
+    "posters": AssetType.POSTER,
+    "backdrops": AssetType.BACKDROP,
+    "logos": AssetType.LOGO,
+    "stills": AssetType.STILL,
+}
 # No-proxy opener — avoids Cursor/shell proxy breaking TMDB DNS (Errno 8 / 403).
 _NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -54,7 +82,67 @@ def _parse_year(value: str | None) -> int | None:
 
 
 def _poster(path: str | None) -> str | None:
-    return f"{_TMDB_IMAGE}{path}" if path else None
+    return _image_url(path, "w185")
+
+
+def _image_url(path: str | None, size: str = "w500") -> str | None:
+    if not path:
+        return None
+    return f"https://image.tmdb.org/t/p/{size}{path}"
+
+
+def _resolution(item: dict) -> str | None:
+    width, height = item.get("width"), item.get("height")
+    if width and height:
+        return f"{width}x{height}"
+    return None
+
+
+def _artwork_filename(asset_type: AssetType, file_path: str, **parts: str) -> str:
+    base = file_path.strip("/").replace("/", "_")
+    suffix = "_".join(p for p in parts if p)
+    name = asset_type.value
+    return f"{name}_{suffix}_{base}" if suffix else f"{name}_{base}"
+
+
+def _sorted_images(images: list[dict]) -> list[dict]:
+    return sorted(images, key=lambda x: x.get("vote_average") or 0, reverse=True)
+
+
+def _items_from_images(
+    images: list[dict],
+    asset_type: AssetType,
+    *,
+    note_prefix: str | None = None,
+) -> list[ArtworkItem]:
+    limit = _IMAGE_LIMITS[asset_type]
+    size = _IMAGE_SIZE[asset_type]
+    items: list[ArtworkItem] = []
+    seen: set[str] = set()
+    for image in _sorted_images(images)[:limit]:
+        path = image.get("file_path")
+        url = _image_url(path, size)
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        lang = image.get("iso_639_1")
+        note = TMDB_SOURCE_NOTE
+        if note_prefix:
+            note = f"{note}; {note_prefix}"
+        if lang:
+            note = f"{note}; lang:{lang}"
+        items.append(
+            ArtworkItem(
+                asset_type=asset_type,
+                storage_uri=url,
+                filename=_artwork_filename(asset_type, path, lang or "xx"),
+                mime_type="image/jpeg",
+                language=lang,
+                resolution=_resolution(image),
+                notes=note,
+            )
+        )
+    return items
 
 
 def _title_type_for_media(media_type: str) -> TitleType:
@@ -195,6 +283,77 @@ def _studios(data: dict, media_type: str) -> str | None:
     return ", ".join(network_names[:3]) if network_names else None
 
 
+async def collect_artwork_from_tmdb(
+    media_type: str, tmdb_id: int
+) -> list[ArtworkItem]:
+    if media_type not in ("movie", "tv"):
+        raise HTTPException(status_code=400, detail="media_type must be movie or tv")
+
+    items: list[ArtworkItem] = []
+    images_data = await _get(f"/{media_type}/{tmdb_id}/images")
+    for key, asset_type in _IMAGES_KEY_TO_TYPE.items():
+        if key == "stills" and media_type != "tv":
+            continue
+        batch = images_data.get(key) or []
+        if batch:
+            items.extend(_items_from_images(batch, asset_type))
+
+    credits_data = await _get(f"/{media_type}/{tmdb_id}", append_to_response="credits")
+    cast = credits_data.get("credits", {}).get("cast") or []
+    cast_items: list[ArtworkItem] = []
+    seen_cast: set[str] = set()
+    for member in cast:
+        path = member.get("profile_path")
+        url = _image_url(path, _IMAGE_SIZE[AssetType.CAST_PHOTO])
+        if not url or url in seen_cast:
+            continue
+        seen_cast.add(url)
+        name = member.get("name") or "Unknown"
+        character = member.get("character")
+        note = f"{TMDB_SOURCE_NOTE}; {name}"
+        if character:
+            note = f"{note} as {character}"
+        cast_items.append(
+            ArtworkItem(
+                asset_type=AssetType.CAST_PHOTO,
+                storage_uri=url,
+                filename=_artwork_filename(AssetType.CAST_PHOTO, path, name.replace(" ", "_")),
+                mime_type="image/jpeg",
+                resolution=_resolution(member) if member.get("width") else None,
+                notes=note,
+            )
+        )
+        if len(cast_items) >= _IMAGE_LIMITS[AssetType.CAST_PHOTO]:
+            break
+    items.extend(cast_items)
+
+    if media_type == "tv":
+        detail = await _get(f"/tv/{tmdb_id}")
+        for season in detail.get("seasons") or []:
+            if season.get("season_number", 0) == 0:
+                continue
+            path = season.get("poster_path")
+            url = _image_url(path, _IMAGE_SIZE[AssetType.SEASON_POSTER])
+            if not url:
+                continue
+            season_num = season.get("season_number")
+            items.append(
+                ArtworkItem(
+                    asset_type=AssetType.SEASON_POSTER,
+                    storage_uri=url,
+                    filename=_artwork_filename(
+                        AssetType.SEASON_POSTER, path, f"s{season_num}"
+                    ),
+                    mime_type="image/jpeg",
+                    notes=f"{TMDB_SOURCE_NOTE}; season:{season_num}",
+                )
+            )
+            if len([i for i in items if i.asset_type == AssetType.SEASON_POSTER]) >= _IMAGE_LIMITS[AssetType.SEASON_POSTER]:
+                break
+
+    return items
+
+
 async def fetch_metadata(
     media_type: str, tmdb_id: int
 ) -> TitleMetadataImport:
@@ -224,8 +383,11 @@ async def fetch_metadata(
         except ValueError:
             release_date_value = date_str
 
+    external_id = f"tmdb:{media_type}:{tmdb_id}"
+    artwork = await collect_artwork_from_tmdb(media_type, tmdb_id)
+
     return TitleMetadataImport(
-        external_id=f"tmdb:{media_type}:{tmdb_id}",
+        external_id=external_id,
         media_type=media_type,
         title_type=_title_type_for_media(media_type),
         name=name,
@@ -242,6 +404,7 @@ async def fetch_metadata(
         cast=_format_cast(credits),
         crew=_format_crew(credits),
         poster_url=_poster(data.get("poster_path")),
+        artwork=artwork,
     )
 
 

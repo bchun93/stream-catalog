@@ -10,10 +10,33 @@ export type AssetType =
   | "video_master"
   | "trailer"
   | "poster"
+  | "backdrop"
+  | "logo"
+  | "still"
+  | "cast_photo"
+  | "season_poster"
   | "thumbnail"
   | "subtitle"
   | "audio"
   | "caption";
+
+export type ArtworkType =
+  | "poster"
+  | "backdrop"
+  | "logo"
+  | "still"
+  | "cast_photo"
+  | "season_poster";
+
+export interface ArtworkItem {
+  asset_type: ArtworkType;
+  storage_uri: string;
+  filename: string;
+  mime_type?: string | null;
+  language?: string | null;
+  resolution?: string | null;
+  notes?: string | null;
+}
 
 export type AssetStatus =
   | "uploaded"
@@ -105,4 +128,23 @@ export interface TitleMetadataImport {
   cast?: string | null;
   crew?: string | null;
   poster_url?: string | null;
+  artwork?: ArtworkItem[];
 }
+
+export const ARTWORK_TYPES: ArtworkType[] = [
+  "poster",
+  "backdrop",
+  "logo",
+  "still",
+  "cast_photo",
+  "season_poster",
+];
+
+export const ARTWORK_LABELS: Record<ArtworkType, string> = {
+  poster: "Posters",
+  backdrop: "Backdrops",
+  logo: "Logos",
+  still: "Stills",
+  cast_photo: "Cast photos",
+  season_poster: "Season posters",
+};

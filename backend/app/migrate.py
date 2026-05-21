@@ -13,6 +13,11 @@ _NEW_COLUMNS = [
 ]
 
 
+def _quote_ident(name: str) -> str:
+    """Quote identifiers so reserved words (e.g. cast) work on PostgreSQL."""
+    return f'"{name.replace(chr(34), chr(34) * 2)}"'
+
+
 def run_migrations() -> None:
     inspector = inspect(engine)
     if "titles" not in inspector.get_table_names():
@@ -21,4 +26,7 @@ def run_migrations() -> None:
     with engine.begin() as conn:
         for name, col_type in _NEW_COLUMNS:
             if name not in existing:
-                conn.execute(text(f"ALTER TABLE titles ADD COLUMN {name} {col_type}"))
+                col = _quote_ident(name)
+                conn.execute(
+                    text(f"ALTER TABLE titles ADD COLUMN {col} {col_type}")
+                )
