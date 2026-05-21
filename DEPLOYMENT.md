@@ -59,7 +59,20 @@ Expect `{"ok":true}` for metadata health.
 
 ### Manual deploy (without Blueprint)
 
-**New +** → **Web Service** → Docker → root directory `backend` → add the same env vars.
+**New +** → **Web Service** → **Docker** → settings:
+
+| Setting | Value |
+|---------|--------|
+| Root Directory | *(leave empty — uses repo root `Dockerfile`)* |
+| Dockerfile path | `Dockerfile` |
+
+Or set **Root Directory** to `backend` and Dockerfile to `Dockerfile` there.
+
+Add env vars: `DATABASE_URL`, `TMDB_API_KEY`, `SEED_ON_STARTUP`.
+
+### Build error: `open Dockerfile: no such file or directory`
+
+Render was building from the repo root but looking for `Dockerfile` there. The repo now includes a **root `Dockerfile`**. Redeploy from the latest `main` commit (includes `render.yaml`).
 
 ---
 
