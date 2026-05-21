@@ -1,4 +1,5 @@
 import { NavLink, Route, Routes } from "react-router-dom";
+import { ApiStatus } from "./components/ApiStatus";
 import { AssetsPage } from "./pages/AssetsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TitlesPage } from "./pages/TitlesPage";
@@ -17,7 +18,8 @@ export default function App() {
           <NavLink to="/titles">Titles</NavLink>
           <NavLink to="/assets">Media assets</NavLink>
         </nav>
-        <p style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: "auto" }}>
+        <ApiStatus />
+        <p style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: "0.75rem" }}>
           TM + MAM for streaming
         </p>
       </aside>

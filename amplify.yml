@@ -6,6 +6,18 @@ applications:
         preBuild:
           commands:
             - npm ci
+            - |
+              if [ -z "${VITE_API_URL:-}" ]; then
+                echo "============================================================"
+                echo "ERROR: VITE_API_URL is not set."
+                echo "Amplify Console → App settings → Environment variables"
+                echo "  Name:  VITE_API_URL"
+                echo "  Value: https://YOUR-SERVICE.us-east-1.awsapprunner.com"
+                echo "Then redeploy. See DEPLOYMENT.md"
+                echo "============================================================"
+                exit 1
+              fi
+              echo "Building with VITE_API_URL=${VITE_API_URL}"
         build:
           commands:
             - npm run build

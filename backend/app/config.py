@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +17,11 @@ class Settings(BaseSettings):
         default="http://localhost:5173,http://127.0.0.1:5173",
         validation_alias="CORS_ORIGINS",
     )
+    # Auto-allow Amplify preview/production URLs (set to empty to disable).
+    cors_origin_regex: str = Field(
+        default=r"https://([a-z0-9-]+\.)?amplifyapp\.com",
+        validation_alias="CORS_ORIGIN_REGEX",
+    )
     api_prefix: str = "/api/v1"
     seed_on_startup: bool = False
     port: int = 8000
@@ -29,6 +34,11 @@ class Settings(BaseSettings):
         if raw.startswith("["):
             return json.loads(raw)
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    @property
+    def cors_regex(self) -> str | None:
+        value = (self.cors_origin_regex or "").strip()
+        return value if value else None
 
 
 settings = Settings()

@@ -487,3 +487,46 @@ tr:hover td {
 .modal {
   max-width: 640px;
 }
+
+.api-status {
+  margin-top: auto;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+}
+
+.api-status strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.api-status p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+}
+
+.api-status-url {
+  font-size: 0.7rem;
+  word-break: break-all;
+}
+
+.api-status-ok {
+  background: #1e3d2e;
+  border-color: var(--success);
+}
+
+.api-status-ok p {
+  color: #b8f0d4;
+}
+
+.api-status-error,
+.api-status-unset {
+  background: #3d2020;
+  border-color: var(--danger);
+}
+
+.api-status-error p,
+.api-status-unset p {
+  color: #ffc9c9;
+}

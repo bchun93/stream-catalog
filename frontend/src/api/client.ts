@@ -9,8 +9,14 @@ import type {
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const API = `${API_BASE}/api/v1`;
+const IS_PROD = import.meta.env.PROD;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (IS_PROD && !API_BASE) {
+    throw new Error(
+      "API URL not configured. In Amplify, set VITE_API_URL to your App Runner URL and redeploy."
+    );
+  }
   const res = await fetch(`${API}${path}`, {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,

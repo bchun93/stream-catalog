@@ -9,3 +9,4 @@ frontend/.env
 frontend/.env.local
 .DS_Store
 .env
+deploy.env

@@ -57,8 +57,10 @@ App Runner builds the `backend/Dockerfile` from your GitHub repo.
    | Name | Value |
    |------|--------|
    | `DATABASE_URL` | Your Neon Postgres URL |
-   | `CORS_ORIGINS` | `https://main.dXXXXXXXX.amplifyapp.com` (fill in after Amplify step 4, or use `*` temporarily) |
+   | `TMDB_API_KEY` | Your TMDB v3 API key (required for metadata search) |
    | `SEED_ON_STARTUP` | `true` (first deploy only; set `false` later) |
+
+   CORS for `*.amplifyapp.com` is automatic. Optionally set `CORS_ORIGINS` for custom domains.
 
 7. Deploy. Copy the **default domain**, e.g. `https://abc123.us-east-1.awsapprunner.com`.
 8. Verify: open `https://YOUR-APP-RUNNER-URL/health` → `{"status":"ok"}`.
@@ -81,15 +83,36 @@ App Runner builds the `backend/Dockerfile` from your GitHub repo.
 
 ---
 
-## 5. Wire CORS (required once)
+## 5. CORS
 
-Go back to **App Runner** → your service → **Configuration** → **Environment variables**:
+The API **automatically allows** `*.amplifyapp.com` origins (no manual CORS entry required for standard Amplify URLs).
 
-- Set `CORS_ORIGINS` to your Amplify URL (comma-separated if you add custom domains):
-  ```
-  https://main.d1234abcdef.amplifyapp.com,https://catalog.yourdomain.com
-  ```
-- Redeploy if App Runner does not auto-restart.
+Optionally add custom domains to `CORS_ORIGINS` on App Runner:
+```
+https://catalog.yourdomain.com
+```
+
+---
+
+## 5b. One-command cloud setup (recommended)
+
+After App Runner exists and you have its URL:
+
+```bash
+cp deploy.env.example deploy.env
+# Edit deploy.env: AMPLIFY_APP_ID, APP_RUNNER_URL, DATABASE_URL, TMDB_API_KEY
+
+chmod +x scripts/deploy-cloud.sh scripts/verify-cloud.sh
+./scripts/deploy-cloud.sh
+```
+
+This sets Amplify `VITE_API_URL`, starts a rebuild, and updates App Runner env vars (if `APP_RUNNER_SERVICE_ARN` is set).
+
+Verify:
+
+```bash
+./scripts/verify-cloud.sh https://YOUR-APP-RUNNER-URL
+```
 
 ---
 
