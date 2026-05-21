@@ -30,9 +30,11 @@ class MediaAsset(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title_id: Mapped[int] = mapped_column(ForeignKey("titles.id"), index=True)
-    asset_type: Mapped[AssetType] = mapped_column(Enum(AssetType))
+    asset_type: Mapped[AssetType] = mapped_column(
+        Enum(AssetType, native_enum=False)
+    )
     status: Mapped[AssetStatus] = mapped_column(
-        Enum(AssetStatus), default=AssetStatus.UPLOADED
+        Enum(AssetStatus, native_enum=False), default=AssetStatus.UPLOADED
     )
     filename: Mapped[str] = mapped_column(String(255))
     mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)

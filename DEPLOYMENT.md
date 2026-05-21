@@ -153,6 +153,20 @@ Other options: standard **ECS Fargate**, **Lambda + API Gateway** (requires [Man
 | Slow first search | Render free tier cold start — wait or upgrade plan |
 | CORS error | Confirm Amplify URL matches `*.amplifyapp.com` pattern |
 | Build fails on Amplify | Set `VITE_API_URL` in Amplify env vars |
+| Render: `Application startup failed` + SQLAlchemy link | Wrong `DATABASE_URL`, or reset Neon DB (see below) |
+
+### Render startup failed (SQLAlchemy / seed)
+
+Usually one of:
+
+1. **`DATABASE_URL` is wrong** — must be full Neon URL starting with `postgresql://`, not `neon`.
+2. **PostgreSQL enum conflict** — partial failed deploy left bad schema. In Neon → **SQL Editor** run:
+   ```sql
+   DROP SCHEMA public CASCADE;
+   CREATE SCHEMA public;
+   ```
+   Then redeploy Render.
+3. Set `SEED_ON_STARTUP=false` in Render if you don't need sample data on every boot.
 
 ---
 

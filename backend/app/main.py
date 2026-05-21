@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,12 +11,18 @@ from app.routers import media_assets, metadata, titles
 from app.seed import seed
 
 
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
     run_migrations()
     if settings.seed_on_startup:
-        seed()
+        try:
+            seed()
+        except Exception as exc:
+            logger.warning("Startup seed skipped: %s", exc)
     yield
 
 

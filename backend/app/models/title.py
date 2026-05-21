@@ -28,9 +28,11 @@ class Title(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
-    title_type: Mapped[TitleType] = mapped_column(Enum(TitleType))
+    title_type: Mapped[TitleType] = mapped_column(
+        Enum(TitleType, native_enum=False)
+    )
     status: Mapped[TitleStatus] = mapped_column(
-        Enum(TitleStatus), default=TitleStatus.DRAFT
+        Enum(TitleStatus, native_enum=False), default=TitleStatus.DRAFT
     )
     synopsis: Mapped[str | None] = mapped_column(Text, nullable=True)
     short_description: Mapped[str | None] = mapped_column(String(500), nullable=True)
