@@ -52,6 +52,7 @@ class MediaAsset(Base):
     codec: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )

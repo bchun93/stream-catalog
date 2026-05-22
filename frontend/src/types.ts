@@ -28,6 +28,19 @@ export type ArtworkType =
   | "cast_photo"
   | "season_poster";
 
+export interface ArtworkSpecs {
+  width?: number | null;
+  height?: number | null;
+  aspect_ratio?: number | null;
+  aspect_ratio_label?: string | null;
+  resolution?: string | null;
+  language?: string | null;
+  country?: string | null;
+  vote_average?: number | null;
+  vote_count?: number | null;
+  label?: string | null;
+}
+
 export interface ArtworkItem {
   asset_type: ArtworkType;
   storage_uri: string;
@@ -36,6 +49,7 @@ export interface ArtworkItem {
   language?: string | null;
   resolution?: string | null;
   notes?: string | null;
+  specs?: ArtworkSpecs;
 }
 
 export type AssetStatus =
@@ -70,6 +84,7 @@ export interface Title {
   season_number?: number | null;
   episode_number?: number | null;
   runtime_minutes?: number | null;
+  poster_url?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +109,8 @@ export interface MediaAsset {
   codec?: string | null;
   version: number;
   notes?: string | null;
+  metadata_json?: string | null;
+  specs?: ArtworkSpecs | null;
   created_at: string;
   updated_at: string;
 }

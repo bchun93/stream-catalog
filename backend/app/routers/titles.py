@@ -3,10 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.title import Title, TitleType
+from app.schemas.artwork import SaveArtworkRequest
 from app.schemas.media_asset import MediaAssetRead
 from app.schemas.title import TitleCreate, TitleRead, TitleTree, TitleUpdate
 from app.services import title_service
-from app.services.artwork_service import sync_artwork_for_title
+from app.services.artwork_metadata import enrich_asset_read
+from app.services.artwork_service import save_artwork_selection, sync_artwork_for_title
 
 router = APIRouter(prefix="/titles", tags=["titles"])
 
@@ -26,7 +28,7 @@ def list_titles(
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db),
 ):
-    return title_service.list_titles(
+    return title_service.list_titles_read(
         db, q=q, title_type=title_type, parent_id=parent_id, skip=skip, limit=limit
     )
 
@@ -53,6 +55,19 @@ def create_title(payload: TitleCreate, db: Session = Depends(get_db)):
     return title_service.create_title(db, payload)
 
 
+@router.post("/{title_id}/artwork", response_model=list[MediaAssetRead])
+def save_title_artwork(
+    title_id: int,
+    payload: SaveArtworkRequest,
+    db: Session = Depends(get_db),
+):
+    title = title_service.get_title(db, title_id)
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    assets = save_artwork_selection(db, title_id, payload.items)
+    return [enrich_asset_read(a) for a in assets]
+
+
 @router.post("/{title_id}/artwork/sync", response_model=list[MediaAssetRead])
 async def sync_title_artwork(title_id: int, db: Session = Depends(get_db)):
     title = title_service.get_title(db, title_id)
@@ -63,7 +78,8 @@ async def sync_title_artwork(title_id: int, db: Session = Depends(get_db)):
             status_code=400,
             detail="Title has no TMDB external_id — import metadata first",
         )
-    return await sync_artwork_for_title(db, title)
+    assets = await sync_artwork_for_title(db, title)
+    return [enrich_asset_read(a) for a in assets]
 
 
 @router.patch("/{title_id}", response_model=TitleRead)

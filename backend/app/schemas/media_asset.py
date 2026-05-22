@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.media_asset import AssetStatus, AssetType
+from app.schemas.artwork import ArtworkSpecs
 
 
 class MediaAssetBase(BaseModel):
@@ -20,6 +21,7 @@ class MediaAssetBase(BaseModel):
     codec: str | None = None
     version: int = 1
     notes: str | None = None
+    metadata_json: str | None = None
 
 
 class MediaAssetCreate(MediaAssetBase):
@@ -40,6 +42,7 @@ class MediaAssetUpdate(BaseModel):
     codec: str | None = None
     version: int | None = None
     notes: str | None = None
+    metadata_json: str | None = None
 
 
 class MediaAssetRead(MediaAssetBase):
@@ -48,3 +51,4 @@ class MediaAssetRead(MediaAssetBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    specs: ArtworkSpecs | None = None

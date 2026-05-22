@@ -16,6 +16,7 @@ interface TitleFormProps {
   initialTab?: "details" | "artwork";
   onSubmit: (data: Partial<Title>) => Promise<Title | void>;
   onCancel: () => void;
+  onArtworkSaved?: () => void;
 }
 
 const TYPES: TitleType[] = ["movie", "series", "season", "episode"];
@@ -58,6 +59,7 @@ export function TitleForm({
   initialTab = "details",
   onSubmit,
   onCancel,
+  onArtworkSaved,
 }: TitleFormProps) {
   const [tab, setTab] = useState<"details" | "artwork">(initialTab);
   const [form, setForm] = useState(emptyForm(initial));
@@ -65,7 +67,6 @@ export function TitleForm({
   const [error, setError] = useState<string | null>(null);
   const [metadataApplied, setMetadataApplied] = useState(false);
   const [savedTitleId, setSavedTitleId] = useState<number | undefined>(titleId);
-  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     setTab(initialTab);
@@ -74,6 +75,12 @@ export function TitleForm({
   useEffect(() => {
     setSavedTitleId(titleId);
   }, [titleId]);
+
+  useEffect(() => {
+    setForm(emptyForm(initial));
+    setError(null);
+    setMetadataApplied(false);
+  }, [initial?.id, isCreate]);
 
   const set = (key: string, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -116,7 +123,6 @@ export function TitleForm({
     }
     setSaving(true);
     setError(null);
-    setSuccess(null);
     try {
       const payload: Partial<Title> = {
         slug: form.slug,
@@ -142,13 +148,7 @@ export function TitleForm({
           ? Number(form.runtime_minutes)
           : null,
       };
-      const result = await onSubmit(payload);
-      if (result && "id" in result) {
-        setSavedTitleId(result.id);
-        setSuccess("Title saved. Use Fetch artwork on the Artwork tab when ready.");
-      } else {
-        setSuccess("Title saved.");
-      }
+      await onSubmit(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -161,8 +161,6 @@ export function TitleForm({
   return (
     <form onSubmit={handleSubmit} noValidate>
       {error && <div className="error-banner">{error}</div>}
-      {success && !error && <div className="metadata-applied-banner">{success}</div>}
-
       <div className="title-tabs">
         <button
           type="button"
@@ -331,6 +329,7 @@ export function TitleForm({
           key={activeTitleId ?? form.external_id ?? "new"}
           titleId={activeTitleId}
           externalId={form.external_id}
+          onSaved={onArtworkSaved}
         />
       )}
 

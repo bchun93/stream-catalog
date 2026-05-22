@@ -67,6 +67,7 @@ class TitleRead(TitleBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    poster_url: str | None = None
 
 
 class TitleTree(TitleRead):

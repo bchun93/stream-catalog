@@ -11,11 +11,14 @@ from fastapi import HTTPException
 from app.config import settings
 from app.models.media_asset import AssetType
 from app.models.title import TitleType
-from app.schemas.artwork import ArtworkItem
+from app.schemas.artwork import ArtworkItem, ArtworkSpecs
 from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
 
 _TMDB_IMAGE = "https://image.tmdb.org/t/p/w185"
 TMDB_SOURCE_NOTE = "source:tmdb"
+# English (US) artwork — TMDB image language filter + API locale.
+_TMDB_LANGUAGE = "en-US"
+_TMDB_IMAGE_LANGUAGES = "en,null"
 
 _IMAGE_SIZE = {
     AssetType.POSTER: "w500",
@@ -27,12 +30,12 @@ _IMAGE_SIZE = {
 }
 
 _IMAGE_LIMITS = {
-    AssetType.POSTER: 8,
-    AssetType.BACKDROP: 6,
-    AssetType.LOGO: 6,
-    AssetType.STILL: 8,
-    AssetType.CAST_PHOTO: 15,
-    AssetType.SEASON_POSTER: 30,
+    AssetType.POSTER: 24,
+    AssetType.BACKDROP: 16,
+    AssetType.LOGO: 16,
+    AssetType.STILL: 16,
+    AssetType.CAST_PHOTO: 24,
+    AssetType.SEASON_POSTER: 40,
 }
 
 _IMAGES_KEY_TO_TYPE = {
@@ -91,11 +94,45 @@ def _image_url(path: str | None, size: str = "w500") -> str | None:
     return f"https://image.tmdb.org/t/p/{size}{path}"
 
 
-def _resolution(item: dict) -> str | None:
-    width, height = item.get("width"), item.get("height")
+def _resolution(width: int | None, height: int | None) -> str | None:
     if width and height:
-        return f"{width}x{height}"
+        return f"{width}×{height}"
     return None
+
+
+def _aspect_ratio_label(ratio: float | None) -> str | None:
+    if ratio is None:
+        return None
+    pairs = [
+        (0.667, "2:3"),
+        (0.75, "3:4"),
+        (1.0, "1:1"),
+        (1.778, "16:9"),
+        (2.333, "21:9"),
+    ]
+    for target, label in pairs:
+        if abs(ratio - target) < 0.06:
+            return label
+    return f"{ratio:.2f}:1"
+
+
+def _specs_from_image(image: dict, *, label: str | None = None) -> ArtworkSpecs:
+    width = image.get("width")
+    height = image.get("height")
+    ar = image.get("aspect_ratio")
+    lang = image.get("iso_639_1")
+    return ArtworkSpecs(
+        width=width,
+        height=height,
+        aspect_ratio=ar,
+        aspect_ratio_label=_aspect_ratio_label(ar),
+        resolution=_resolution(width, height),
+        language=lang,
+        country=image.get("iso_3166_1"),
+        vote_average=image.get("vote_average"),
+        vote_count=image.get("vote_count"),
+        label=label,
+    )
 
 
 def _artwork_filename(asset_type: AssetType, file_path: str, *parts: str) -> str:
@@ -106,8 +143,27 @@ def _artwork_filename(asset_type: AssetType, file_path: str, *parts: str) -> str
     return raw[:255]
 
 
-def _sorted_images(images: list[dict]) -> list[dict]:
-    return sorted(images, key=lambda x: x.get("vote_average") or 0, reverse=True)
+def _is_english_or_neutral(lang: str | None) -> bool:
+    return lang in (None, "", "en")
+
+
+def _rank_images_english_first(images: list[dict]) -> list[dict]:
+    """Prefer English and language-neutral images, then by TMDB vote."""
+
+    def sort_key(img: dict) -> tuple[int, float]:
+        lang = img.get("iso_639_1")
+        tier = 0 if _is_english_or_neutral(lang) else 1
+        return (tier, -(img.get("vote_average") or 0))
+
+    return sorted(images, key=sort_key)
+
+
+def _tmdb_image_params(**extra: str) -> dict[str, str]:
+    return {
+        "language": _TMDB_LANGUAGE,
+        "include_image_language": _TMDB_IMAGE_LANGUAGES,
+        **extra,
+    }
 
 
 def _items_from_images(
@@ -118,19 +174,24 @@ def _items_from_images(
 ) -> list[ArtworkItem]:
     limit = _IMAGE_LIMITS[asset_type]
     size = _IMAGE_SIZE[asset_type]
+    ranked = _rank_images_english_first(images)
+    english = [i for i in ranked if _is_english_or_neutral(i.get("iso_639_1"))]
+    fallback = [i for i in ranked if not _is_english_or_neutral(i.get("iso_639_1"))]
+    pool = english + fallback
     items: list[ArtworkItem] = []
     seen: set[str] = set()
-    for image in _sorted_images(images)[:limit]:
+    for image in pool[:limit]:
         path = image.get("file_path")
         url = _image_url(path, size)
         if not url or url in seen:
             continue
         seen.add(url)
         lang = image.get("iso_639_1")
-        note = TMDB_SOURCE_NOTE
+        specs = _specs_from_image(image, label=note_prefix)
+        note = f"{TMDB_SOURCE_NOTE}; locale:en-US"
         if note_prefix:
             note = f"{note}; {note_prefix}"
-        if lang:
+        if lang and lang != "en":
             note = f"{note}; lang:{lang}"
         items.append(
             ArtworkItem(
@@ -139,8 +200,9 @@ def _items_from_images(
                 filename=_artwork_filename(asset_type, path, lang or "xx"),
                 mime_type="image/jpeg",
                 language=lang,
-                resolution=_resolution(image),
+                resolution=specs.resolution,
                 notes=note,
+                specs=specs,
             )
         )
     return items
@@ -293,7 +355,10 @@ async def collect_artwork_from_tmdb(
         raise HTTPException(status_code=400, detail="media_type must be movie or tv")
 
     items: list[ArtworkItem] = []
-    images_data = await _get(f"/{media_type}/{tmdb_id}/images")
+    images_data = await _get(
+        f"/{media_type}/{tmdb_id}/images",
+        **_tmdb_image_params(),
+    )
     for key, asset_type in _IMAGES_KEY_TO_TYPE.items():
         if key == "stills" and media_type != "tv":
             continue
@@ -301,7 +366,11 @@ async def collect_artwork_from_tmdb(
         if batch:
             items.extend(_items_from_images(batch, asset_type))
 
-    credits_data = await _get(f"/{media_type}/{tmdb_id}", append_to_response="credits")
+    credits_data = await _get(
+        f"/{media_type}/{tmdb_id}",
+        append_to_response="credits",
+        language=_TMDB_LANGUAGE,
+    )
     cast = credits_data.get("credits", {}).get("cast") or []
     cast_items: list[ArtworkItem] = []
     seen_cast: set[str] = set()
@@ -316,14 +385,22 @@ async def collect_artwork_from_tmdb(
         note = f"{TMDB_SOURCE_NOTE}; {name}"
         if character:
             note = f"{note} as {character}"
+        cast_label = f"{name} as {character}" if character else name
+        cast_specs = ArtworkSpecs(
+            width=member.get("width"),
+            height=member.get("height"),
+            resolution=_resolution(member.get("width"), member.get("height")),
+            label=cast_label,
+        )
         cast_items.append(
             ArtworkItem(
                 asset_type=AssetType.CAST_PHOTO,
                 storage_uri=url,
                 filename=_artwork_filename(AssetType.CAST_PHOTO, path, name.replace(" ", "_")),
                 mime_type="image/jpeg",
-                resolution=_resolution(member) if member.get("width") else None,
+                resolution=cast_specs.resolution,
                 notes=note,
+                specs=cast_specs,
             )
         )
         if len(cast_items) >= _IMAGE_LIMITS[AssetType.CAST_PHOTO]:
@@ -331,7 +408,7 @@ async def collect_artwork_from_tmdb(
     items.extend(cast_items)
 
     if media_type == "tv":
-        detail = await _get(f"/tv/{tmdb_id}")
+        detail = await _get(f"/tv/{tmdb_id}", language=_TMDB_LANGUAGE)
         for season in detail.get("seasons") or []:
             if season.get("season_number", 0) == 0:
                 continue
@@ -340,6 +417,10 @@ async def collect_artwork_from_tmdb(
             if not url:
                 continue
             season_num = season.get("season_number")
+            season_specs = ArtworkSpecs(
+                label=f"Season {season_num}",
+                language="en",
+            )
             items.append(
                 ArtworkItem(
                     asset_type=AssetType.SEASON_POSTER,
@@ -349,6 +430,7 @@ async def collect_artwork_from_tmdb(
                     ),
                     mime_type="image/jpeg",
                     notes=f"{TMDB_SOURCE_NOTE}; season:{season_num}",
+                    specs=season_specs,
                 )
             )
             if len([i for i in items if i.asset_type == AssetType.SEASON_POSTER]) >= _IMAGE_LIMITS[AssetType.SEASON_POSTER]:

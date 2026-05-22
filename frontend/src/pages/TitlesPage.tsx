@@ -3,6 +3,7 @@ import { titlesApi } from "../api/client";
 import { Badge } from "../components/Badge";
 import { Modal } from "../components/Modal";
 import { TitleForm } from "../components/TitleForm";
+import { posterThumbUrl } from "../utils/posterThumb";
 import type { Title } from "../types";
 
 export function TitlesPage() {
@@ -96,13 +97,27 @@ export function TitlesPage() {
             <tbody>
               {titles.map((t) => (
                 <tr key={t.id}>
-                  <td>
-                    <strong>{t.name}</strong>
-                    {t.genres && (
-                      <div style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
-                        {t.genres}
+                  <td className="title-row-cell">
+                    <div className="title-row-main">
+                      {t.poster_url ? (
+                        <img
+                          src={posterThumbUrl(t.poster_url)}
+                          alt=""
+                          className="title-row-poster"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="title-row-poster title-row-poster-empty" aria-hidden>
+                          ?
+                        </div>
+                      )}
+                      <div className="title-row-text">
+                        <strong>{t.name}</strong>
+                        {t.genres && (
+                          <div className="title-row-genres">{t.genres}</div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </td>
                   <td className="mono">{t.slug}</td>
                   <td>
@@ -145,23 +160,25 @@ export function TitlesPage() {
           onClose={closeModal}
         >
           <TitleForm
+            key={editing?.id ?? "new"}
             initial={editing ?? undefined}
             titleId={editing?.id}
             isCreate={modal === "create"}
             initialTab={formTab}
             parents={titles.filter((t) => t.id !== editing?.id)}
             onCancel={closeModal}
+            onArtworkSaved={load}
             onSubmit={async (data) => {
               if (modal === "create") {
                 const created = await titlesApi.create(data);
-                setEditing(created);
-                setModal("edit");
                 load();
+                closeModal();
                 return created;
               }
               if (editing) {
                 const updated = await titlesApi.update(editing.id, data);
                 load();
+                closeModal();
                 return updated;
               }
             }}

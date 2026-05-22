@@ -55,8 +55,11 @@ export const titlesApi = {
     }),
   delete: (id: number) =>
     request<void>(`/titles/${id}`, { method: "DELETE" }),
-  syncArtwork: (id: number) =>
-    request<MediaAsset[]>(`/titles/${id}/artwork/sync`, { method: "POST" }),
+  saveArtwork: (id: number, items: ArtworkItem[]) =>
+    request<MediaAsset[]>(`/titles/${id}/artwork`, {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    }),
 };
 
 export const metadataApi = {
