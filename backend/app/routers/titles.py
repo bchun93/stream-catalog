@@ -8,7 +8,11 @@ from app.schemas.media_asset import MediaAssetRead
 from app.schemas.title import TitleCreate, TitleRead, TitleTree, TitleUpdate
 from app.services import title_service
 from app.services.artwork_metadata import enrich_asset_read
-from app.services.artwork_service import save_artwork_selection, sync_artwork_for_title
+from app.services.artwork_service import (
+    list_artwork_assets,
+    save_artwork_selection,
+    sync_artwork_for_title,
+)
 
 router = APIRouter(prefix="/titles", tags=["titles"])
 
@@ -41,7 +45,7 @@ def get_title_tree(db: Session = Depends(get_db)):
 
 @router.get("/{title_id}", response_model=TitleRead)
 def get_title(title_id: int, db: Session = Depends(get_db)):
-    title = title_service.get_title(db, title_id)
+    title = title_service.get_title_read(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
     return title
@@ -53,6 +57,15 @@ def create_title(payload: TitleCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=409, detail="Slug already exists")
     return title_service.create_title(db, payload)
+
+
+@router.get("/{title_id}/artwork", response_model=list[MediaAssetRead])
+def list_title_artwork(title_id: int, db: Session = Depends(get_db)):
+    title = title_service.get_title(db, title_id)
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    assets = list_artwork_assets(db, title_id)
+    return [enrich_asset_read(a) for a in assets]
 
 
 @router.post("/{title_id}/artwork", response_model=list[MediaAssetRead])

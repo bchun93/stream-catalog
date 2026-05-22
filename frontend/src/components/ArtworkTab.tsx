@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { assetsApi, metadataApi, titlesApi } from "../api/client";
+import { metadataApi, titlesApi } from "../api/client";
 import { specLinesForItem } from "../utils/artworkSpecs";
 import {
   ARTWORK_LABELS,
@@ -159,7 +159,7 @@ export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
   const [saved, setSaved] = useState<MediaAsset[]>([]);
   const [candidates, setCandidates] = useState<ArtworkItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -192,15 +192,14 @@ export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
       setSaved([]);
       return;
     }
-    setLoading(true);
-    setError(null);
+    setCatalogLoading(true);
     try {
-      const list = await assetsApi.list({ title_id: String(titleId) });
+      const list = await titlesApi.listArtwork(titleId);
       setSaved(list.filter(isArtworkAsset));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load saved artwork");
     } finally {
-      setLoading(false);
+      setCatalogLoading(false);
     }
   }, [titleId]);
 
@@ -259,8 +258,8 @@ export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
     setError(null);
     setSuccess(null);
     try {
-      await titlesApi.saveArtwork(titleId, items);
-      await loadSaved();
+      const stored = await titlesApi.saveArtwork(titleId, items);
+      setSaved(stored.filter(isArtworkAsset));
       setSelected(new Set());
       setSuccess(
         `Added ${items.length} artwork asset${items.length === 1 ? "" : "s"} to the catalog.`
@@ -286,7 +285,7 @@ export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
           <button
             type="button"
             className="btn btn-primary artwork-fetch-btn"
-            disabled={fetching || loading || saving}
+            disabled={fetching || saving}
             onClick={handleFetch}
           >
             {fetching ? "Fetching…" : candidates.length ? "Refresh browse" : "Fetch artwork"}
@@ -317,90 +316,80 @@ export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
         <div className="metadata-applied-banner artwork-success">{success}</div>
       )}
 
-      {loading && (
-        <div className="artwork-state">
-          <div className="artwork-spinner" aria-hidden />
-          <p>Loading catalog artwork…</p>
-        </div>
-      )}
-
-      {!loading && !titleId && (
-        <div className="artwork-state artwork-state-action">
-          <p className="artwork-state-title">Save the title first</p>
-          <p className="artwork-state-body">
-            Save title details on the Details tab, then return here to fetch and
-            store artwork.
+      <div className="artwork-view-section">
+        <h3 className="artwork-view-heading">In your catalog</h3>
+        {!titleId ? (
+          <p className="artwork-view-empty">
+            Save the title on the Details tab first, then return here to store artwork.
           </p>
-        </div>
-      )}
-
-      {!loading && titleId && (
-        <>
-          <div className="artwork-view-section">
-            <h3 className="artwork-view-heading">In your catalog</h3>
-            {saved.length === 0 ? (
-              <p className="artwork-view-empty">
-                No artwork saved yet. Fetch from TMDB below and add selected images.
-              </p>
-            ) : (
-              <ArtworkStrip
-                items={savedItems}
-                mode="catalog"
-                savedUris={savedUris}
-                selected={selected}
-              />
-            )}
+        ) : catalogLoading ? (
+          <div className="artwork-state">
+            <div className="artwork-spinner" aria-hidden />
+            <p>Loading catalog artwork…</p>
           </div>
+        ) : saved.length === 0 ? (
+          <p className="artwork-view-empty">
+            No artwork saved yet. Fetch from TMDB below and add selected images.
+          </p>
+        ) : (
+          <ArtworkStrip
+            items={savedItems}
+            mode="catalog"
+            savedUris={savedUris}
+            selected={selected}
+          />
+        )}
+      </div>
 
-          <div className="artwork-view-section artwork-view-section-browse">
-            <h3 className="artwork-view-heading">Browse TMDB</h3>
-            {!canFetch ? (
-              <p className="artwork-view-empty">
-                Import metadata on the Details tab to enable TMDB artwork.
-              </p>
-            ) : fetching ? (
-              <div className="artwork-state">
-                <div className="artwork-spinner" aria-hidden />
-                <p>Loading artwork from TMDB…</p>
-              </div>
-            ) : candidates.length === 0 ? (
-              <p className="artwork-view-empty">
-                Click Fetch artwork to browse posters, backdrops, logos, and more.
-                Selected images are added to your catalog — nothing is saved until you
-                confirm.
-              </p>
-            ) : (
-              <>
-                <div className="artwork-select-bar">
-                  <button type="button" className="btn btn-ghost" onClick={selectAllNew}>
-                    Select all new
-                  </button>
-                  <button type="button" className="btn btn-ghost" onClick={clearSelection}>
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={selectedNewCount === 0 || saving}
-                    onClick={handleSaveSelected}
-                  >
-                    {saving
-                      ? "Saving…"
-                      : `Add selected to catalog (${selectedNewCount})`}
-                  </button>
-                </div>
-                <ArtworkStrip
-                  items={candidates}
-                  mode="browse"
-                  savedUris={savedUris}
-                  selected={selected}
-                  onToggle={toggle}
-                />
-              </>
-            )}
+      <div className="artwork-view-section artwork-view-section-browse">
+        <h3 className="artwork-view-heading">Browse TMDB</h3>
+        {!canFetch ? (
+          <p className="artwork-view-empty">
+            Import metadata on the Details tab to enable TMDB artwork.
+          </p>
+        ) : fetching ? (
+          <div className="artwork-state">
+            <div className="artwork-spinner" aria-hidden />
+            <p>Loading artwork from TMDB…</p>
           </div>
-        </>
-      )}
+        ) : candidates.length === 0 ? (
+          <p className="artwork-view-empty">
+            Click Fetch artwork to browse posters, backdrops, logos, and more.
+            Selected images are added to your catalog — nothing is saved until you
+            confirm.
+          </p>
+        ) : (
+          <>
+            <div className="artwork-select-bar">
+              <button type="button" className="btn btn-ghost" onClick={selectAllNew}>
+                Select all new
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={clearSelection}>
+                Clear
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={selectedNewCount === 0 || saving || !titleId}
+                onClick={handleSaveSelected}
+              >
+                {saving
+                  ? "Saving…"
+                  : titleId
+                    ? `Add selected to catalog (${selectedNewCount})`
+                    : "Save title first"}
+              </button>
+            </div>
+            <ArtworkStrip
+              items={candidates}
+              mode="browse"
+              savedUris={savedUris}
+              selected={selected}
+              onToggle={toggle}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }

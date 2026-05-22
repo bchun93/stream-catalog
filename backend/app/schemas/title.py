@@ -29,6 +29,7 @@ class TitleBase(BaseModel):
     crew: str | None = None
     external_id: str | None = None
     metadata_source: str | None = None
+    poster_url: str | None = None
 
 
 class TitleCreate(TitleBase):
@@ -59,6 +60,7 @@ class TitleUpdate(BaseModel):
     crew: str | None = None
     external_id: str | None = None
     metadata_source: str | None = None
+    poster_url: str | None = None
 
 
 class TitleRead(TitleBase):
@@ -67,7 +69,6 @@ class TitleRead(TitleBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    poster_url: str | None = None
 
 
 class TitleTree(TitleRead):

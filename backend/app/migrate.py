@@ -10,6 +10,7 @@ _NEW_COLUMNS = [
     ("crew", "TEXT"),
     ("external_id", "VARCHAR(64)"),
     ("metadata_source", "VARCHAR(32)"),
+    ("poster_url", "VARCHAR(1024)"),
 ]
 
 

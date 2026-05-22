@@ -1,11 +1,9 @@
 import asyncio
 import json
 import re
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import date
 
+import httpx
 from fastapi import HTTPException
 
 from app.config import settings
@@ -44,8 +42,8 @@ _IMAGES_KEY_TO_TYPE = {
     "logos": AssetType.LOGO,
     "stills": AssetType.STILL,
 }
-# No-proxy opener — avoids Cursor/shell proxy breaking TMDB DNS (Errno 8 / 403).
-_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+# trust_env=False — ignore HTTP_PROXY / ALL_PROXY so TMDB calls work in dev shells.
+_TMDb_HTTP = httpx.Client(timeout=20.0, trust_env=False)
 
 
 def _require_api_key() -> str:
@@ -214,30 +212,28 @@ def _title_type_for_media(media_type: str) -> TitleType:
 
 def _fetch_json(path: str, **params) -> dict:
     params["api_key"] = _require_api_key()
-    query = urllib.parse.urlencode(params)
-    url = f"{settings.tmdb_base_url.rstrip('/')}{path}?{query}"
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    url = f"{settings.tmdb_base_url.rstrip('/')}{path}"
     try:
-        with _NO_PROXY_OPENER.open(req, timeout=20) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode()[:200] if exc.fp else ""
-        if exc.code == 401:
+        resp = _TMDb_HTTP.get(url, params=params)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as exc:
+        body = (exc.response.text or "")[:200]
+        if exc.response.status_code == 401:
             raise HTTPException(
                 status_code=503,
                 detail="Invalid TMDB API key — check TMDB_API_KEY in backend/.env",
             ) from exc
         raise HTTPException(
             status_code=502,
-            detail=f"TMDB error ({exc.code}): {body}",
+            detail=f"TMDB error ({exc.response.status_code}): {body}",
         ) from exc
-    except OSError as exc:
+    except httpx.RequestError as exc:
         raise HTTPException(
             status_code=503,
             detail=(
                 f"Could not reach TMDB ({exc}). "
-                "Check internet/DNS, disable VPN, and start the API from Terminal.app: "
-                "./scripts/start-backend.sh"
+                "Check internet/DNS, disable VPN, and verify TMDB_API_KEY on Render."
             ),
         ) from exc
 
@@ -493,7 +489,7 @@ async def fetch_metadata(
 
 
 def parse_external_id(external_id: str) -> tuple[str, int]:
-    from urllib.parse import unquote
+    from urllib.parse import unquote  # stdlib — external_id decoding only
 
     normalized = unquote(external_id).strip().rstrip("/")
     if normalized.endswith("/artwork"):

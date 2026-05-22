@@ -3,7 +3,7 @@ import { titlesApi } from "../api/client";
 import { Badge } from "../components/Badge";
 import { Modal } from "../components/Modal";
 import { TitleForm } from "../components/TitleForm";
-import { posterThumbUrl } from "../utils/posterThumb";
+import { TitleRowPoster } from "../components/TitleRowPoster";
 import type { Title } from "../types";
 
 export function TitlesPage() {
@@ -100,12 +100,7 @@ export function TitlesPage() {
                   <td className="title-row-cell">
                     <div className="title-row-main">
                       {t.poster_url ? (
-                        <img
-                          src={posterThumbUrl(t.poster_url)}
-                          alt=""
-                          className="title-row-poster"
-                          loading="lazy"
-                        />
+                        <TitleRowPoster url={t.poster_url} />
                       ) : (
                         <div className="title-row-poster title-row-poster-empty" aria-hidden>
                           ?

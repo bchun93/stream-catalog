@@ -1,6 +1,24 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.media_asset import AssetType
+
+
+def _coerce_int(value: object) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_float(value: object) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class ArtworkSpecs(BaseModel):
@@ -19,6 +37,16 @@ class ArtworkSpecs(BaseModel):
     vote_count: int | None = None
     label: str | None = Field(None, description="Cast name, season number, etc.")
 
+    @field_validator("width", "height", "vote_count", mode="before")
+    @classmethod
+    def _int_fields(cls, value: object) -> int | None:
+        return _coerce_int(value)
+
+    @field_validator("aspect_ratio", "vote_average", mode="before")
+    @classmethod
+    def _float_fields(cls, value: object) -> float | None:
+        return _coerce_float(value)
+
 
 class ArtworkItem(BaseModel):
     """Artwork from TMDB (preview or persisted as MediaAsset)."""
@@ -30,7 +58,7 @@ class ArtworkItem(BaseModel):
     language: str | None = None
     resolution: str | None = None
     notes: str | None = None
-    specs: ArtworkSpecs = Field(default_factory=ArtworkSpecs)
+    specs: ArtworkSpecs | None = None
 
 
 class SaveArtworkRequest(BaseModel):

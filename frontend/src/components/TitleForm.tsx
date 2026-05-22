@@ -45,6 +45,7 @@ const emptyForm = (initial?: Partial<Title>) => ({
   crew: initial?.crew ?? "",
   external_id: initial?.external_id ?? "",
   metadata_source: initial?.metadata_source ?? "",
+  poster_url: initial?.poster_url ?? "",
   parent_id: initial?.parent_id?.toString() ?? "",
   season_number: initial?.season_number?.toString() ?? "",
   episode_number: initial?.episode_number?.toString() ?? "",
@@ -104,6 +105,7 @@ export function TitleForm({
       crew: meta.crew ?? "",
       external_id: meta.external_id,
       metadata_source: meta.source,
+      poster_url: meta.poster_url ?? "",
     }));
     setMetadataApplied(true);
     setError(null);
@@ -141,6 +143,7 @@ export function TitleForm({
         crew: form.crew || null,
         external_id: form.external_id || null,
         metadata_source: form.metadata_source || null,
+        poster_url: form.poster_url || null,
         parent_id: form.parent_id ? Number(form.parent_id) : null,
         season_number: form.season_number ? Number(form.season_number) : null,
         episode_number: form.episode_number ? Number(form.episode_number) : null,
@@ -148,7 +151,10 @@ export function TitleForm({
           ? Number(form.runtime_minutes)
           : null,
       };
-      await onSubmit(payload);
+      const result = await onSubmit(payload);
+      if (result?.id) {
+        setSavedTitleId(result.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -326,7 +332,7 @@ export function TitleForm({
 
       {tab === "artwork" && (
         <ArtworkTab
-          key={activeTitleId ?? form.external_id ?? "new"}
+          key={activeTitleId ?? "new"}
           titleId={activeTitleId}
           externalId={form.external_id}
           onSaved={onArtworkSaved}

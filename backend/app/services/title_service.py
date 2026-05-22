@@ -1,9 +1,12 @@
+from collections import defaultdict
+
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.media_asset import AssetType, MediaAsset
 from app.models.title import Title, TitleType
 from app.schemas.title import TitleCreate, TitleRead, TitleUpdate
+from app.services.poster_resolver import pick_best_poster_uri, resolve_poster_url
 
 _POSTER_TYPES = (
     AssetType.POSTER,
@@ -34,7 +37,9 @@ def list_titles(
     return query.order_by(Title.updated_at.desc()).offset(skip).limit(limit).all()
 
 
-def poster_urls_for_titles(db: Session, title_ids: list[int]) -> dict[int, str]:
+def _poster_assets_by_title(
+    db: Session, title_ids: list[int]
+) -> dict[int, list[MediaAsset]]:
     if not title_ids:
         return {}
     assets = (
@@ -46,14 +51,45 @@ def poster_urls_for_titles(db: Session, title_ids: list[int]) -> dict[int, str]:
         .order_by(MediaAsset.updated_at.desc())
         .all()
     )
-    urls: dict[int, str] = {}
+    grouped: dict[int, list[MediaAsset]] = defaultdict(list)
     for asset in assets:
-        tid = asset.title_id
-        if asset.asset_type == AssetType.POSTER:
-            urls[tid] = asset.storage_uri
-        elif tid not in urls:
-            urls[tid] = asset.storage_uri
+        grouped[asset.title_id].append(asset)
+    return grouped
+
+
+def poster_urls_for_titles(db: Session, title_ids: list[int]) -> dict[int, str]:
+    if not title_ids:
+        return {}
+    assets_by_title = _poster_assets_by_title(db, title_ids)
+    titles = db.query(Title).filter(Title.id.in_(title_ids)).all()
+    urls: dict[int, str] = {}
+    for title in titles:
+        resolved = resolve_poster_url(
+            cached_poster_url=title.poster_url,
+            assets=assets_by_title.get(title.id, []),
+        )
+        if resolved:
+            urls[title.id] = resolved
     return urls
+
+
+def sync_title_poster_cache(db: Session, title_id: int) -> None:
+    """Keep titles.poster_url aligned with the best catalog poster asset."""
+    title = get_title(db, title_id)
+    if not title:
+        return
+    assets = (
+        db.query(MediaAsset)
+        .filter(
+            MediaAsset.title_id == title_id,
+            MediaAsset.asset_type.in_(_POSTER_TYPES),
+        )
+        .all()
+    )
+    best = pick_best_poster_uri(assets)
+    if best and title.poster_url != best:
+        title.poster_url = best
+        db.commit()
 
 
 def list_titles_read(
@@ -73,17 +109,42 @@ def list_titles_read(
         skip=skip,
         limit=limit,
     )
-    poster_map = poster_urls_for_titles(db, [t.id for t in titles])
+    title_ids = [t.id for t in titles]
+    assets_by_title = _poster_assets_by_title(db, title_ids)
+    poster_map = poster_urls_for_titles(db, title_ids)
     result: list[TitleRead] = []
     for title in titles:
         read = TitleRead.model_validate(title)
-        read.poster_url = poster_map.get(title.id)
+        read.poster_url = poster_map.get(title.id) or resolve_poster_url(
+            cached_poster_url=title.poster_url,
+            assets=assets_by_title.get(title.id, []),
+        )
         result.append(read)
     return result
 
 
 def get_title(db: Session, title_id: int) -> Title | None:
     return db.query(Title).filter(Title.id == title_id).first()
+
+
+def get_title_read(db: Session, title_id: int) -> TitleRead | None:
+    title = get_title(db, title_id)
+    if not title:
+        return None
+    assets = (
+        db.query(MediaAsset)
+        .filter(
+            MediaAsset.title_id == title_id,
+            MediaAsset.asset_type.in_(_POSTER_TYPES),
+        )
+        .all()
+    )
+    read = TitleRead.model_validate(title)
+    read.poster_url = resolve_poster_url(
+        cached_poster_url=title.poster_url,
+        assets=assets,
+    )
+    return read
 
 
 def create_title(db: Session, payload: TitleCreate) -> Title:

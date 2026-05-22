@@ -55,10 +55,22 @@ export const titlesApi = {
     }),
   delete: (id: number) =>
     request<void>(`/titles/${id}`, { method: "DELETE" }),
+  listArtwork: (id: number) => request<MediaAsset[]>(`/titles/${id}/artwork`),
   saveArtwork: (id: number, items: ArtworkItem[]) =>
     request<MediaAsset[]>(`/titles/${id}/artwork`, {
       method: "POST",
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({
+        items: items.map((item) => ({
+          asset_type: item.asset_type,
+          storage_uri: item.storage_uri,
+          filename: item.filename,
+          mime_type: item.mime_type ?? "image/jpeg",
+          language: item.language ?? null,
+          resolution: item.resolution ?? null,
+          notes: item.notes ?? null,
+          specs: item.specs ?? {},
+        })),
+      }),
     }),
 };
 
@@ -72,9 +84,19 @@ export const metadataApi = {
     request<TitleMetadataImport>(
       `/metadata/import/${encodeURIComponent(externalId)}`
     ),
-  importArtwork: (externalId: string) => {
+  importArtwork: async (externalId: string) => {
     const params = new URLSearchParams({ external_id: externalId });
-    return request<ArtworkItem[]>(`/metadata/artwork?${params}`);
+    try {
+      return await request<ArtworkItem[]>(`/metadata/artwork?${params}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (!message.includes("Not Found") && !message.includes("404")) {
+        throw err;
+      }
+      return request<ArtworkItem[]>(
+        `/metadata/import/${encodeURIComponent(externalId)}/artwork`
+      );
+    }
   },
 };
 

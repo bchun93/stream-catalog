@@ -55,6 +55,7 @@ class Title(Base):
     crew: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metadata_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    poster_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )

@@ -6,6 +6,8 @@ from app.models.media_asset import AssetStatus, AssetType, MediaAsset
 from app.models.title import Title
 from app.schemas.artwork import ArtworkItem
 from app.services.artwork_metadata import artwork_item_metadata_json
+from app.services.poster_resolver import is_usable_poster_url
+from app.services.title_service import sync_title_poster_cache
 from app.services.tmdb_service import (
     TMDB_SOURCE_NOTE,
     collect_artwork_from_tmdb,
@@ -43,6 +45,11 @@ def _clear_tmdb_artwork(db: Session, title_id: int) -> None:
 def _persist_artwork(db: Session, title_id: int, items: list[ArtworkItem]) -> list[MediaAsset]:
     created: list[MediaAsset] = []
     for item in items:
+        if item.asset_type == AssetType.POSTER and not is_usable_poster_url(
+            item.storage_uri
+        ):
+            continue
+        specs = item.specs
         asset = MediaAsset(
             title_id=title_id,
             asset_type=item.asset_type,
@@ -50,8 +57,8 @@ def _persist_artwork(db: Session, title_id: int, items: list[ArtworkItem]) -> li
             filename=item.filename,
             mime_type=item.mime_type,
             storage_uri=item.storage_uri,
-            language=item.language or item.specs.language,
-            resolution=item.resolution or item.specs.resolution,
+            language=item.language or (specs.language if specs else None),
+            resolution=item.resolution or (specs.resolution if specs else None),
             notes=item.notes,
             metadata_json=artwork_item_metadata_json(item),
         )
@@ -86,6 +93,7 @@ def save_artwork_selection(
         db.commit()
         for asset in created:
             db.refresh(asset)
+        sync_title_poster_cache(db, title_id)
 
     return list_artwork_assets(db, title_id)
 

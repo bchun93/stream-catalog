@@ -8,7 +8,7 @@ from app.schemas.media_asset import MediaAssetRead
 def artwork_item_metadata_json(item: ArtworkItem) -> str:
     payload = {
         "notes": item.notes,
-        "specs": item.specs.model_dump(exclude_none=True),
+        "specs": item.specs.model_dump(exclude_none=True) if item.specs else {},
     }
     return json.dumps(payload)
 
