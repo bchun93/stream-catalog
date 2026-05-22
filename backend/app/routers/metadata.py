@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import settings
 from app.models.title import TitleType
 from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
 from app.schemas.artwork import ArtworkItem
@@ -19,7 +20,15 @@ router = APIRouter(prefix="/metadata", tags=["metadata"])
 
 @router.get("/health")
 async def metadata_health():
-    return await check_tmdb_connectivity()
+    if not settings.tmdb_configured:
+        return {
+            "ok": False,
+            "message": "TMDB_API_KEY is not set on Render. Add your v3 key under Environment and redeploy.",
+            "tmdb_configured": False,
+        }
+    result = await check_tmdb_connectivity()
+    result["tmdb_configured"] = True
+    return result
 
 
 @router.get("/search", response_model=list[MetadataSearchResult])

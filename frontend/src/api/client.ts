@@ -47,14 +47,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     );
   }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const detail =
-      typeof err.detail === "string"
-        ? err.detail
-        : JSON.stringify(err.detail ?? err);
+    const raw = await res.text().catch(() => "");
+    let detail = res.statusText || `HTTP ${res.status}`;
+    if (raw) {
+      try {
+        const err = JSON.parse(raw) as { detail?: unknown };
+        detail =
+          typeof err.detail === "string"
+            ? err.detail
+            : err.detail != null
+              ? JSON.stringify(err.detail)
+              : raw.slice(0, 300);
+      } catch {
+        detail = raw.slice(0, 300) || detail;
+      }
+    }
     if (res.status === 404 && detail === "Not Found") {
       throw new Error(
         "API route not found. Redeploy Render from latest main and verify /api/v1 is live."
+      );
+    }
+    if (detail === "Internal Server Error" && res.status >= 500) {
+      throw new Error(
+        `API error (${res.status}). Check TMDB_API_KEY on Render, redeploy the API, then open ${API}/metadata/health`
       );
     }
     throw new Error(detail);
@@ -136,7 +151,14 @@ export const titlesApi = {
     }).then(filterArtworkAssets),
 };
 
+export type MetadataHealth = {
+  ok: boolean;
+  message: string;
+  tmdb_configured?: boolean;
+};
+
 export const metadataApi = {
+  health: () => requestWithRetry<MetadataHealth>("/metadata/health"),
   search: (q: string, titleType?: TitleType) => {
     const params = new URLSearchParams({ q });
     if (titleType) params.set("title_type", titleType);

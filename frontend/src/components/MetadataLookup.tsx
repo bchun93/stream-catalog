@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { metadataApi } from "../api/client";
 import type { MetadataSearchResult, TitleMetadataImport } from "../types";
 
@@ -13,6 +13,17 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
   const [importing, setImporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    metadataApi
+      .health()
+      .then((health) => {
+        if (!health.ok) setError(health.message);
+      })
+      .catch(() => {
+        /* search will surface API errors */
+      });
+  }, []);
+
   const handleSearch = async () => {
     if (!query.trim()) return;
     setLoading(true);
@@ -26,11 +37,13 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Search failed";
-      setError(
-        msg === "Internal Server Error"
-          ? "Metadata search failed on the API. Check TMDB_API_KEY on Render and redeploy."
-          : msg
-      );
+      setError(msg);
+      try {
+        const health = await metadataApi.health();
+        if (!health.ok) setError(health.message);
+      } catch {
+        /* keep search error */
+      }
     } finally {
       setLoading(false);
     }

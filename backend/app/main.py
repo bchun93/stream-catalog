@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import ResponseValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -29,6 +30,13 @@ async def lifespan(app: FastAPI):
         logger.info("Database ready")
     except Exception as exc:
         logger.exception("Database startup failed (metadata routes still work): %s", exc)
+
+    if settings.tmdb_configured:
+        logger.info("TMDB API key configured")
+    else:
+        logger.warning(
+            "TMDB_API_KEY is not set on this service — metadata search and import will fail"
+        )
 
     if app.state.db_ready and settings.seed_on_startup:
         try:
@@ -72,6 +80,16 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return _cors_json(request, exc.status_code, str(exc.detail))
 
 
+@app.exception_handler(ResponseValidationError)
+async def response_validation_handler(request: Request, exc: ResponseValidationError):
+    logger.exception("Response validation failed on %s %s", request.method, request.url.path)
+    return _cors_json(
+        request,
+        500,
+        "API response validation failed. Redeploy the latest API build from main.",
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception(request: Request, exc: Exception):
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
@@ -99,7 +117,7 @@ def root():
 @app.get("/health")
 @app.head("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "tmdb_configured": settings.tmdb_configured}
 
 
 @app.get("/ready")

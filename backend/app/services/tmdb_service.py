@@ -271,14 +271,17 @@ async def search_metadata(
                 continue
             date_field = item.get("release_date") or item.get("first_air_date")
             year = _parse_year(date_field)
+            overview = item.get("overview")
+            if overview is not None and not isinstance(overview, str):
+                overview = str(overview)
             results.append(
                 MetadataSearchResult(
                     external_id=f"tmdb:{media_type}:{tmdb_id}",
                     media_type=media_type,
                     title_type=_title_type_for_media(media_type),
-                    name=item.get("title") or item.get("name") or "Unknown",
+                    name=str(item.get("title") or item.get("name") or "Unknown"),
                     release_year=year,
-                    overview=item.get("overview"),
+                    overview=overview,
                     poster_url=_poster(item.get("poster_path")),
                 )
             )
