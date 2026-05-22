@@ -25,7 +25,12 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
         setError("No matches found. Try a different title or type.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed");
+      const msg = err instanceof Error ? err.message : "Search failed";
+      setError(
+        msg === "Internal Server Error"
+          ? "Metadata search failed on the API. Check TMDB_API_KEY on Render and redeploy."
+          : msg
+      );
     } finally {
       setLoading(false);
     }

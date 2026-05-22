@@ -12,6 +12,16 @@ from app.models.title import TitleType
 from app.schemas.artwork import ArtworkItem, ArtworkSpecs
 from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
 
+
+class TmdbServiceError(Exception):
+    """Raised from sync TMDB helpers; converted to HTTPException in async layer."""
+
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(detail)
+
+
 _TMDB_IMAGE = "https://image.tmdb.org/t/p/w185"
 TMDB_SOURCE_NOTE = "source:tmdb"
 # English (US) artwork — TMDB image language filter + API locale.
@@ -48,18 +58,15 @@ _TMDb_HTTP = httpx.Client(timeout=20.0, trust_env=False)
 
 def _require_api_key() -> str:
     if not settings.tmdb_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "TMDB API key not configured. Set TMDB_API_KEY in backend/.env "
-                "(free key at https://www.themoviedb.org/settings/api)"
-            ),
+        raise TmdbServiceError(
+            503,
+            "TMDB API key not configured. Set TMDB_API_KEY on Render (Environment).",
         )
     key = settings.tmdb_api_key.strip()
     if key.startswith("your_") or key == "your_tmdb_api_key_here":
-        raise HTTPException(
-            status_code=503,
-            detail="Replace the placeholder TMDB_API_KEY in backend/.env with your real v3 key from themoviedb.org/settings/api",
+        raise TmdbServiceError(
+            503,
+            "Replace the placeholder TMDB_API_KEY with your real v3 key from themoviedb.org/settings/api",
         )
     return key
 
@@ -220,26 +227,26 @@ def _fetch_json(path: str, **params) -> dict:
     except httpx.HTTPStatusError as exc:
         body = (exc.response.text or "")[:200]
         if exc.response.status_code == 401:
-            raise HTTPException(
-                status_code=503,
-                detail="Invalid TMDB API key — check TMDB_API_KEY in backend/.env",
+            raise TmdbServiceError(
+                503,
+                "Invalid TMDB API key — check TMDB_API_KEY on Render.",
             ) from exc
-        raise HTTPException(
-            status_code=502,
-            detail=f"TMDB error ({exc.response.status_code}): {body}",
+        raise TmdbServiceError(
+            502,
+            f"TMDB error ({exc.response.status_code}): {body}",
         ) from exc
     except httpx.RequestError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                f"Could not reach TMDB ({exc}). "
-                "Check internet/DNS, disable VPN, and verify TMDB_API_KEY on Render."
-            ),
+        raise TmdbServiceError(
+            503,
+            f"Could not reach TMDB ({exc}). Check TMDB_API_KEY and Render outbound network.",
         ) from exc
 
 
 async def _get(path: str, **params) -> dict:
-    return await asyncio.to_thread(_fetch_json, path, **params)
+    try:
+        return await asyncio.to_thread(_fetch_json, path, **params)
+    except TmdbServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 async def search_metadata(
@@ -511,4 +518,6 @@ async def check_tmdb_connectivity() -> dict:
         await _get("/search/movie", query="test")
         return {"ok": True, "message": "TMDB reachable"}
     except HTTPException as exc:
-        return {"ok": False, "message": exc.detail}
+        return {"ok": False, "message": str(exc.detail)}
+    except Exception as exc:
+        return {"ok": False, "message": str(exc)}

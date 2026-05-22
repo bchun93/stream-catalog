@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Query
+import logging
+
+from fastapi import APIRouter, HTTPException, Query
 
 from app.models.title import TitleType
 from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
@@ -11,6 +13,7 @@ from app.services.tmdb_service import (
     search_metadata,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/metadata", tags=["metadata"])
 
 
@@ -26,7 +29,16 @@ async def metadata_search(
         None, description="Filter to movie or series results"
     ),
 ):
-    return await search_metadata(q, title_type)
+    try:
+        return await search_metadata(q, title_type)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("metadata search failed for q=%r", q)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Metadata search failed: {exc}",
+        ) from exc
 
 
 @router.get("/artwork", response_model=list[ArtworkItem])
