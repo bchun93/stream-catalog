@@ -186,7 +186,9 @@ export function TitleForm({
 
       {tab === "details" && (
         <>
-          {isCreate && <MetadataLookup onApply={applyMetadata} />}
+          {(isCreate || !form.external_id?.startsWith("tmdb:")) && (
+            <MetadataLookup onApply={applyMetadata} />
+          )}
           {metadataApplied && (
             <div className="metadata-applied-banner">
               Metadata imported — review fields below, add licensor if needed, then save.
@@ -330,13 +332,23 @@ export function TitleForm({
         </>
       )}
 
-      {tab === "artwork" && (
+      {activeTitleId ? (
         <ArtworkTab
-          key={activeTitleId ?? "new"}
+          key={activeTitleId}
           titleId={activeTitleId}
-          externalId={form.external_id}
+          externalId={form.external_id || null}
+          visible={tab === "artwork"}
           onSaved={onArtworkSaved}
         />
+      ) : (
+        tab === "artwork" && (
+          <ArtworkTab
+            key="new"
+            externalId={form.external_id || null}
+            visible
+            onSaved={onArtworkSaved}
+          />
+        )
       )}
 
       <div className="form-actions">

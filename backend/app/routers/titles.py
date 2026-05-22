@@ -43,22 +43,17 @@ def get_title_tree(db: Session = Depends(get_db)):
     return [_title_to_tree(r) for r in roots]
 
 
-@router.get("/{title_id}", response_model=TitleRead)
-def get_title(title_id: int, db: Session = Depends(get_db)):
-    title = title_service.get_title_read(db, title_id)
-    if not title:
-        raise HTTPException(status_code=404, detail="Title not found")
-    return title
-
-
 @router.post("", response_model=TitleRead, status_code=201)
 def create_title(payload: TitleCreate, db: Session = Depends(get_db)):
     existing = db.query(Title).filter(Title.slug == payload.slug).first()
     if existing:
         raise HTTPException(status_code=409, detail="Slug already exists")
-    return title_service.create_title(db, payload)
+    title = title_service.create_title(db, payload)
+    read = title_service.get_title_read(db, title.id)
+    return read or TitleRead.model_validate(title)
 
 
+# Sub-routes under /{title_id}/… must be registered before GET/PATCH /{title_id}.
 @router.get("/{title_id}/artwork", response_model=list[MediaAssetRead])
 def list_title_artwork(title_id: int, db: Session = Depends(get_db)):
     title = title_service.get_title(db, title_id)
@@ -77,7 +72,10 @@ def save_title_artwork(
     title = title_service.get_title(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
-    assets = save_artwork_selection(db, title_id, payload.items)
+    try:
+        assets = save_artwork_selection(db, title_id, payload.items)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return [enrich_asset_read(a) for a in assets]
 
 
@@ -95,6 +93,14 @@ async def sync_title_artwork(title_id: int, db: Session = Depends(get_db)):
     return [enrich_asset_read(a) for a in assets]
 
 
+@router.get("/{title_id}", response_model=TitleRead)
+def get_title(title_id: int, db: Session = Depends(get_db)):
+    title = title_service.get_title_read(db, title_id)
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    return title
+
+
 @router.patch("/{title_id}", response_model=TitleRead)
 def update_title(
     title_id: int, payload: TitleUpdate, db: Session = Depends(get_db)
@@ -102,7 +108,9 @@ def update_title(
     title = title_service.get_title(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
-    return title_service.update_title(db, title, payload)
+    title_service.update_title(db, title, payload)
+    read = title_service.get_title_read(db, title_id)
+    return read or TitleRead.model_validate(title)
 
 
 @router.delete("/{title_id}", status_code=204)

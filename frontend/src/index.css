@@ -668,6 +668,10 @@ tr:hover td {
   margin-bottom: 0.85rem;
 }
 
+.artwork-panel-hidden {
+  display: none !important;
+}
+
 .artwork-view-section {
   margin-bottom: 1.35rem;
   padding-bottom: 1.25rem;

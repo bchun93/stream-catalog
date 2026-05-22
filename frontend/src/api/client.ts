@@ -1,3 +1,4 @@
+import { filterArtworkAssets } from "../utils/artworkTypes";
 import type {
   ArtworkItem,
   MediaAsset,
@@ -55,7 +56,21 @@ export const titlesApi = {
     }),
   delete: (id: number) =>
     request<void>(`/titles/${id}`, { method: "DELETE" }),
-  listArtwork: (id: number) => request<MediaAsset[]>(`/titles/${id}/artwork`),
+  listArtwork: async (id: number) => {
+    try {
+      const list = await request<MediaAsset[]>(`/titles/${id}/artwork`);
+      return filterArtworkAssets(list);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      const missing =
+        message.includes("Not Found") ||
+        message.includes("404") ||
+        message.includes("Metadata API not found");
+      if (!missing) throw err;
+      const assets = await request<MediaAsset[]>(`/assets?title_id=${id}`);
+      return filterArtworkAssets(assets);
+    }
+  },
   saveArtwork: (id: number, items: ArtworkItem[]) =>
     request<MediaAsset[]>(`/titles/${id}/artwork`, {
       method: "POST",
@@ -71,7 +86,7 @@ export const titlesApi = {
           specs: item.specs ?? {},
         })),
       }),
-    }),
+    }).then(filterArtworkAssets),
 };
 
 export const metadataApi = {

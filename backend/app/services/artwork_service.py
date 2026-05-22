@@ -90,6 +90,11 @@ def save_artwork_selection(
     to_add = [item for item in items if item.storage_uri not in existing_uris]
     if to_add:
         created = _persist_artwork(db, title_id, to_add)
+        if not created:
+            raise ValueError(
+                "None of the selected images could be saved. "
+                "Choose valid TMDB artwork (not placeholder URLs)."
+            )
         db.commit()
         for asset in created:
             db.refresh(asset)

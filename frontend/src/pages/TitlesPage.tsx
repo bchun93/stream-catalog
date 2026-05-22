@@ -14,6 +14,7 @@ export function TitlesPage() {
   const [editing, setEditing] = useState<Title | null>(null);
   const [formTab, setFormTab] = useState<"details" | "artwork">("details");
   const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
 
   const load = useCallback(() => {
     const params: Record<string, string> = {};
@@ -30,6 +31,21 @@ export function TitlesPage() {
     setModal(null);
     setEditing(null);
     setFormTab("details");
+  };
+
+  const openEdit = async (t: Title, tab: "details" | "artwork" = "details") => {
+    setOpening(true);
+    setError(null);
+    try {
+      const full = await titlesApi.get(t.id);
+      setEditing(full);
+      setFormTab(tab);
+      setModal("edit");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load title");
+    } finally {
+      setOpening(false);
+    }
   };
 
   const handleDelete = async (t: Title) => {
@@ -129,13 +145,18 @@ export function TitlesPage() {
                     <button
                       className="btn btn-ghost"
                       style={{ marginRight: "0.35rem" }}
-                      onClick={() => {
-                        setEditing(t);
-                        setFormTab("details");
-                        setModal("edit");
-                      }}
+                      disabled={opening}
+                      onClick={() => openEdit(t, "details")}
                     >
                       Edit
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ marginRight: "0.35rem" }}
+                      disabled={opening}
+                      onClick={() => openEdit(t, "artwork")}
+                    >
+                      Artwork
                     </button>
                     <button className="btn btn-danger" onClick={() => handleDelete(t)}>
                       Delete

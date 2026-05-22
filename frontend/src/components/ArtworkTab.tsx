@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { metadataApi, titlesApi } from "../api/client";
 import { specLinesForItem } from "../utils/artworkSpecs";
+import { filterArtworkAssets } from "../utils/artworkTypes";
 import {
   ARTWORK_LABELS,
   ARTWORK_TYPES,
@@ -12,6 +13,8 @@ import {
 interface ArtworkTabProps {
   titleId?: number;
   externalId?: string | null;
+  /** When false, panel is hidden but stays mounted so catalog state persists. */
+  visible?: boolean;
   onSaved?: () => void;
 }
 
@@ -26,10 +29,6 @@ const ARTWORK_HINTS: Record<ArtworkType, string> = {
 
 function artworkKey(item: { storage_uri: string }): string {
   return item.storage_uri;
-}
-
-function isArtworkAsset(a: MediaAsset): a is MediaAsset & { asset_type: ArtworkType } {
-  return ARTWORK_TYPES.includes(a.asset_type as ArtworkType);
 }
 
 function assetToArtworkItem(asset: MediaAsset): ArtworkItem {
@@ -155,7 +154,12 @@ function ArtworkStrip({
   );
 }
 
-export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
+export function ArtworkTab({
+  titleId,
+  externalId,
+  visible = true,
+  onSaved,
+}: ArtworkTabProps) {
   const [saved, setSaved] = useState<MediaAsset[]>([]);
   const [candidates, setCandidates] = useState<ArtworkItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -190,22 +194,35 @@ export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
   const loadSaved = useCallback(async () => {
     if (!titleId) {
       setSaved([]);
-      return;
+      return [];
     }
     setCatalogLoading(true);
+    setError(null);
     try {
       const list = await titlesApi.listArtwork(titleId);
-      setSaved(list.filter(isArtworkAsset));
+      setSaved(list);
+      return list;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load saved artwork");
+      const message = e instanceof Error ? e.message : "Failed to load saved artwork";
+      setError(message);
+      setSaved([]);
+      return [];
     } finally {
       setCatalogLoading(false);
     }
   }, [titleId]);
 
+  // Load whenever title changes (e.g. open edit modal).
   useEffect(() => {
-    loadSaved();
+    void loadSaved();
   }, [loadSaved]);
+
+  // Refresh when user switches to the Artwork tab.
+  useEffect(() => {
+    if (visible && titleId) {
+      void loadSaved();
+    }
+  }, [visible, titleId, loadSaved]);
 
   const handleFetch = async () => {
     if (!canFetch || !externalId) {
@@ -259,12 +276,14 @@ export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
     setSuccess(null);
     try {
       const stored = await titlesApi.saveArtwork(titleId, items);
-      setSaved(stored.filter(isArtworkAsset));
+      const artworkOnly = filterArtworkAssets(stored);
+      setSaved(artworkOnly);
       setSelected(new Set());
       setSuccess(
         `Added ${items.length} artwork asset${items.length === 1 ? "" : "s"} to the catalog.`
       );
       onSaved?.();
+      await loadSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save artwork");
     } finally {
@@ -273,12 +292,16 @@ export function ArtworkTab({ titleId, externalId, onSaved }: ArtworkTabProps) {
   };
 
   return (
-    <div className="artwork-panel">
+    <div
+      className={`artwork-panel${visible ? "" : " artwork-panel-hidden"}`}
+      hidden={!visible}
+    >
       <header className="artwork-header">
         <div className="artwork-header-text">
           <h3 className="artwork-title">Artwork library</h3>
           <p className="artwork-subtitle">
-            View saved assets, browse TMDB, and add new images to the catalog
+            Saved artwork is stored on this title. Use &quot;Add selected to catalog&quot;
+            to save — &quot;Save title&quot; only saves details metadata.
           </p>
         </div>
         {canFetch && (
