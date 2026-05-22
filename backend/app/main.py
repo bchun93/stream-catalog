@@ -48,6 +48,14 @@ app.include_router(titles.router, prefix=api)
 app.include_router(media_assets.router, prefix=api)
 
 
+@app.get("/")
+@app.head("/")
+def root():
+    """Render and load balancers often probe GET/HEAD / before /health is configured."""
+    return {"status": "ok", "service": "stream-catalog-api"}
+
+
 @app.get("/health")
+@app.head("/health")
 def health():
     return {"status": "ok"}

@@ -14,4 +14,5 @@ COPY app ./app
 ENV PORT=8000
 EXPOSE 8000
 
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
+# When built from backend/ only; repo root Dockerfile uses scripts/docker-start.sh
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

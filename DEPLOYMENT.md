@@ -65,10 +65,15 @@ Expect `{"ok":true}` for metadata health.
 |---------|--------|
 | Root Directory | *(leave empty — uses repo root `Dockerfile`)* |
 | Dockerfile path | `Dockerfile` |
+| Health Check Path | `/health` |
 
 Or set **Root Directory** to `backend` and Dockerfile to `Dockerfile` there.
 
 Add env vars: `DATABASE_URL`, `TMDB_API_KEY`, `SEED_ON_STARTUP`.
+
+Do **not** set `PORT` manually — Render injects it (often `10000`). The container must listen on `$PORT`.
+
+If logs show `HEAD / HTTP/1.1" 404`, the health check path is wrong or the deploy is on an old build without the `/` route fix.
 
 ### Build error: `open Dockerfile: no such file or directory`
 

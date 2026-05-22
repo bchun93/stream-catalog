@@ -15,5 +15,4 @@ services:
         sync: false
       - key: SEED_ON_STARTUP
         value: "true"
-      - key: PORT
-        value: "8000"
+      # Do not set PORT — Render injects it at runtime (e.g. 10000). The app must listen on $PORT.
