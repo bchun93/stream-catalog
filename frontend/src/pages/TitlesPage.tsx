@@ -75,6 +75,7 @@ export function TitlesPage() {
         <button
           className="btn btn-primary"
           onClick={() => {
+            setError(null);
             setEditing(null);
             setFormTab("details");
             setModal("create");

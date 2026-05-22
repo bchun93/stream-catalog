@@ -41,8 +41,8 @@ Uses `render.yaml` in the repo root.
 1. [dashboard.render.com](https://dashboard.render.com) → **New +** → **Blueprint**.
 2. Connect **GitHub** → select `stream-catalog`.
 3. Render reads `render.yaml` and creates **stream-catalog-api**.
-4. When prompted, set secrets:
-   - `DATABASE_URL` — Neon URL
+4. When prompted, set secrets (**required**):
+   - `DATABASE_URL` — Neon PostgreSQL URL (must include `?sslmode=require` if not already). **Without this, metadata import works but Titles/list/create fail.**
    - `TMDB_API_KEY` — [TMDB v3 key](https://www.themoviedb.org/settings/api)
 5. Deploy. Copy the service URL from the Render dashboard (e.g. `https://stream-catalog.onrender.com`).
 6. Verify:

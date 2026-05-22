@@ -1,7 +1,11 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.deps import require_db
 from app.models.title import Title, TitleType
 from app.schemas.artwork import SaveArtworkRequest
 from app.schemas.media_asset import MediaAssetRead
@@ -14,6 +18,7 @@ from app.services.artwork_service import (
     sync_artwork_for_title,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/titles", tags=["titles"])
 
 
@@ -31,31 +36,56 @@ def list_titles(
     skip: int = 0,
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db),
+    _: None = Depends(require_db),
 ):
-    return title_service.list_titles_read(
-        db, q=q, title_type=title_type, parent_id=parent_id, skip=skip, limit=limit
-    )
+    try:
+        return title_service.list_titles_read(
+            db, q=q, title_type=title_type, parent_id=parent_id, skip=skip, limit=limit
+        )
+    except SQLAlchemyError as exc:
+        logger.exception("list_titles failed")
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
 
 
 @router.get("/tree", response_model=list[TitleTree])
-def get_title_tree(db: Session = Depends(get_db)):
-    roots = title_service.build_title_tree(db)
-    return [_title_to_tree(r) for r in roots]
+def get_title_tree(
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
+    try:
+        roots = title_service.build_title_tree(db)
+        return [_title_to_tree(r) for r in roots]
+    except SQLAlchemyError as exc:
+        logger.exception("get_title_tree failed")
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
 
 
 @router.post("", response_model=TitleRead, status_code=201)
-def create_title(payload: TitleCreate, db: Session = Depends(get_db)):
-    existing = db.query(Title).filter(Title.slug == payload.slug).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Slug already exists")
-    title = title_service.create_title(db, payload)
-    read = title_service.get_title_read(db, title.id)
-    return read or TitleRead.model_validate(title)
+def create_title(
+    payload: TitleCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
+    try:
+        existing = db.query(Title).filter(Title.slug == payload.slug).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Slug already exists")
+        title = title_service.create_title(db, payload)
+        read = title_service.get_title_read(db, title.id)
+        return read or TitleRead.model_validate(title)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        logger.exception("create_title failed")
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
 
 
-# Sub-routes under /{title_id}/… must be registered before GET/PATCH /{title_id}.
 @router.get("/{title_id}/artwork", response_model=list[MediaAssetRead])
-def list_title_artwork(title_id: int, db: Session = Depends(get_db)):
+def list_title_artwork(
+    title_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
     title = title_service.get_title(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
@@ -68,6 +98,7 @@ def save_title_artwork(
     title_id: int,
     payload: SaveArtworkRequest,
     db: Session = Depends(get_db),
+    _: None = Depends(require_db),
 ):
     title = title_service.get_title(db, title_id)
     if not title:
@@ -80,7 +111,11 @@ def save_title_artwork(
 
 
 @router.post("/{title_id}/artwork/sync", response_model=list[MediaAssetRead])
-async def sync_title_artwork(title_id: int, db: Session = Depends(get_db)):
+async def sync_title_artwork(
+    title_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
     title = title_service.get_title(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
@@ -94,7 +129,11 @@ async def sync_title_artwork(title_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{title_id}", response_model=TitleRead)
-def get_title(title_id: int, db: Session = Depends(get_db)):
+def get_title(
+    title_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
     title = title_service.get_title_read(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
@@ -103,7 +142,10 @@ def get_title(title_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{title_id}", response_model=TitleRead)
 def update_title(
-    title_id: int, payload: TitleUpdate, db: Session = Depends(get_db)
+    title_id: int,
+    payload: TitleUpdate,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
 ):
     title = title_service.get_title(db, title_id)
     if not title:
@@ -114,7 +156,11 @@ def update_title(
 
 
 @router.delete("/{title_id}", status_code=204)
-def delete_title(title_id: int, db: Session = Depends(get_db)):
+def delete_title(
+    title_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
     title = title_service.get_title(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")

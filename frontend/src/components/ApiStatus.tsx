@@ -17,8 +17,16 @@ export function ApiStatus() {
     Promise.all([
       fetch(healthUrl).then((r) => (r.ok ? "ok" : "error")),
       fetch(readyUrl)
-        .then((r) => r.json())
-        .then((d: { database?: string }) => d.database ?? "db?")
+        .then(async (r) => {
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            const detail =
+              typeof err.detail === "string" ? err.detail : "db not ready";
+            return `db: ${detail.slice(0, 40)}`;
+          }
+          const d = (await r.json()) as { database?: string };
+          return d.database ?? "connected";
+        })
         .catch(() => "db unreachable"),
       titlesApi
         .list()

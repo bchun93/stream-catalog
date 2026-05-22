@@ -1,13 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
-from app.database import Base, SessionLocal, engine
+from app.database import Base, SessionLocal, check_database, engine
+from app.middleware.cors import EchoOriginCORSMiddleware
 from app.migrate import run_migrations
 from app.routers import media_assets, metadata, titles
 from app.seed import seed
@@ -17,16 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
+    app.state.db_ready = False
     try:
         Base.metadata.create_all(bind=engine)
         run_migrations()
-        with SessionLocal() as db:
-            db.execute(text("SELECT 1"))
+        check_database()
+        app.state.db_ready = True
+        logger.info("Database ready")
     except Exception as exc:
-        logger.exception("Database startup failed: %s", exc)
-        raise
-    if settings.seed_on_startup:
+        logger.exception("Database startup failed (metadata routes still work): %s", exc)
+
+    if app.state.db_ready and settings.seed_on_startup:
         try:
             seed()
         except Exception as exc:
@@ -41,26 +45,43 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Amplify, CloudFront, localhost, and Render previews.
-_cors_regex = settings.cors_regex or r"https?://.*"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_origin_regex=_cors_regex,
+    allow_origin_regex=settings.cors_regex or r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+app.add_middleware(EchoOriginCORSMiddleware)
+
+
+def _cors_json(request: Request, status_code: int, detail: str) -> JSONResponse:
+    response = JSONResponse(status_code=status_code, content={"detail": detail})
+    origin = request.headers.get("origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return _cors_json(request, exc.status_code, str(exc.detail))
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception(request: Request, exc: Exception):
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc)},
-    )
+    if isinstance(exc, SQLAlchemyError):
+        return _cors_json(
+            request,
+            503,
+            "Database error. Verify DATABASE_URL on Render (Neon) and redeploy.",
+        )
+    return _cors_json(request, 500, str(exc))
 
 
 api = settings.api_prefix
@@ -83,8 +104,15 @@ def health():
 
 @app.get("/ready")
 @app.head("/ready")
-def ready():
-    """DB connectivity check for production debugging."""
-    with SessionLocal() as db:
-        db.execute(text("SELECT 1"))
+def ready(request: Request):
+    if not getattr(app.state, "db_ready", False):
+        return _cors_json(
+            request,
+            503,
+            "Database not ready. Set DATABASE_URL on Render to your Neon connection string.",
+        )
+    try:
+        check_database()
+    except Exception as exc:
+        return _cors_json(request, 503, f"Database unreachable: {exc}")
     return {"status": "ok", "database": "connected"}
