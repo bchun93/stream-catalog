@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiBaseUrl, titlesApi } from "../api/client";
+import { apiBaseUrl, diagnosticsApi } from "../api/client";
 
 const IS_PROD = import.meta.env.PROD;
 
@@ -11,40 +11,35 @@ export function ApiStatus() {
   const [detail, setDetail] = useState<string | null>(null);
 
   useEffect(() => {
-    const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
-    const readyUrl = API_BASE ? `${API_BASE}/ready` : "/ready";
+    if (!API_BASE) return;
 
-    Promise.all([
-      fetch(healthUrl).then((r) => (r.ok ? "ok" : "error")),
-      fetch(readyUrl)
-        .then(async (r) => {
-          if (!r.ok) {
-            const err = await r.json().catch(() => ({}));
-            const detail =
-              typeof err.detail === "string" ? err.detail : "db not ready";
-            return `db: ${detail.slice(0, 80)}`;
-          }
-          const d = (await r.json()) as { database?: string };
-          return d.database ?? "connected";
-        })
-        .catch(() => "db unreachable"),
-      titlesApi
-        .list()
-        .then((t) => ({ ok: true as const, text: `titles: ${t.length}` }))
-        .catch((e) => ({
-          ok: false as const,
-          text: e instanceof Error ? e.message : "titles error",
-        })),
-    ])
-      .then(([h, db, titles]) => {
-        setHealth(h === "ok" && titles.ok ? "ok" : "error");
-        setDetail(
-          titles.ok ? `${db} · ${titles.text}` : `${db} · titles failed: ${titles.text}`
-        );
+    diagnosticsApi
+      .get()
+      .then((d) => {
+        const ok =
+          d.db_ready &&
+          !d.titles_error &&
+          (d.titles_count !== null || d.database_driver === "sqlite");
+        setHealth(ok ? "ok" : "error");
+        const parts = [
+          d.db_ready ? "db ok" : "db not ready",
+          d.tmdb_configured ? "tmdb ok" : "tmdb missing",
+        ];
+        if (d.titles_count !== null) parts.push(`titles: ${d.titles_count}`);
+        if (d.titles_error) parts.push(`titles err: ${d.titles_error.slice(0, 60)}`);
+        if (d.neon_pooler) parts.push("neon pooler URL");
+        if (d.migration_error) parts.push(`migrate: ${d.migration_error.slice(0, 50)}`);
+        setDetail(parts.join(" · "));
+        if (!ok && d.hints.length > 0) {
+          setDetail((prev) => `${prev}\n${d.hints[0]}`);
+        }
       })
-      .catch(() => {
+      .catch((e) => {
         setHealth("error");
-        setDetail("API check failed");
+        const msg = e instanceof Error ? e.message : "diagnostics failed";
+        setDetail(
+          `${msg}\nIf health works in browser but this fails, redeploy Amplify (VITE_API_URL is baked at build).`
+        );
       });
   }, [API_BASE]);
 
@@ -63,10 +58,13 @@ export function ApiStatus() {
     <div className={`api-status api-status-${health}`}>
       <strong>API</strong>
       <p className="mono api-status-url">{API_BASE || "localhost (dev proxy)"}</p>
-      {health === "loading" && <p>Checking…</p>}
+      {health === "loading" && <p>Checking server…</p>}
       {health === "ok" && detail && <p>Connected · {detail}</p>}
       {health === "error" && (
-        <p>Cannot reach API — redeploy Render + Amplify from latest main.</p>
+        <>
+          <p>Server mismatch or not ready — see detail below.</p>
+          {detail && <p style={{ fontSize: "0.75rem", whiteSpace: "pre-wrap" }}>{detail}</p>}
+        </>
       )}
     </div>
   );

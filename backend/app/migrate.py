@@ -118,6 +118,14 @@ def _ensure_pg_enum_values(conn) -> None:
 
 
 def run_migrations() -> None:
+    if engine.dialect.name == "postgresql":
+        host = engine.url.host or ""
+        if "pooler" in host:
+            raise RuntimeError(
+                "DATABASE_URL uses Neon pooler host. Migrations require the DIRECT "
+                "connection string from Neon (Connect → disable connection pooling)."
+            )
+
     inspector = inspect(engine)
 
     if "titles" in inspector.get_table_names():

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,12 +9,23 @@ def _default_sqlite_url() -> str:
     return f"sqlite:///{Path(__file__).resolve().parents[2] / 'data' / 'catalog.db'}"
 
 
+def _normalize_database_url(value: str) -> str:
+    text = value.strip().strip('"').strip("'")
+    if text.startswith("postgres://"):
+        text = "postgresql://" + text[len("postgres://") :]
+    return text
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     database_url: str = Field(
         default_factory=_default_sqlite_url,
-        validation_alias="DATABASE_URL",
+        validation_alias=AliasChoices("DATABASE_URL", "database_url"),
     )
     cors_origins_raw: str = Field(
         default="http://localhost:5173,http://127.0.0.1:5173",
@@ -39,6 +50,13 @@ class Settings(BaseSettings):
     port: int = 8000
     tmdb_api_key: str | None = Field(default=None, validation_alias="TMDB_API_KEY")
     tmdb_base_url: str = "https://api.themoviedb.org/3"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_db_url(cls, value: object) -> object:
+        if isinstance(value, str):
+            return _normalize_database_url(value)
+        return value
 
     @field_validator("tmdb_api_key", mode="before")
     @classmethod

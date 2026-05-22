@@ -68,9 +68,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       );
     }
     if (detail === "Internal Server Error" && res.status >= 500) {
-      throw new Error(
-        `API error (${res.status}). Check TMDB_API_KEY on Render, redeploy the API, then open ${API}/metadata/health`
-      );
+      const hint = path.includes("/metadata")
+        ? `Check TMDB_API_KEY on Render and open ${API}/metadata/health`
+        : `Redeploy Render from latest main and open ${API}/diagnostics`;
+      throw new Error(`API error (${res.status}). ${hint}`);
     }
     throw new Error(detail);
   }
@@ -159,6 +160,23 @@ export type MetadataHealth = {
   ok: boolean;
   message: string;
   tmdb_configured?: boolean;
+};
+
+export type ApiDiagnostics = {
+  status: string;
+  db_ready: boolean;
+  database_driver: string;
+  database_host: string | null;
+  neon_pooler: boolean;
+  migration_error: string | null;
+  tmdb_configured: boolean;
+  titles_count: number | null;
+  titles_error: string | null;
+  hints: string[];
+};
+
+export const diagnosticsApi = {
+  get: () => requestWithRetry<ApiDiagnostics>("/diagnostics"),
 };
 
 export const metadataApi = {
