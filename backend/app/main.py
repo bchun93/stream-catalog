@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -22,12 +23,17 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.db_ready = False
+    if os.environ.get("PORT") and not os.environ.get("DATABASE_URL"):
+        logger.warning(
+            "DATABASE_URL is not set on Render — titles will not persist. "
+            "Add your Neon PostgreSQL URL under Environment."
+        )
     try:
         Base.metadata.create_all(bind=engine)
         run_migrations()
         check_database()
         app.state.db_ready = True
-        logger.info("Database ready")
+        logger.info("Database ready (%s)", engine.url.drivername)
     except Exception as exc:
         logger.exception("Database startup failed (metadata routes still work): %s", exc)
 

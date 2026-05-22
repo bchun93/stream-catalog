@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 
 from sqlalchemy import or_
@@ -7,6 +8,8 @@ from app.models.media_asset import AssetType, MediaAsset
 from app.models.title import Title, TitleType
 from app.schemas.title import TitleCreate, TitleRead, TitleUpdate
 from app.services.poster_resolver import pick_best_poster_uri, resolve_poster_url
+
+logger = logging.getLogger(__name__)
 
 _POSTER_TYPES = (
     AssetType.POSTER,
@@ -110,16 +113,13 @@ def list_titles_read(
         skip=skip,
         limit=limit,
     )
-    title_ids = [t.id for t in titles]
-    assets_by_title = _poster_assets_by_title(db, title_ids)
-    poster_map = poster_urls_for_titles(db, title_ids)
+    # List view uses titles.poster_url only — avoids media_assets enum/query failures on Neon.
     result: list[TitleRead] = []
     for title in titles:
         read = TitleRead.model_validate(title)
-        cached = getattr(title, "poster_url", None)
-        read.poster_url = poster_map.get(title.id) or resolve_poster_url(
-            cached_poster_url=cached,
-            assets=assets_by_title.get(title.id, []),
+        read.poster_url = resolve_poster_url(
+            cached_poster_url=getattr(title, "poster_url", None),
+            assets=[],
         )
         result.append(read)
     return result
@@ -133,14 +133,21 @@ def get_title_read(db: Session, title_id: int) -> TitleRead | None:
     title = get_title(db, title_id)
     if not title:
         return None
-    assets = (
-        db.query(MediaAsset)
-        .filter(
-            MediaAsset.title_id == title_id,
-            MediaAsset.asset_type.in_(_POSTER_TYPES),
+    assets: list[MediaAsset] = []
+    try:
+        assets = (
+            db.query(MediaAsset)
+            .filter(
+                MediaAsset.title_id == title_id,
+                MediaAsset.asset_type.in_(_POSTER_TYPES),
+            )
+            .all()
         )
-        .all()
-    )
+    except Exception:
+        logger.warning(
+            "poster asset query failed for title %s", title_id, exc_info=True
+        )
+        db.rollback()
     read = TitleRead.model_validate(title)
     read.poster_url = resolve_poster_url(
         cached_poster_url=getattr(title, "poster_url", None),

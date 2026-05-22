@@ -44,12 +44,29 @@ def _quote_ident(name: str) -> str:
     return f'"{name.replace(chr(34), chr(34) * 2)}"'
 
 
-def _is_postgres_enum_column(col: dict) -> bool:
-    col_type = col.get("type")
-    type_str = repr(col_type).upper()
-    if "ENUM" in type_str:
+def _pg_column_udt_name(conn, table: str, column: str) -> str | None:
+    row = conn.execute(
+        text(
+            """
+            SELECT udt_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = :table_name
+              AND column_name = :column_name
+            """
+        ),
+        {"table_name": table, "column_name": column},
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _needs_varchar_migration(conn, table: str, column: str) -> bool:
+    udt = _pg_column_udt_name(conn, table, column)
+    if not udt:
+        return False
+    if udt in _PG_ENUM_TYPES:
         return True
-    if hasattr(col_type, "enums") or hasattr(col_type, "name"):
+    if udt not in ("varchar", "text", "bpchar"):
         return True
     return False
 
@@ -60,10 +77,10 @@ def _upgrade_postgres_enums_to_varchar(conn) -> None:
     for table, column, varchar_len in _PG_ENUM_COLUMNS:
         if table not in inspector.get_table_names():
             continue
-        cols = {c["name"]: c for c in inspector.get_columns(table)}
+        cols = {c["name"] for c in inspector.get_columns(table)}
         if column not in cols:
             continue
-        if not _is_postgres_enum_column(cols[column]):
+        if not _needs_varchar_migration(conn, table, column):
             continue
 
         col_ident = _quote_ident(column)
@@ -74,11 +91,8 @@ def _upgrade_postgres_enums_to_varchar(conn) -> None:
             text(
                 f"ALTER TABLE {table_ident} "
                 f"ALTER COLUMN {col_ident} TYPE VARCHAR({varchar_len}) "
-                f"USING {col_ident}::text"
+                f"USING LOWER({col_ident}::text)"
             )
-        )
-        conn.execute(
-            text(f"UPDATE {table_ident} SET {col_ident} = LOWER({col_ident})")
         )
 
     for enum_name in _PG_ENUM_TYPES:

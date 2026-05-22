@@ -44,7 +44,19 @@ def list_titles(
         )
     except SQLAlchemyError as exc:
         logger.exception("list_titles failed")
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Database error: {exc}. "
+                "Verify DATABASE_URL on Render (Neon) and redeploy."
+            ),
+        ) from exc
+    except Exception as exc:
+        logger.exception("list_titles unexpected failure")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not list titles: {exc}",
+        ) from exc
 
 
 @router.get("/tree", response_model=list[TitleTree])

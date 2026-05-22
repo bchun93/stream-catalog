@@ -12,7 +12,10 @@ def _default_sqlite_url() -> str:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = Field(default_factory=_default_sqlite_url)
+    database_url: str = Field(
+        default_factory=_default_sqlite_url,
+        validation_alias="DATABASE_URL",
+    )
     cors_origins_raw: str = Field(
         default="http://localhost:5173,http://127.0.0.1:5173",
         validation_alias="CORS_ORIGINS",

@@ -22,7 +22,7 @@ export function ApiStatus() {
             const err = await r.json().catch(() => ({}));
             const detail =
               typeof err.detail === "string" ? err.detail : "db not ready";
-            return `db: ${detail.slice(0, 40)}`;
+            return `db: ${detail.slice(0, 80)}`;
           }
           const d = (await r.json()) as { database?: string };
           return d.database ?? "connected";
@@ -30,12 +30,17 @@ export function ApiStatus() {
         .catch(() => "db unreachable"),
       titlesApi
         .list()
-        .then((t) => `titles: ${t.length}`)
-        .catch((e) => `titles failed: ${e instanceof Error ? e.message : "error"}`),
+        .then((t) => ({ ok: true as const, text: `titles: ${t.length}` }))
+        .catch((e) => ({
+          ok: false as const,
+          text: e instanceof Error ? e.message : "titles error",
+        })),
     ])
       .then(([h, db, titles]) => {
-        setHealth(h === "ok" ? "ok" : "error");
-        setDetail(`${db} · ${titles}`);
+        setHealth(h === "ok" && titles.ok ? "ok" : "error");
+        setDetail(
+          titles.ok ? `${db} · ${titles.text}` : `${db} · titles failed: ${titles.text}`
+        );
       })
       .catch(() => {
         setHealth("error");

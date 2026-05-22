@@ -94,7 +94,11 @@ async function requestWithRetry<T>(
       const retryable =
         msg.includes("Network error") ||
         msg.includes("Failed to fetch") ||
-        msg.includes("Load failed");
+        msg.includes("Load failed") ||
+        msg.includes("503") ||
+        msg.includes("Database not") ||
+        msg.includes("Database error") ||
+        msg.includes("db not ready");
       if (!retryable || i === attempts - 1) throw e;
       await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
     }
