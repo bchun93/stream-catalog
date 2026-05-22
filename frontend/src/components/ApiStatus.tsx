@@ -1,34 +1,39 @@
 import { useEffect, useState } from "react";
+import { apiBaseUrl, titlesApi } from "../api/client";
 
-const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const IS_PROD = import.meta.env.PROD;
 
 export function ApiStatus() {
+  const API_BASE = apiBaseUrl();
   const [health, setHealth] = useState<"ok" | "error" | "loading" | "unset">(
     IS_PROD && !API_BASE ? "unset" : "loading"
   );
-  const [metaHealth, setMetaHealth] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
 
   useEffect(() => {
     const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
-    const metaUrl = API_BASE
-      ? `${API_BASE}/api/v1/metadata/health`
-      : "/api/v1/metadata/health";
+    const readyUrl = API_BASE ? `${API_BASE}/ready` : "/ready";
+
     Promise.all([
       fetch(healthUrl).then((r) => (r.ok ? "ok" : "error")),
-      fetch(metaUrl)
+      fetch(readyUrl)
         .then((r) => r.json())
-        .then((d: { ok?: boolean; message?: string }) =>
-          d.ok ? "TMDB ok" : d.message ?? "TMDB unavailable"
-        )
-        .catch(() => "metadata check failed"),
+        .then((d: { database?: string }) => d.database ?? "db?")
+        .catch(() => "db unreachable"),
+      titlesApi
+        .list()
+        .then((t) => `titles: ${t.length}`)
+        .catch((e) => `titles failed: ${e instanceof Error ? e.message : "error"}`),
     ])
-      .then(([h, m]) => {
+      .then(([h, db, titles]) => {
         setHealth(h === "ok" ? "ok" : "error");
-        setMetaHealth(m);
+        setDetail(`${db} · ${titles}`);
       })
-      .catch(() => setHealth("error"));
-  }, []);
+      .catch(() => {
+        setHealth("error");
+        setDetail("API check failed");
+      });
+  }, [API_BASE]);
 
   if (!IS_PROD && !API_BASE) return null;
 
@@ -46,9 +51,9 @@ export function ApiStatus() {
       <strong>API</strong>
       <p className="mono api-status-url">{API_BASE || "localhost (dev proxy)"}</p>
       {health === "loading" && <p>Checking…</p>}
-      {health === "ok" && <p>Connected · {metaHealth}</p>}
+      {health === "ok" && detail && <p>Connected · {detail}</p>}
       {health === "error" && (
-        <p>Cannot reach API — deploy on Render and set VITE_API_URL in Amplify.</p>
+        <p>Cannot reach API — redeploy Render + Amplify from latest main.</p>
       )}
     </div>
   );

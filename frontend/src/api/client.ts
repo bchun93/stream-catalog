@@ -13,16 +13,39 @@ const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const API = `${API_BASE}/api/v1`;
 const IS_PROD = import.meta.env.PROD;
 
+function buildHeaders(init?: RequestInit): HeadersInit {
+  const headers = new Headers(init?.headers);
+  const method = (init?.method ?? "GET").toUpperCase();
+  const hasBody = init?.body != null && method !== "GET" && method !== "HEAD";
+  // Do not set Content-Type on GET — it triggers CORS preflight and breaks Amplify → Render.
+  if (hasBody && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  return headers;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (IS_PROD && !API_BASE) {
     throw new Error(
       "API URL not configured. In Amplify, set VITE_API_URL to your Render API URL and redeploy."
     );
   }
-  const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    ...init,
-  });
+  const url = `${API}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: buildHeaders(init),
+    });
+  } catch (err) {
+    const hint =
+      err instanceof TypeError
+        ? ` Network error reaching ${url}. Check VITE_API_URL (${API_BASE || "not set"}) and Render CORS.`
+        : "";
+    throw new Error(
+      `${err instanceof Error ? err.message : "Request failed"}${hint}`
+    );
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const detail =
@@ -31,7 +54,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         : JSON.stringify(err.detail ?? err);
     if (res.status === 404 && detail === "Not Found") {
       throw new Error(
-        "Metadata API not found. Restart the backend (uvicorn) after pulling latest code, and ensure it runs on port 8000."
+        "API route not found. Redeploy Render from latest main and verify /api/v1 is live."
       );
     }
     throw new Error(detail);
@@ -40,13 +63,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+/** Retry cold-start / transient failures (Render free tier). */
+async function requestWithRetry<T>(
+  path: string,
+  init?: RequestInit,
+  attempts = 4
+): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await request<T>(path, init);
+    } catch (e) {
+      last = e;
+      const msg = e instanceof Error ? e.message : "";
+      const retryable =
+        msg.includes("Network error") ||
+        msg.includes("Failed to fetch") ||
+        msg.includes("Load failed");
+      if (!retryable || i === attempts - 1) throw e;
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  throw last;
+}
+
 export const titlesApi = {
   list: (params?: Record<string, string>) => {
     const q = new URLSearchParams(params).toString();
-    return request<Title[]>(`/titles${q ? `?${q}` : ""}`);
+    return requestWithRetry<Title[]>(`/titles${q ? `?${q}` : ""}`);
   },
-  tree: () => request<TitleTree[]>("/titles/tree"),
-  get: (id: number) => request<Title>(`/titles/${id}`),
+  tree: () => requestWithRetry<TitleTree[]>("/titles/tree"),
+  get: (id: number) => requestWithRetry<Title>(`/titles/${id}`),
   create: (body: Partial<Title>) =>
     request<Title>("/titles", { method: "POST", body: JSON.stringify(body) }),
   update: (id: number, body: Partial<Title>) =>
@@ -58,16 +105,16 @@ export const titlesApi = {
     request<void>(`/titles/${id}`, { method: "DELETE" }),
   listArtwork: async (id: number) => {
     try {
-      const list = await request<MediaAsset[]>(`/titles/${id}/artwork`);
+      const list = await requestWithRetry<MediaAsset[]>(`/titles/${id}/artwork`);
       return filterArtworkAssets(list);
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       const missing =
         message.includes("Not Found") ||
         message.includes("404") ||
-        message.includes("Metadata API not found");
+        message.includes("route not found");
       if (!missing) throw err;
-      const assets = await request<MediaAsset[]>(`/assets?title_id=${id}`);
+      const assets = await requestWithRetry<MediaAsset[]>(`/assets?title_id=${id}`);
       return filterArtworkAssets(assets);
     }
   },
@@ -93,22 +140,22 @@ export const metadataApi = {
   search: (q: string, titleType?: TitleType) => {
     const params = new URLSearchParams({ q });
     if (titleType) params.set("title_type", titleType);
-    return request<MetadataSearchResult[]>(`/metadata/search?${params}`);
+    return requestWithRetry<MetadataSearchResult[]>(`/metadata/search?${params}`);
   },
   import: (externalId: string) =>
-    request<TitleMetadataImport>(
+    requestWithRetry<TitleMetadataImport>(
       `/metadata/import/${encodeURIComponent(externalId)}`
     ),
   importArtwork: async (externalId: string) => {
     const params = new URLSearchParams({ external_id: externalId });
     try {
-      return await request<ArtworkItem[]>(`/metadata/artwork?${params}`);
+      return await requestWithRetry<ArtworkItem[]>(`/metadata/artwork?${params}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (!message.includes("Not Found") && !message.includes("404")) {
         throw err;
       }
-      return request<ArtworkItem[]>(
+      return requestWithRetry<ArtworkItem[]>(
         `/metadata/import/${encodeURIComponent(externalId)}/artwork`
       );
     }
@@ -118,9 +165,9 @@ export const metadataApi = {
 export const assetsApi = {
   list: (params?: Record<string, string>) => {
     const q = new URLSearchParams(params).toString();
-    return request<MediaAsset[]>(`/assets${q ? `?${q}` : ""}`);
+    return requestWithRetry<MediaAsset[]>(`/assets${q ? `?${q}` : ""}`);
   },
-  get: (id: number) => request<MediaAsset>(`/assets/${id}`),
+  get: (id: number) => requestWithRetry<MediaAsset>(`/assets/${id}`),
   create: (body: Partial<MediaAsset>) =>
     request<MediaAsset>("/assets", {
       method: "POST",
@@ -134,3 +181,7 @@ export const assetsApi = {
   delete: (id: number) =>
     request<void>(`/assets/${id}`, { method: "DELETE" }),
 };
+
+export function apiBaseUrl(): string {
+  return API_BASE;
+}

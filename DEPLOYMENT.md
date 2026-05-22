@@ -154,6 +154,7 @@ Other options: standard **ECS Fargate**, **Lambda + API Gateway** (requires [Man
 | Symptom | Fix |
 |---------|-----|
 | Metadata works locally, not on Amplify | Set `VITE_API_URL` to Render URL; redeploy Amplify |
+| Titles show **Failed to fetch** but API sidebar says Connected | Redeploy Amplify (GET must not send `Content-Type` — fixed in client). Run `./scripts/verify-cloud.sh` |
 | API status shows error | Check Render logs; verify `/health` |
 | Slow first search | Render free tier cold start — wait or upgrade plan |
 | CORS error / "Failed to fetch" on Amplify | Redeploy **Render** after CORS fix; Amplify URLs look like `main.xxxx.amplifyapp.com` |

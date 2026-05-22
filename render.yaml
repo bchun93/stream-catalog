@@ -16,3 +16,6 @@ services:
       - key: SEED_ON_STARTUP
         value: "true"
       # Do not set PORT — Render injects it at runtime (e.g. 10000). The app must listen on $PORT.
+      # Optional: comma-separated Amplify URL(s) if CORS regex is not enough
+      - key: CORS_ORIGINS
+        sync: false

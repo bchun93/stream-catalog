@@ -64,8 +64,9 @@ def poster_urls_for_titles(db: Session, title_ids: list[int]) -> dict[int, str]:
     titles = db.query(Title).filter(Title.id.in_(title_ids)).all()
     urls: dict[int, str] = {}
     for title in titles:
+        cached = getattr(title, "poster_url", None)
         resolved = resolve_poster_url(
-            cached_poster_url=title.poster_url,
+            cached_poster_url=cached,
             assets=assets_by_title.get(title.id, []),
         )
         if resolved:
@@ -115,8 +116,9 @@ def list_titles_read(
     result: list[TitleRead] = []
     for title in titles:
         read = TitleRead.model_validate(title)
+        cached = getattr(title, "poster_url", None)
         read.poster_url = poster_map.get(title.id) or resolve_poster_url(
-            cached_poster_url=title.poster_url,
+            cached_poster_url=cached,
             assets=assets_by_title.get(title.id, []),
         )
         result.append(read)
@@ -141,7 +143,7 @@ def get_title_read(db: Session, title_id: int) -> TitleRead | None:
     )
     read = TitleRead.model_validate(title)
     read.poster_url = resolve_poster_url(
-        cached_poster_url=title.poster_url,
+        cached_poster_url=getattr(title, "poster_url", None),
         assets=assets,
     )
     return read

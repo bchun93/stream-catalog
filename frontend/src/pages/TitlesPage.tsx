@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { titlesApi } from "../api/client";
+import { apiBaseUrl, titlesApi } from "../api/client";
 import { Badge } from "../components/Badge";
 import { Modal } from "../components/Modal";
 import { TitleForm } from "../components/TitleForm";
@@ -20,7 +20,14 @@ export function TitlesPage() {
     const params: Record<string, string> = {};
     if (search) params.q = search;
     if (typeFilter) params.title_type = typeFilter;
-    titlesApi.list(params).then(setTitles).catch((e) => setError(e.message));
+    titlesApi
+      .list(params)
+      .then(setTitles)
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : "Failed to load titles";
+        const base = apiBaseUrl();
+        setError(base ? `${msg} (API: ${base})` : msg);
+      });
   }, [search, typeFilter]);
 
   useEffect(() => {
