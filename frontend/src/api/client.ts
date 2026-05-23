@@ -57,7 +57,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (err) {
     const hint =
       err instanceof TypeError
-        ? ` Network error reaching ${url}. Check VITE_API_URL (${API_BASE || "not set"}) and Render CORS.`
+        ? ` Network error reaching ${url}. Check VITE_API_URL (${API_BASE || "not set"}) and retry (Render may be temporarily unreachable).`
         : "";
     throw new Error(
       `${err instanceof Error ? err.message : "Request failed"}${hint}`
@@ -153,7 +153,9 @@ export const titlesApi = {
       const dbFailure = isArtworkRouteDatabaseError(message);
       if (!missing && !dbFailure) throw err;
       const fallbackAssets = await requestWithRetry<MediaAsset[]>(
-        `/assets?title_id=${id}`
+        `/assets?title_id=${id}`,
+        undefined,
+        8
       );
       return filterArtworkAssets(fallbackAssets);
     }
@@ -181,7 +183,11 @@ export const titlesApi = {
           throw err;
         }
 
-        const existing = await requestWithRetry<MediaAsset[]>(`/assets?title_id=${id}`);
+        const existing = await requestWithRetry<MediaAsset[]>(
+          `/assets?title_id=${id}`,
+          undefined,
+          8
+        );
         const existingUris = new Set(existing.map((asset) => asset.storage_uri));
         const toCreate = items.filter((item) => !existingUris.has(item.storage_uri));
         let skipped = 0;
@@ -215,7 +221,11 @@ export const titlesApi = {
           }
         }
 
-        const refreshed = await requestWithRetry<MediaAsset[]>(`/assets?title_id=${id}`);
+        const refreshed = await requestWithRetry<MediaAsset[]>(
+          `/assets?title_id=${id}`,
+          undefined,
+          8
+        );
         if (created === 0 && skipped > 0) {
           throw new Error(friendlySkippedArtworkMessage(skipped));
         }
