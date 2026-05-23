@@ -101,11 +101,19 @@ def _upgrade_postgres_enums_to_varchar(conn) -> None:
 
 def _ensure_pg_enum_values(conn) -> None:
     """If enum columns still exist, add missing labels (fallback)."""
+    def _enum_labels(enum_cls) -> list[str]:
+        labels: list[str] = []
+        for item in enum_cls:
+            for label in (item.name, str(item.value)):
+                if label not in labels:
+                    labels.append(label)
+        return labels
+
     additions = {
-        "assettype": [e.name for e in AssetType],
-        "assetstatus": [e.name for e in AssetStatus],
-        "titletype": [e.name for e in TitleType],
-        "titlestatus": [e.name for e in TitleStatus],
+        "assettype": _enum_labels(AssetType),
+        "assetstatus": _enum_labels(AssetStatus),
+        "titletype": _enum_labels(TitleType),
+        "titlestatus": _enum_labels(TitleStatus),
     }
     for type_name, labels in additions.items():
         for label in labels:

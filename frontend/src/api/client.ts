@@ -22,6 +22,14 @@ function isArtworkRouteDatabaseError(message: string): boolean {
   );
 }
 
+function friendlySkippedArtworkMessage(count: number): string {
+  const plural = count === 1 ? "" : "s";
+  return (
+    `Saved what the current API schema supports, but skipped ${count} selected ` +
+    `image${plural}. Redeploy API migrations to enable all artwork types.`
+  );
+}
+
 function buildHeaders(init?: RequestInit): HeadersInit {
   const headers = new Headers(init?.headers);
   const method = (init?.method ?? "GET").toUpperCase();
@@ -176,26 +184,41 @@ export const titlesApi = {
         const existing = await requestWithRetry<MediaAsset[]>(`/assets?title_id=${id}`);
         const existingUris = new Set(existing.map((asset) => asset.storage_uri));
         const toCreate = items.filter((item) => !existingUris.has(item.storage_uri));
+        let skipped = 0;
+        let created = 0;
 
         for (const item of toCreate) {
-          await request<MediaAsset>("/assets", {
-            method: "POST",
-            body: JSON.stringify({
-              title_id: id,
-              asset_type: item.asset_type,
-              status: "ready",
-              filename: item.filename,
-              mime_type: item.mime_type ?? "image/jpeg",
-              storage_uri: item.storage_uri,
-              language: item.language ?? null,
-              resolution: item.resolution ?? null,
-              notes: item.notes ?? null,
-              metadata_json: item.specs ? JSON.stringify(item.specs) : null,
-            }),
-          });
+          try {
+            await request<MediaAsset>("/assets", {
+              method: "POST",
+              body: JSON.stringify({
+                title_id: id,
+                asset_type: item.asset_type,
+                status: "ready",
+                filename: item.filename,
+                mime_type: item.mime_type ?? "image/jpeg",
+                storage_uri: item.storage_uri,
+                language: item.language ?? null,
+                resolution: item.resolution ?? null,
+                notes: item.notes ?? null,
+                metadata_json: item.specs ? JSON.stringify(item.specs) : null,
+              }),
+            });
+            created += 1;
+          } catch (createErr) {
+            const createMessage =
+              createErr instanceof Error ? createErr.message : "";
+            if (!isArtworkRouteDatabaseError(createMessage)) {
+              throw createErr;
+            }
+            skipped += 1;
+          }
         }
 
         const refreshed = await requestWithRetry<MediaAsset[]>(`/assets?title_id=${id}`);
+        if (created === 0 && skipped > 0) {
+          throw new Error(friendlySkippedArtworkMessage(skipped));
+        }
         return filterArtworkAssets(refreshed);
       }),
 };
