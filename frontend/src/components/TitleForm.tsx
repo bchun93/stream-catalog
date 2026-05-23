@@ -16,6 +16,8 @@ interface TitleFormProps {
   initialTab?: "details" | "artwork";
   onSubmit: (data: Partial<Title>) => Promise<Title | void>;
   onCancel: () => void;
+  /** Called after title details save succeeds (e.g. refresh list). */
+  onSaved?: () => void;
   onArtworkSaved?: () => void;
 }
 
@@ -60,6 +62,7 @@ export function TitleForm({
   initialTab = "details",
   onSubmit,
   onCancel,
+  onSaved,
   onArtworkSaved,
 }: TitleFormProps) {
   const [tab, setTab] = useState<"details" | "artwork">(initialTab);
@@ -155,6 +158,8 @@ export function TitleForm({
       if (result?.id) {
         setSavedTitleId(result.id);
       }
+      onSaved?.();
+      onCancel();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {

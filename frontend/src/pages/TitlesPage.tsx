@@ -191,20 +191,19 @@ export function TitlesPage() {
             initialTab={formTab}
             parents={titles.filter((t) => t.id !== editing?.id)}
             onCancel={closeModal}
+            onSaved={load}
             onArtworkSaved={load}
             onSubmit={async (data) => {
               if (modal === "create") {
-                const created = await titlesApi.create(data);
-                load();
-                closeModal();
-                return created;
+                return await titlesApi.create(data);
               }
-              if (editing) {
-                const updated = await titlesApi.update(editing.id, data);
-                load();
-                closeModal();
-                return updated;
+              const id = editing?.id;
+              if (id == null) {
+                throw new Error(
+                  "Could not save — close the dialog, reopen the title, and try again."
+                );
               }
+              return await titlesApi.update(id, data);
             }}
           />
         </Modal>

@@ -26,8 +26,8 @@ def _hints(*, db_ready: bool, neon_pooler: bool, migration_error: str | None, tm
         )
         if neon_pooler:
             hints.append(
-                "DATABASE_URL uses Neon pooler (-pooler host). Use the DIRECT connection "
-                "string from Neon → Connect (not Connection pooling)."
+                "DATABASE_URL uses Neon pooler (-pooler host). This is supported, but "
+                "if migrations fail, switch to Neon DIRECT connection string."
             )
         if migration_error:
             hints.append(f"Last migration error: {migration_error[:200]}")

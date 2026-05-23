@@ -72,6 +72,7 @@ export function AssetForm({ titles, initial, onSubmit, onCancel }: AssetFormProp
         size_bytes: form.size_bytes ? Number(form.size_bytes) : null,
         notes: form.notes || null,
       });
+      onCancel();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {

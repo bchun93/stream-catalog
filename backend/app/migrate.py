@@ -121,9 +121,10 @@ def run_migrations() -> None:
     if engine.dialect.name == "postgresql":
         host = engine.url.host or ""
         if "pooler" in host:
-            raise RuntimeError(
-                "DATABASE_URL uses Neon pooler host. Migrations require the DIRECT "
-                "connection string from Neon (Connect → disable connection pooling)."
+            logger.warning(
+                "DATABASE_URL uses a Neon pooler host (%s). Continuing migrations; "
+                "if schema updates fail, switch to Neon direct connection URL.",
+                host,
             )
 
     inspector = inspect(engine)

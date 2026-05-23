@@ -156,13 +156,22 @@ export function AssetsPage() {
           onClose={closeModal}
         >
           <AssetForm
+            key={editing?.id ?? "new"}
             titles={titles}
             initial={editing ?? undefined}
             onCancel={closeModal}
             onSubmit={async (data) => {
-              if (modal === "create") await assetsApi.create(data);
-              else if (editing) await assetsApi.update(editing.id, data);
-              closeModal();
+              if (modal === "create") {
+                await assetsApi.create(data);
+              } else {
+                const id = editing?.id;
+                if (id == null) {
+                  throw new Error(
+                    "Could not save — close the dialog, reopen the asset, and try again."
+                  );
+                }
+                await assetsApi.update(id, data);
+              }
               load();
             }}
           />
