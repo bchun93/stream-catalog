@@ -13,6 +13,15 @@ const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const API = `${API_BASE}/api/v1`;
 const IS_PROD = import.meta.env.PROD;
 
+function isArtworkRouteDatabaseError(message: string): boolean {
+  const text = message.toLowerCase();
+  return (
+    text.includes("database error") ||
+    text.includes("database_url") ||
+    text.includes("db not ready")
+  );
+}
+
 function buildHeaders(init?: RequestInit): HeadersInit {
   const headers = new Headers(init?.headers);
   const method = (init?.method ?? "GET").toUpperCase();
@@ -133,9 +142,12 @@ export const titlesApi = {
         message.includes("Not Found") ||
         message.includes("404") ||
         message.includes("route not found");
-      if (!missing) throw err;
-      const assets = await requestWithRetry<MediaAsset[]>(`/assets?title_id=${id}`);
-      return filterArtworkAssets(assets);
+      const dbFailure = isArtworkRouteDatabaseError(message);
+      if (!missing && !dbFailure) throw err;
+      const fallbackAssets = await requestWithRetry<MediaAsset[]>(
+        `/assets?title_id=${id}`
+      );
+      return filterArtworkAssets(fallbackAssets);
     }
   },
   saveArtwork: (id: number, items: ArtworkItem[]) =>
@@ -153,7 +165,39 @@ export const titlesApi = {
           specs: item.specs ?? {},
         })),
       }),
-    }).then(filterArtworkAssets),
+    })
+      .then(filterArtworkAssets)
+      .catch(async (err: unknown) => {
+        const message = err instanceof Error ? err.message : "";
+        if (!isArtworkRouteDatabaseError(message)) {
+          throw err;
+        }
+
+        const existing = await requestWithRetry<MediaAsset[]>(`/assets?title_id=${id}`);
+        const existingUris = new Set(existing.map((asset) => asset.storage_uri));
+        const toCreate = items.filter((item) => !existingUris.has(item.storage_uri));
+
+        for (const item of toCreate) {
+          await request<MediaAsset>("/assets", {
+            method: "POST",
+            body: JSON.stringify({
+              title_id: id,
+              asset_type: item.asset_type,
+              status: "ready",
+              filename: item.filename,
+              mime_type: item.mime_type ?? "image/jpeg",
+              storage_uri: item.storage_uri,
+              language: item.language ?? null,
+              resolution: item.resolution ?? null,
+              notes: item.notes ?? null,
+              metadata_json: item.specs ? JSON.stringify(item.specs) : null,
+            }),
+          });
+        }
+
+        const refreshed = await requestWithRetry<MediaAsset[]>(`/assets?title_id=${id}`);
+        return filterArtworkAssets(refreshed);
+      }),
 };
 
 export type MetadataHealth = {
