@@ -1172,6 +1172,92 @@ tr:hover td {
   color: #0c1a12;
 }
 
+.artwork-ai-badge {
+  margin-top: 0.5rem;
+  color: var(--success);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.artwork-ai-controls {
+  margin-top: 0.65rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.artwork-ai-controls select {
+  width: 100%;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+.artwork-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.artwork-ai-actions .btn {
+  padding: 0.35rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.artwork-training-upload {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.artwork-training-upload label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.artwork-training-upload input,
+.artwork-training-upload select {
+  margin-top: 0.35rem;
+  width: 100%;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+}
+
+.artwork-training-preview {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  color: var(--muted);
+}
+
+.artwork-training-preview img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.artwork-training-preview strong {
+  color: var(--text);
+  display: block;
+}
+
+.artwork-training-preview p {
+  margin: 0.25rem 0 0;
+}
+
 .artwork-tile-in-catalog:not(.artwork-tile-selected) .artwork-tile-img-wrap {
   opacity: 0.92;
 }

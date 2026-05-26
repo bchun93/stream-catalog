@@ -10,6 +10,15 @@ from app.schemas.ingest import (
     IngestManifestValidateRequest,
     IngestManifestValidateResponse,
 )
+from app.schemas.artwork_ai import (
+    ArtworkAutoAssignRequest,
+    ArtworkAutoAssignResponse,
+    ArtworkClassifyResponse,
+    ArtworkLabelRequest,
+    ArtworkPrediction,
+    ArtworkReviewItem,
+    ArtworkTrainingExampleRead,
+)
 from app.schemas.title import TitleCreate, TitleRead, TitleTree, TitleUpdate
 
 __all__ = [
@@ -25,4 +34,11 @@ __all__ = [
     "IngestManifestValidateResponse",
     "IngestJobCreateRequest",
     "IngestJobRead",
+    "ArtworkPrediction",
+    "ArtworkClassifyResponse",
+    "ArtworkAutoAssignRequest",
+    "ArtworkAutoAssignResponse",
+    "ArtworkLabelRequest",
+    "ArtworkTrainingExampleRead",
+    "ArtworkReviewItem",
 ]

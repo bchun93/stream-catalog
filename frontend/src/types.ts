@@ -52,6 +52,66 @@ export interface ArtworkItem {
   specs?: ArtworkSpecs;
 }
 
+export type ArtworkRole =
+  | "vertical_poster"
+  | "box_art"
+  | "hero_image"
+  | "horizontal_poster"
+  | "still_frame"
+  | "logo"
+  | "season_poster"
+  | "cast_photo"
+  | "unknown";
+
+export type ArtworkTrainingDecision = "approved" | "corrected" | "rejected";
+
+export interface ArtworkPrediction {
+  item: ArtworkItem;
+  predicted_role: ArtworkRole;
+  confidence: number;
+  model_version: string;
+  auto_apply: boolean;
+  rationale?: string | null;
+}
+
+export interface ArtworkClassifyResponse {
+  title_id: number;
+  threshold: number;
+  predictions: ArtworkPrediction[];
+}
+
+export interface ArtworkAutoAssignResponse {
+  title_id: number;
+  threshold: number;
+  saved_count: number;
+  review_count: number;
+  assets: MediaAsset[];
+  predictions: ArtworkPrediction[];
+}
+
+export interface ArtworkLabelRequest {
+  title_id?: number | null;
+  item: ArtworkItem;
+  assigned_role: ArtworkRole;
+  decision: ArtworkTrainingDecision;
+  reviewer?: string | null;
+  notes?: string | null;
+}
+
+export interface ArtworkTrainingExample {
+  id: number;
+  title_id?: number | null;
+  candidate_uri: string;
+  filename?: string | null;
+  source_asset_type?: ArtworkType | null;
+  assigned_role: ArtworkRole;
+  decision: ArtworkTrainingDecision;
+  reviewer?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type AssetStatus =
   | "uploaded"
   | "processing"

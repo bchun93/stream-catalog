@@ -1,6 +1,10 @@
 import { filterArtworkAssets } from "../utils/artworkTypes";
 import type {
   ArtworkItem,
+  ArtworkAutoAssignResponse,
+  ArtworkClassifyResponse,
+  ArtworkLabelRequest,
+  ArtworkTrainingExample,
   IngestJob,
   IngestManifest,
   IngestManifestValidateResponse,
@@ -319,6 +323,33 @@ export const metadataApi = {
       );
     }
   },
+};
+
+export const artworkAiApi = {
+  classify: (titleId: number, threshold = 0.9) =>
+    requestWithRetry<ArtworkClassifyResponse>(
+      `/titles/${titleId}/artwork/classify?${new URLSearchParams({
+        threshold: String(threshold),
+      })}`,
+      { method: "POST" }
+    ),
+  autoAssign: (titleId: number, threshold = 0.9) =>
+    requestWithRetry<ArtworkAutoAssignResponse>(
+      `/titles/${titleId}/artwork/auto-assign`,
+      {
+        method: "POST",
+        body: JSON.stringify({ threshold }),
+      },
+      8
+    ).then((response) => ({
+      ...response,
+      assets: filterArtworkAssets(response.assets),
+    })),
+  label: (body: ArtworkLabelRequest) =>
+    request<ArtworkTrainingExample>("/artwork-ai/labels", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 export const assetsApi = {

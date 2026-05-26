@@ -5,6 +5,7 @@ import secrets
 from sqlalchemy import inspect, text
 
 from app.database import engine
+from app.models.artwork_ai import ArtworkRole, ArtworkTrainingDecision
 from app.models.ingest_job import IngestItemStatus, IngestJobStatus
 from app.models.media_asset import AssetStatus, AssetType
 from app.models.title import TitleStatus, TitleType
@@ -39,6 +40,8 @@ _PG_ENUM_TYPES = (
     "titlestatus",
     "ingestjobstatus",
     "ingestitemstatus",
+    "artworkrole",
+    "artworktrainingdecision",
 )
 
 # Columns that must be VARCHAR to match SQLAlchemy native_enum=False + SQLite locally.
@@ -50,6 +53,11 @@ _PG_ENUM_COLUMNS: tuple[tuple[str, str, int], ...] = (
     ("ingest_jobs", "status", 32),
     ("ingest_items", "inferred_asset_type", 32),
     ("ingest_items", "status", 32),
+    ("artwork_training_examples", "source_asset_type", 32),
+    ("artwork_training_examples", "assigned_role", 64),
+    ("artwork_training_examples", "decision", 32),
+    ("artwork_classifications", "source_asset_type", 32),
+    ("artwork_classifications", "predicted_role", 64),
 )
 
 
@@ -129,6 +137,8 @@ def _ensure_pg_enum_values(conn) -> None:
         "titlestatus": _enum_labels(TitleStatus),
         "ingestjobstatus": _enum_labels(IngestJobStatus),
         "ingestitemstatus": _enum_labels(IngestItemStatus),
+        "artworkrole": _enum_labels(ArtworkRole),
+        "artworktrainingdecision": _enum_labels(ArtworkTrainingDecision),
     }
     for type_name, labels in additions.items():
         for label in labels:
@@ -255,6 +265,24 @@ def _ensure_common_indexes(conn) -> None:
         text(
             "CREATE INDEX IF NOT EXISTS idx_media_assets_storage_uri "
             "ON media_assets (storage_uri)"
+        )
+    )
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_artwork_training_role "
+            "ON artwork_training_examples (assigned_role)"
+        )
+    )
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_artwork_training_uri "
+            "ON artwork_training_examples (candidate_uri)"
+        )
+    )
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_artwork_classifications_title "
+            "ON artwork_classifications (title_id, confidence DESC)"
         )
     )
 

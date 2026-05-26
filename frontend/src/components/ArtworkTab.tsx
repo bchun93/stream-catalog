@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { metadataApi, titlesApi } from "../api/client";
+import { artworkAiApi, metadataApi, titlesApi } from "../api/client";
 import { specLinesForItem } from "../utils/artworkSpecs";
 import { filterArtworkAssets } from "../utils/artworkTypes";
 import {
   ARTWORK_LABELS,
   ARTWORK_TYPES,
   type ArtworkItem,
+  type ArtworkPrediction,
+  type ArtworkRole,
+  type ArtworkTrainingDecision,
   type ArtworkType,
   type MediaAsset,
 } from "../types";
@@ -41,6 +44,39 @@ const CORE_ARTWORK_LABELS: Record<string, string> = {
   hero_image_vertical: "Hero image vertical",
   box_art: "Box art",
 };
+
+const ARTWORK_ROLE_OPTIONS: ArtworkRole[] = [
+  "vertical_poster",
+  "box_art",
+  "hero_image",
+  "horizontal_poster",
+  "still_frame",
+  "logo",
+  "season_poster",
+  "cast_photo",
+  "unknown",
+];
+
+const ARTWORK_ROLE_LABELS: Record<ArtworkRole, string> = {
+  vertical_poster: "Vertical poster",
+  box_art: "Box art",
+  hero_image: "Hero image",
+  horizontal_poster: "Horizontal poster",
+  still_frame: "Still frame",
+  logo: "Logo",
+  season_poster: "Season poster",
+  cast_photo: "Cast photo",
+  unknown: "Unknown",
+};
+
+function roleToArtworkType(role: ArtworkRole): ArtworkType {
+  if (role === "logo") return "logo";
+  if (role === "still_frame") return "still";
+  if (role === "season_poster") return "season_poster";
+  if (role === "cast_photo") return "cast_photo";
+  if (role === "hero_image" || role === "horizontal_poster") return "backdrop";
+  return "poster";
+}
 
 function preferredArtworkLabel(item: ArtworkItem, labels: string[]): string {
   const aspect = item.specs?.aspect_ratio ?? null;
@@ -152,12 +188,26 @@ function ArtworkStrip({
   savedUris,
   selected,
   onToggle,
+  predictions,
+  trainingRoles,
+  trainingBusyKey,
+  onSetTrainingRole,
+  onTrain,
 }: {
   items: DisplayItem[];
   mode: "catalog" | "browse";
   savedUris: Set<string>;
   selected: Set<string>;
   onToggle?: (uri: string) => void;
+  predictions?: Map<string, ArtworkPrediction>;
+  trainingRoles?: Record<string, ArtworkRole>;
+  trainingBusyKey?: string | null;
+  onSetTrainingRole?: (uri: string, role: ArtworkRole) => void;
+  onTrain?: (
+    item: ArtworkItem,
+    role: ArtworkRole,
+    decision: ArtworkTrainingDecision
+  ) => void;
 }) {
   if (items.length === 0) return null;
 
@@ -191,6 +241,8 @@ function ArtworkStrip({
                 const inCatalog = savedUris.has(key);
                 const isSelected = selected.has(key);
                 const selectable = mode === "browse" && onToggle && !inCatalog;
+                const prediction = predictions?.get(key);
+                const role = trainingRoles?.[key] ?? prediction?.predicted_role ?? "unknown";
 
                 return (
                   <figure
@@ -233,6 +285,12 @@ function ArtworkStrip({
                     {inCatalog && (
                       <span className="artwork-tile-badge">In catalog</span>
                     )}
+                    {prediction && (
+                      <div className="artwork-ai-badge">
+                        AI: {ARTWORK_ROLE_LABELS[prediction.predicted_role]} ·{" "}
+                        {Math.round(prediction.confidence * 100)}%
+                      </div>
+                    )}
                     <figcaption className="artwork-tile-specs">
                       <ul>
                         {specLinesForItem(item).map((line) => (
@@ -242,6 +300,48 @@ function ArtworkStrip({
                           </li>
                         ))}
                       </ul>
+                      {mode === "browse" && prediction && onTrain && onSetTrainingRole && (
+                        <div className="artwork-ai-controls">
+                          <select
+                            value={role}
+                            onChange={(e) =>
+                              onSetTrainingRole(key, e.target.value as ArtworkRole)
+                            }
+                          >
+                            {ARTWORK_ROLE_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {ARTWORK_ROLE_LABELS[option]}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="artwork-ai-actions">
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              disabled={trainingBusyKey === key}
+                              onClick={() => onTrain(item, role, "approved")}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              disabled={trainingBusyKey === key}
+                              onClick={() => onTrain(item, role, "corrected")}
+                            >
+                              Correct
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              disabled={trainingBusyKey === key}
+                              onClick={() => onTrain(item, role, "rejected")}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </figcaption>
                   </figure>
                 );
@@ -266,9 +366,20 @@ export function ArtworkTab({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [classifying, setClassifying] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [trainingBusyKey, setTrainingBusyKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [predictions, setPredictions] = useState<Map<string, ArtworkPrediction>>(
+    () => new Map()
+  );
+  const [trainingRoles, setTrainingRoles] = useState<Record<string, ArtworkRole>>({});
+  const [uploadRole, setUploadRole] = useState<ArtworkRole>("vertical_poster");
+  const [uploadItem, setUploadItem] = useState<ArtworkItem | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [uploadingTraining, setUploadingTraining] = useState(false);
 
   const canFetch = Boolean(externalId?.startsWith("tmdb:"));
 
@@ -295,6 +406,11 @@ export function ArtworkTab({
   const selectedNewCount = useMemo(
     () => [...selected].filter((uri) => !savedUris.has(uri)).length,
     [selected, savedUris]
+  );
+
+  const highConfidenceCount = useMemo(
+    () => [...predictions.values()].filter((prediction) => prediction.auto_apply).length,
+    [predictions]
   );
 
   const loadSaved = useCallback(async () => {
@@ -342,10 +458,165 @@ export function ArtworkTab({
       const items = await metadataApi.importArtwork(externalId);
       setCandidates(normalizeFetchedArtwork(items));
       setSelected(new Set());
+      setPredictions(new Map());
+      setTrainingRoles({});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch artwork");
     } finally {
       setFetching(false);
+    }
+  };
+
+  const applyPredictions = (items: ArtworkPrediction[]) => {
+    setPredictions(new Map(items.map((prediction) => [artworkKey(prediction.item), prediction])));
+    setCandidates(items.map((prediction) => prediction.item));
+    setTrainingRoles(
+      Object.fromEntries(
+        items.map((prediction) => [artworkKey(prediction.item), prediction.predicted_role])
+      )
+    );
+    setSelected(new Set());
+  };
+
+  const handleClassify = async () => {
+    if (!titleId) {
+      setError("Save the title on the Details tab before running AI classification.");
+      return;
+    }
+    setClassifying(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await artworkAiApi.classify(titleId);
+      applyPredictions(response.predictions);
+      setSuccess(
+        `AI classified ${response.predictions.length} artwork candidate${
+          response.predictions.length === 1 ? "" : "s"
+        }. ${response.predictions.filter((p) => p.auto_apply).length} are high-confidence.`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to classify artwork");
+    } finally {
+      setClassifying(false);
+    }
+  };
+
+  const handleAutoAssign = async () => {
+    if (!titleId) {
+      setError("Save the title on the Details tab before auto-assigning artwork.");
+      return;
+    }
+    setAutoAssigning(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await artworkAiApi.autoAssign(titleId);
+      applyPredictions(response.predictions);
+      setSaved(filterArtworkAssets(response.assets));
+      setSuccess(
+        `AI auto-assigned ${response.saved_count} high-confidence artwork asset${
+          response.saved_count === 1 ? "" : "s"
+        }. ${response.review_count} remain for review.`
+      );
+      onSaved?.();
+      await loadSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to auto-assign artwork");
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
+
+  const setTrainingRole = (uri: string, role: ArtworkRole) => {
+    setTrainingRoles((current) => ({ ...current, [uri]: role }));
+  };
+
+  const handleTrain = async (
+    item: ArtworkItem,
+    role: ArtworkRole,
+    decision: ArtworkTrainingDecision
+  ) => {
+    const key = artworkKey(item);
+    setTrainingBusyKey(key);
+    setError(null);
+    try {
+      await artworkAiApi.label({
+        title_id: titleId ?? null,
+        item,
+        assigned_role: role,
+        decision,
+      });
+      setSuccess(`Saved ${decision} AI training label for ${ARTWORK_ROLE_LABELS[role]}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save AI training label");
+    } finally {
+      setTrainingBusyKey(null);
+    }
+  };
+
+  const handleTrainingUpload = (file: File | null) => {
+    if (uploadPreview) URL.revokeObjectURL(uploadPreview);
+    setUploadPreview(null);
+    setUploadItem(null);
+    if (!file) return;
+
+    const preview = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const width = img.naturalWidth || null;
+      const height = img.naturalHeight || null;
+      const aspect = width && height ? width / height : null;
+      setUploadItem({
+        asset_type: roleToArtworkType(uploadRole),
+        storage_uri: `training-upload://${Date.now()}-${encodeURIComponent(file.name)}`,
+        filename: file.name.slice(0, 255),
+        mime_type: file.type || "image/jpeg",
+        resolution: width && height ? `${width}×${height}` : null,
+        specs: {
+          width,
+          height,
+          aspect_ratio: aspect,
+          aspect_ratio_label: aspect ? `${aspect.toFixed(2)}:1` : null,
+          label: ARTWORK_ROLE_LABELS[uploadRole],
+        },
+      });
+      setUploadPreview(preview);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(preview);
+      setError("Could not read that image file.");
+    };
+    img.src = preview;
+  };
+
+  const saveUploadedTrainingExample = async () => {
+    if (!uploadItem) {
+      setError("Choose an image file to train with.");
+      return;
+    }
+    setUploadingTraining(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const role = uploadRole;
+      await artworkAiApi.label({
+        title_id: titleId ?? null,
+        item: {
+          ...uploadItem,
+          asset_type: roleToArtworkType(role),
+          specs: {
+            ...(uploadItem.specs ?? {}),
+            label: ARTWORK_ROLE_LABELS[role],
+          },
+        },
+        assigned_role: role,
+        decision: "approved",
+      });
+      setSuccess(`Saved uploaded training example as ${ARTWORK_ROLE_LABELS[role]}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save uploaded training example");
+    } finally {
+      setUploadingTraining(false);
     }
   };
 
@@ -473,7 +744,7 @@ export function ArtworkTab({
             <button
               type="button"
               className="btn btn-primary artwork-fetch-btn"
-              disabled={fetching || saving}
+            disabled={fetching || saving || classifying || autoAssigning}
               onClick={handleFetch}
             >
               {fetching ? "Fetching…" : "Fetch artwork"}
@@ -484,10 +755,16 @@ export function ArtworkTab({
           <p className="artwork-view-empty">
             Import metadata on the Details tab to enable TMDB artwork.
           </p>
-        ) : fetching ? (
+        ) : fetching || classifying || autoAssigning ? (
           <div className="artwork-state">
             <div className="artwork-spinner" aria-hidden />
-            <p>Loading artwork from TMDB…</p>
+            <p>
+              {fetching
+                ? "Loading artwork from TMDB…"
+                : classifying
+                  ? "Classifying artwork with AI…"
+                  : "Auto-assigning high-confidence artwork…"}
+            </p>
           </div>
         ) : candidates.length === 0 ? (
           <p className="artwork-view-empty">
@@ -502,6 +779,24 @@ export function ArtworkTab({
               </button>
               <button type="button" className="btn btn-ghost" onClick={clearSelection}>
                 Clear
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={!titleId || classifying || autoAssigning}
+                onClick={handleClassify}
+              >
+                {classifying ? "Classifying…" : "AI Classify"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={!titleId || autoAssigning || highConfidenceCount === 0}
+                onClick={handleAutoAssign}
+              >
+                {autoAssigning
+                  ? "Auto-assigning…"
+                  : `Auto-assign high confidence (${highConfidenceCount})`}
               </button>
               <button
                 type="button"
@@ -522,8 +817,77 @@ export function ArtworkTab({
               savedUris={savedUris}
               selected={selected}
               onToggle={toggle}
+              predictions={predictions}
+              trainingRoles={trainingRoles}
+              trainingBusyKey={trainingBusyKey}
+              onSetTrainingRole={setTrainingRole}
+              onTrain={handleTrain}
             />
           </>
+        )}
+      </div>
+
+      <div className="artwork-view-section">
+        <h3 className="artwork-view-heading">Train AI with upload</h3>
+        <p className="artwork-view-empty artwork-view-empty-inline">
+          Upload an example image and tell the classifier what artwork type it represents.
+          The current model learns from image dimensions, source type, and your labels.
+        </p>
+        <div className="artwork-training-upload">
+          <label>
+            Training image
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleTrainingUpload(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          <label>
+            Artwork type
+            <select
+              value={uploadRole}
+              onChange={(e) => {
+                const role = e.target.value as ArtworkRole;
+                setUploadRole(role);
+                if (uploadItem) {
+                  setUploadItem({
+                    ...uploadItem,
+                    asset_type: roleToArtworkType(role),
+                    specs: {
+                      ...(uploadItem.specs ?? {}),
+                      label: ARTWORK_ROLE_LABELS[role],
+                    },
+                  });
+                }
+              }}
+            >
+              {ARTWORK_ROLE_OPTIONS.map((role) => (
+                <option key={role} value={role}>
+                  {ARTWORK_ROLE_LABELS[role]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!uploadItem || uploadingTraining}
+            onClick={saveUploadedTrainingExample}
+          >
+            {uploadingTraining ? "Saving…" : "Save training example"}
+          </button>
+        </div>
+        {uploadPreview && uploadItem && (
+          <div className="artwork-training-preview">
+            <img src={uploadPreview} alt="" />
+            <div>
+              <strong>{uploadItem.filename}</strong>
+              <p>
+                {ARTWORK_ROLE_LABELS[uploadRole]} ·{" "}
+                {uploadItem.resolution || "unknown resolution"}
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>
