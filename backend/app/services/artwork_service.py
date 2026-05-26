@@ -74,7 +74,13 @@ def _with_artwork_label(item: ArtworkItem, labels: list[str]) -> ArtworkItem:
     note = f"{TMDB_SOURCE_NOTE}; {label}"
     if item.language and item.language != "en":
         note = f"{note}; lang:{item.language}"
-    return item.model_copy(update={"notes": note, "specs": specs})
+    return item.model_copy(
+        update={
+            "asset_type": AssetType.POSTER,
+            "notes": note,
+            "specs": specs,
+        }
+    )
 
 
 def _filter_to_metadata_artwork(

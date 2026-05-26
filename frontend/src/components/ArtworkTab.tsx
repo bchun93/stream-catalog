@@ -78,6 +78,7 @@ function filterToMetadataArtwork(
     const label = labels.join(" / ");
     selected.set(item.storage_uri, {
       ...item,
+      asset_type: "poster",
       notes: `source:tmdb; ${label}${item.language && item.language !== "en" ? `; lang:${item.language}` : ""}`,
       specs: {
         ...(item.specs ?? {}),
