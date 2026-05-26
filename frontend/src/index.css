@@ -922,6 +922,14 @@ tr:hover td {
   padding-top: 0.25rem;
 }
 
+.artwork-browse-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
 .artwork-view-heading {
   margin: 0 0 0.65rem;
   font-size: 0.82rem;
@@ -936,6 +944,11 @@ tr:hover td {
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.artwork-view-empty-inline {
+  margin-bottom: 0;
+  max-width: 34rem;
 }
 
 .artwork-tile-img-static {

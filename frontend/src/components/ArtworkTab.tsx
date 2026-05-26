@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { metadataApi, titlesApi } from "../api/client";
 import { specLinesForItem } from "../utils/artworkSpecs";
 import { filterArtworkAssets } from "../utils/artworkTypes";
@@ -225,10 +225,8 @@ export function ArtworkTab({
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const autoSyncedTitleIds = useRef<Set<number>>(new Set());
 
   const canFetch = Boolean(externalId?.startsWith("tmdb:"));
 
@@ -277,55 +275,6 @@ export function ArtworkTab({
     }
   }, [titleId]);
 
-  const syncArtwork = useCallback(
-    async (mode: "auto" | "manual" = "manual") => {
-      if (!titleId || !canFetch) {
-        if (mode === "manual") {
-          setError("Import TMDB metadata on the Details tab first.");
-        }
-        return [];
-      }
-      setSyncing(true);
-      if (mode === "manual") setFetching(true);
-      setError(null);
-      setSuccess(null);
-      try {
-        let stored: MediaAsset[];
-        try {
-          stored = await titlesApi.syncArtwork(titleId);
-        } catch (syncErr) {
-          if (!externalId) throw syncErr;
-          const items = await metadataApi.importArtwork(externalId);
-          stored = await titlesApi.saveArtwork(
-            titleId,
-            filterToMetadataArtwork(items, metadataJson)
-          );
-        }
-        const artworkOnly = filterArtworkAssets(stored);
-        setSaved(artworkOnly);
-        setCandidates([]);
-        setSelected(new Set());
-        if (mode === "manual") {
-          setSuccess(
-            `Synced ${artworkOnly.length} artwork asset${
-              artworkOnly.length === 1 ? "" : "s"
-            } to the catalog.`
-          );
-        }
-        onSaved?.();
-        return artworkOnly;
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to sync artwork";
-        setError(message);
-        return [];
-      } finally {
-        setSyncing(false);
-        if (mode === "manual") setFetching(false);
-      }
-    },
-    [canFetch, externalId, metadataJson, onSaved, titleId]
-  );
-
   // Load whenever title changes (e.g. open edit modal).
   useEffect(() => {
     void loadSaved();
@@ -338,18 +287,6 @@ export function ArtworkTab({
     }
   }, [visible, titleId, loadSaved]);
 
-  useEffect(() => {
-    if (!visible || !titleId || !canFetch || autoSyncedTitleIds.current.has(titleId)) {
-      return;
-    }
-    autoSyncedTitleIds.current.add(titleId);
-    void loadSaved().then((list) => {
-      if (list.length === 0) {
-        void syncArtwork("auto");
-      }
-    });
-  }, [canFetch, loadSaved, syncArtwork, titleId, visible]);
-
   const handleFetch = async () => {
     if (!canFetch || !externalId) {
       setError("Import TMDB metadata on the Details tab first.");
@@ -359,9 +296,9 @@ export function ArtworkTab({
     setError(null);
     setSuccess(null);
     try {
-      if (titleId) {
-        await syncArtwork("manual");
-      }
+      const items = await metadataApi.importArtwork(externalId);
+      setCandidates(filterToMetadataArtwork(items, metadataJson));
+      setSelected(new Set());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch artwork");
     } finally {
@@ -426,24 +363,10 @@ export function ArtworkTab({
         <div className="artwork-header-text">
           <h3 className="artwork-title">Artwork library</h3>
           <p className="artwork-subtitle">
-            Saved artwork is stored on this title. Use &quot;Add selected to catalog&quot;
-            to save — &quot;Save title&quot; only saves details metadata.
+            Saved artwork loads from this title when the modal opens. Use Browse TMDB
+            to fetch metadata-matched artwork candidates.
           </p>
         </div>
-        {canFetch && (
-          <button
-            type="button"
-            className="btn btn-primary artwork-fetch-btn"
-            disabled={fetching || saving || syncing}
-            onClick={handleFetch}
-          >
-            {fetching || syncing
-              ? "Syncing…"
-              : saved.length
-                ? "Refresh artwork"
-                : "Fetch artwork"}
-          </button>
-        )}
       </header>
 
       <div className="artwork-meta-row">
@@ -480,14 +403,9 @@ export function ArtworkTab({
             <div className="artwork-spinner" aria-hidden />
             <p>Loading catalog artwork…</p>
           </div>
-        ) : syncing ? (
-          <div className="artwork-state">
-            <div className="artwork-spinner" aria-hidden />
-            <p>Saving TMDB artwork to this title…</p>
-          </div>
         ) : savedItems.length === 0 ? (
           <p className="artwork-view-empty">
-            No artwork saved yet. Fetch from TMDB to save matching artwork automatically.
+            No artwork saved yet. Fetch from TMDB below, then add selected images.
           </p>
         ) : (
           <ArtworkStrip
@@ -500,7 +418,25 @@ export function ArtworkTab({
       </div>
 
       <div className="artwork-view-section artwork-view-section-browse">
-        <h3 className="artwork-view-heading">Browse TMDB</h3>
+        <div className="artwork-browse-header">
+          <div>
+            <h3 className="artwork-view-heading">Browse TMDB</h3>
+            <p className="artwork-view-empty artwork-view-empty-inline">
+              Fetch metadata-matched posters, hero images, stills, logos, and box art from TMDB.
+              Fetching does not change saved catalog artwork.
+            </p>
+          </div>
+          {canFetch && (
+            <button
+              type="button"
+              className="btn btn-primary artwork-fetch-btn"
+              disabled={fetching || saving}
+              onClick={handleFetch}
+            >
+              {fetching ? "Fetching…" : "Fetch artwork"}
+            </button>
+          )}
+        </div>
         {!canFetch ? (
           <p className="artwork-view-empty">
             Import metadata on the Details tab to enable TMDB artwork.
@@ -513,7 +449,7 @@ export function ArtworkTab({
         ) : candidates.length === 0 ? (
           <p className="artwork-view-empty">
             Click Fetch artwork to browse posters, backdrops, logos, and more.
-            Matching images are automatically saved to your catalog.
+            Fetching does not save anything until you add selected images.
           </p>
         ) : (
           <>
