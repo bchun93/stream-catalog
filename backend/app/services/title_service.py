@@ -40,6 +40,15 @@ def _ensure_internal_id(db: Session, title: Title) -> None:
         title.internal_id = _generate_unique_internal_id(db)
 
 
+def _ensure_internal_ids(db: Session, titles: list[Title]) -> bool:
+    changed = False
+    for title in titles:
+        if not title.internal_id:
+            title.internal_id = _generate_unique_internal_id(db)
+            changed = True
+    return changed
+
+
 def list_titles(
     db: Session,
     *,
@@ -53,7 +62,11 @@ def list_titles(
     if q:
         pattern = f"%{q}%"
         query = query.filter(
-            or_(Title.name.ilike(pattern), Title.slug.ilike(pattern))
+            or_(
+                Title.name.ilike(pattern),
+                Title.slug.ilike(pattern),
+                Title.internal_id.ilike(pattern),
+            )
         )
     if title_type:
         query = query.filter(Title.title_type == title_type)
@@ -291,6 +304,8 @@ def list_titles_read(
         skip=skip,
         limit=limit,
     )
+    if _ensure_internal_ids(db, titles):
+        db.commit()
     # List view uses titles.poster_url only — avoids media_assets enum/query failures on Neon.
     result: list[TitleRead] = []
     for title in titles:
@@ -311,6 +326,10 @@ def get_title_read(db: Session, title_id: int) -> TitleRead | None:
     title = get_title(db, title_id)
     if not title:
         return None
+    if not title.internal_id:
+        _ensure_internal_id(db, title)
+        db.commit()
+        db.refresh(title)
     assets: list[MediaAsset] = []
     try:
         assets = (
@@ -478,6 +497,8 @@ def apply_series_hierarchy_preview(
 
 def build_title_tree(db: Session, root_id: int | None = None) -> list[Title]:
     titles = db.query(Title).order_by(Title.name).all()
+    if _ensure_internal_ids(db, titles):
+        db.commit()
     by_parent: dict[int | None, list[Title]] = {}
     for title in titles:
         by_parent.setdefault(title.parent_id, []).append(title)
