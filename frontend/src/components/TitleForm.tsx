@@ -78,6 +78,7 @@ function metadataImportToCore(meta: TitleMetadataImport): Record<string, string>
 }
 
 const emptyForm = (initial?: Partial<Title>) => ({
+  internal_id: initial?.internal_id ?? "",
   slug: initial?.slug ?? "",
   name: initial?.name ?? "",
   title_type: initial?.title_type ?? "movie",
@@ -283,6 +284,20 @@ export function TitleForm({
             </div>
           )}
           <div className="form-grid">
+            <div className="form-span-2 metadata-requirements">
+              <h3 className="metadata-requirements-heading">Identification Metadata</h3>
+              <p className="metadata-hint">
+                Internal ID is assigned by the catalog and stays with this title.
+              </p>
+            </div>
+            <label>
+              Internal ID
+              <input
+                value={form.internal_id || "Assigned when saved"}
+                readOnly
+                aria-readonly="true"
+              />
+            </label>
             <label>
               Name
               <input required value={form.name} onChange={(e) => set("name", e.target.value)} />

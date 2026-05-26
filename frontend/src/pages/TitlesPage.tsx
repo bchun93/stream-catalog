@@ -17,6 +17,10 @@ function titleMetaLine(title: Title): string {
     .join(" · ");
 }
 
+function displayInternalId(title: Pick<Title, "internal_id" | "slug">): string {
+  return title.internal_id || "Pending";
+}
+
 function TitleModalSummary({ title }: { title: Title }) {
   return (
     <section className="title-modal-summary" aria-label="Title summary">
@@ -38,7 +42,7 @@ function TitleModalSummary({ title }: { title: Title }) {
         <p>{titleMetaLine(title) || "Basic title details"}</p>
         <div className="title-modal-pills">
           <Badge value={title.status} />
-          <span className="title-modal-pill mono">{title.slug}</span>
+          <span className="title-modal-pill mono">{displayInternalId(title)}</span>
           {title.eidr && <span className="title-modal-pill mono">EIDR {title.eidr}</span>}
         </div>
       </div>
@@ -51,7 +55,8 @@ function matchesFilters(node: TitleTree, search: string, typeFilter: string): bo
   const textMatch =
     !needle ||
     node.name.toLowerCase().includes(needle) ||
-    node.slug.toLowerCase().includes(needle);
+    node.slug.toLowerCase().includes(needle) ||
+    (node.internal_id ?? "").toLowerCase().includes(needle);
   const typeMatch = !typeFilter || node.title_type === typeFilter;
   return textMatch && typeMatch;
 }
@@ -129,7 +134,7 @@ function TitleTableRow({
           </div>
         </td>
         <td>
-          <span className="mono table-slug">{node.slug}</span>
+          <span className="mono table-internal-id">{displayInternalId(node)}</span>
         </td>
         <td>
           <Badge value={node.title_type} kind="type" />
@@ -310,7 +315,7 @@ export function TitlesPage() {
 
       <div className="toolbar">
         <input
-          placeholder="Search name or slug…"
+          placeholder="Search name, slug, or internal ID…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -323,39 +328,41 @@ export function TitlesPage() {
         </select>
       </div>
 
-      <div className="card">
+      <div className="card titles-table-card">
         {loading ? (
           <p className="empty">Loading titles… Render may need a moment to wake up.</p>
         ) : filteredTree.length === 0 ? (
           <p className="empty">No titles match your filters.</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Slug</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Year</th>
-                <th>Studio</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTree.map((node) => (
-                <TitleTableRow
-                  key={node.id}
-                  node={node}
-                  opening={opening}
-                  expandedIds={expandedIds}
-                  forceExpanded={forceExpanded}
-                  onToggle={toggleExpanded}
-                  onEdit={openEdit}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div className="titles-table-scroll">
+            <table className="titles-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Internal ID</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Year</th>
+                  <th>Studio</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTree.map((node) => (
+                  <TitleTableRow
+                    key={node.id}
+                    node={node}
+                    opening={opening}
+                    expandedIds={expandedIds}
+                    forceExpanded={forceExpanded}
+                    onToggle={toggleExpanded}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

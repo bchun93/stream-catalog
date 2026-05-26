@@ -38,6 +38,28 @@ _CORE_ARTWORK_LABELS = {
 }
 
 
+def _preferred_artwork_label(item: ArtworkItem, labels: list[str]) -> str:
+    """Pick the best single catalog role when core metadata reuses one TMDB file."""
+    specs = item.specs
+    aspect = specs.aspect_ratio if specs else None
+
+    if item.asset_type in (AssetType.POSTER, AssetType.SEASON_POSTER):
+        if "Vertical poster" in labels:
+            return "Vertical poster"
+        if "Box art" in labels:
+            return "Box art"
+    if item.asset_type == AssetType.BACKDROP or (aspect is not None and aspect >= 1.6):
+        if "Hero image" in labels:
+            return "Hero image"
+        if "Horizontal poster" in labels:
+            return "Horizontal poster"
+    if item.asset_type == AssetType.STILL and "Still frame" in labels:
+        return "Still frame"
+    if item.asset_type == AssetType.LOGO and "Logo" in labels:
+        return "Logo"
+    return labels[0]
+
+
 def _is_tmdb_external_id(external_id: str | None) -> bool:
     return bool(external_id and external_id.startswith("tmdb:"))
 
@@ -68,7 +90,7 @@ def _metadata_artwork_labels(metadata_json: str | None) -> dict[str, list[str]]:
 
 
 def _with_artwork_label(item: ArtworkItem, labels: list[str]) -> ArtworkItem:
-    label = " / ".join(labels)
+    label = _preferred_artwork_label(item, labels)
     specs = item.specs or ArtworkSpecs()
     specs = specs.model_copy(update={"label": label})
     note = f"{TMDB_SOURCE_NOTE}; {label}"

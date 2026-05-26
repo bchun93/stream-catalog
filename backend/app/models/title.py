@@ -26,6 +26,9 @@ class Title(Base):
     __tablename__ = "titles"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    internal_id: Mapped[str | None] = mapped_column(
+        String(32), unique=True, index=True, nullable=True
+    )
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     title_type: Mapped[TitleType] = mapped_column(

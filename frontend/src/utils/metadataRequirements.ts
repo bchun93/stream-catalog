@@ -9,7 +9,6 @@ export const METADATA_REQUIREMENT_FIELDS: MetadataRequirementField[] = [
   { key: "movie_ref", label: "Movie ref" },
   { key: "series_ref", label: "Series ref" },
   { key: "season_ref", label: "Season ref" },
-  { key: "reference_id", label: "Reference ID" },
   { key: "name", label: "Name" },
   { key: "synopsis", label: "Synopsis", multiline: true },
   { key: "short_synopsis", label: "Short synopsis", multiline: true },

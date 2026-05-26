@@ -42,6 +42,48 @@ const CORE_ARTWORK_LABELS: Record<string, string> = {
   box_art: "Box art",
 };
 
+function preferredArtworkLabel(item: ArtworkItem, labels: string[]): string {
+  const aspect = item.specs?.aspect_ratio ?? null;
+
+  if (item.asset_type === "poster" || item.asset_type === "season_poster") {
+    if (labels.includes("Vertical poster")) return "Vertical poster";
+    if (labels.includes("Box art")) return "Box art";
+  }
+  if (item.asset_type === "backdrop" || (typeof aspect === "number" && aspect >= 1.6)) {
+    if (labels.includes("Hero image")) return "Hero image";
+    if (labels.includes("Horizontal poster")) return "Horizontal poster";
+  }
+  if (item.asset_type === "still" && labels.includes("Still frame")) return "Still frame";
+  if (item.asset_type === "logo" && labels.includes("Logo")) return "Logo";
+  if (item.asset_type === "poster" || item.asset_type === "season_poster") {
+    return "Vertical poster";
+  }
+  if (item.asset_type === "backdrop" || (typeof aspect === "number" && aspect >= 1.6)) {
+    return "Hero image";
+  }
+  if (item.asset_type === "still") return "Still frame";
+  if (item.asset_type === "logo") return "Logo";
+  return labels[0] ?? "Artwork";
+}
+
+function normalizeFetchedArtwork(items: ArtworkItem[]): ArtworkItem[] {
+  return items.map((item) => {
+    const existingLabel = item.specs?.label;
+    const labels =
+      typeof existingLabel === "string" && existingLabel.trim()
+        ? existingLabel.split("/").map((label) => label.trim()).filter(Boolean)
+        : [];
+    const label = preferredArtworkLabel(item, labels);
+    return {
+      ...item,
+      specs: {
+        ...(item.specs ?? {}),
+        label,
+      },
+    };
+  });
+}
+
 function uriBasename(uri: string): string {
   return uri.split("?")[0].replace(/\/+$/, "").split("/").pop() ?? uri;
 }
@@ -75,7 +117,7 @@ function filterToMetadataArtwork(
   for (const item of items) {
     const labels = labelsByFilename.get(uriBasename(item.storage_uri));
     if (!labels || selected.has(item.storage_uri)) continue;
-    const label = labels.join(" / ");
+    const label = preferredArtworkLabel(item, labels);
     selected.set(item.storage_uri, {
       ...item,
       asset_type: "poster",
@@ -230,18 +272,19 @@ export function ArtworkTab({
 
   const canFetch = Boolean(externalId?.startsWith("tmdb:"));
 
+  const savedArtworkItems: DisplayItem[] = useMemo(
+    () => saved.map((a) => ({ ...assetToArtworkItem(a), catalogId: a.id })),
+    [saved]
+  );
+
   const savedItems: DisplayItem[] = useMemo(
-    () =>
-      filterToMetadataArtwork(
-        saved.map((a) => ({ ...assetToArtworkItem(a), catalogId: a.id })),
-        metadataJson
-      ),
-    [metadataJson, saved]
+    () => filterToMetadataArtwork(savedArtworkItems, metadataJson),
+    [metadataJson, savedArtworkItems]
   );
 
   const savedUris = useMemo(
-    () => new Set(savedItems.map((a) => a.storage_uri)),
-    [savedItems]
+    () => new Set(savedArtworkItems.map((a) => a.storage_uri)),
+    [savedArtworkItems]
   );
 
   const newCandidates = useMemo(
@@ -297,7 +340,7 @@ export function ArtworkTab({
     setSuccess(null);
     try {
       const items = await metadataApi.importArtwork(externalId);
-      setCandidates(filterToMetadataArtwork(items, metadataJson));
+      setCandidates(normalizeFetchedArtwork(items));
       setSelected(new Set());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch artwork");
@@ -422,7 +465,7 @@ export function ArtworkTab({
           <div>
             <h3 className="artwork-view-heading">Browse TMDB</h3>
             <p className="artwork-view-empty artwork-view-empty-inline">
-              Fetch metadata-matched posters, hero images, stills, logos, and box art from TMDB.
+              Fetch all available posters, hero images, stills, logos, and box art from TMDB.
               Fetching does not change saved catalog artwork.
             </p>
           </div>
@@ -448,7 +491,7 @@ export function ArtworkTab({
           </div>
         ) : candidates.length === 0 ? (
           <p className="artwork-view-empty">
-            Click Fetch artwork to browse posters, backdrops, logos, and more.
+            Click Fetch artwork to browse all TMDB posters, backdrops, logos, and more.
             Fetching does not save anything until you add selected images.
           </p>
         ) : (

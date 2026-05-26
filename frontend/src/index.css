@@ -295,7 +295,8 @@ tr:hover td {
   font-size: 0.82rem;
 }
 
-.table-slug {
+.table-slug,
+.table-internal-id {
   display: inline-block;
   max-width: 240px;
   white-space: nowrap;
@@ -307,6 +308,28 @@ tr:hover td {
   vertical-align: bottom;
 }
 
+.table-internal-id {
+  max-width: 150px;
+}
+
+.titles-table-card {
+  overflow: hidden;
+}
+
+.titles-table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.titles-table {
+  min-width: 980px;
+}
+
+.titles-table th:last-child,
+.titles-table td:last-child {
+  text-align: right;
+}
+
 .title-studio-cell {
   max-width: 140px;
   overflow: hidden;
@@ -316,6 +339,7 @@ tr:hover td {
 
 .title-actions-cell {
   white-space: nowrap;
+  width: 260px;
 }
 
 .badge {

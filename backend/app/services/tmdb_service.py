@@ -60,8 +60,8 @@ _IMAGES_KEY_TO_TYPE = {
 }
 
 _IMAGES_KEY_LABELS = {
-    "posters": "Vertical poster / Box art",
-    "backdrops": "Horizontal poster / Hero image",
+    "posters": "Vertical poster",
+    "backdrops": "Hero image",
     "logos": "Logo",
     "stills": "Still frame",
 }
@@ -73,7 +73,6 @@ _REQUIREMENTS_FIELDS: tuple[str, ...] = (
     "movie_ref",
     "series_ref",
     "season_ref",
-    "reference_id",
     "name",
     "synopsis",
     "short_synopsis",
@@ -528,8 +527,6 @@ def _tmdb_core_metadata(
     else:
         values["series_ref"] = f"tmdb_tv_{data.get('id')}"
 
-    values["reference_id"] = f"tmdb_{media_type}_{data.get('id')}"
-
     keyword_rows = []
     keywords = data.get("keywords") or {}
     keyword_list = keywords.get("keywords") if media_type == "movie" else keywords.get("results")
@@ -758,7 +755,6 @@ def _season_core_metadata(
         values["latest_release_year"] = str(year)
     values["series_ref"] = f"tmdb_tv_{series_id}"
     values["season_ref"] = f"tmdb_tv_{series_id}_season_{season_number}"
-    values["reference_id"] = f"tmdb_tv_{series_id}_season_{season_number}"
     values["v_poster"] = _basename(season_data.get("poster_path"))
     values["box_art"] = _basename(season_data.get("poster_path"))
     return values
@@ -786,9 +782,6 @@ def _episode_core_metadata(
         values["latest_release_year"] = str(year)
     values["series_ref"] = f"tmdb_tv_{series_id}"
     values["season_ref"] = f"tmdb_tv_{series_id}_season_{season_number}"
-    values["reference_id"] = (
-        f"tmdb_tv_{series_id}_season_{season_number}_episode_{episode_number}"
-    )
     values["still_frame"] = _basename(episode_data.get("still_path"))
     values["hero_image"] = _basename(episode_data.get("still_path"))
     return values

@@ -61,6 +61,7 @@ export type AssetStatus =
 
 export interface Title {
   id: number;
+  internal_id?: string | null;
   slug: string;
   name: string;
   title_type: TitleType;

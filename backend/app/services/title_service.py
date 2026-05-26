@@ -1,5 +1,6 @@
 import logging
 import json
+import secrets
 from collections import defaultdict
 from datetime import date
 
@@ -19,6 +20,24 @@ _POSTER_TYPES = (
     AssetType.SEASON_POSTER,
     AssetType.THUMBNAIL,
 )
+
+_INTERNAL_ID_PREFIX = "SC"
+
+
+def _new_internal_id() -> str:
+    return f"{_INTERNAL_ID_PREFIX}-{secrets.token_hex(6).upper()}"
+
+
+def _generate_unique_internal_id(db: Session) -> str:
+    while True:
+        candidate = _new_internal_id()
+        if not db.query(Title).filter(Title.internal_id == candidate).first():
+            return candidate
+
+
+def _ensure_internal_id(db: Session, title: Title) -> None:
+    if not title.internal_id:
+        title.internal_id = _generate_unique_internal_id(db)
 
 
 def list_titles(
@@ -167,6 +186,7 @@ def _upsert_hierarchy_title(
     created = title is None
     if title is None:
         title = Title(
+            internal_id=_generate_unique_internal_id(db),
             slug=_unique_slug(db, slug),
             name=name,
             title_type=title_type,
@@ -194,6 +214,7 @@ def _upsert_hierarchy_title(
         return title, True
 
     title.title_type = title_type
+    _ensure_internal_id(db, title)
     title.parent_id = parent_id
     title.season_number = season_number
     title.episode_number = episode_number
@@ -314,7 +335,7 @@ def get_title_read(db: Session, title_id: int) -> TitleRead | None:
 
 
 def create_title(db: Session, payload: TitleCreate) -> Title:
-    title = Title(**payload.model_dump())
+    title = Title(**payload.model_dump(), internal_id=_generate_unique_internal_id(db))
     db.add(title)
     db.commit()
     db.refresh(title)
@@ -322,6 +343,7 @@ def create_title(db: Session, payload: TitleCreate) -> Title:
 
 
 def update_title(db: Session, title: Title, payload: TitleUpdate) -> Title:
+    _ensure_internal_id(db, title)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(title, key, value)
     db.commit()

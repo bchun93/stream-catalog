@@ -1,5 +1,6 @@
 import logging
 import json
+import secrets
 
 from sqlalchemy import inspect, text
 
@@ -11,6 +12,7 @@ from app.models.title import TitleStatus, TitleType
 logger = logging.getLogger(__name__)
 
 _NEW_COLUMNS = [
+    ("internal_id", "VARCHAR(32)"),
     ("release_year", "INTEGER"),
     ("licensor", "VARCHAR(255)"),
     ("studio", "VARCHAR(500)"),
@@ -22,6 +24,8 @@ _NEW_COLUMNS = [
     ("poster_url", "VARCHAR(1024)"),
     ("metadata_json", "TEXT"),
 ]
+
+_INTERNAL_ID_PREFIX = "SC"
 
 _MEDIA_ASSET_COLUMNS = [
     ("metadata_json", "TEXT"),
@@ -194,8 +198,48 @@ def _seed_default_ingest_manifest(conn) -> None:
     )
 
 
+def _new_internal_id() -> str:
+    return f"{_INTERNAL_ID_PREFIX}-{secrets.token_hex(6).upper()}"
+
+
+def _ensure_title_internal_ids(conn) -> None:
+    inspector = inspect(conn)
+    if "titles" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("titles")}
+    if "internal_id" not in cols:
+        return
+
+    existing = {
+        row[0]
+        for row in conn.execute(
+            text("SELECT internal_id FROM titles WHERE internal_id IS NOT NULL")
+        ).fetchall()
+        if row[0]
+    }
+    rows = conn.execute(
+        text("SELECT id FROM titles WHERE internal_id IS NULL OR internal_id = ''")
+    ).fetchall()
+    for row in rows:
+        while True:
+            candidate = _new_internal_id()
+            if candidate not in existing:
+                existing.add(candidate)
+                break
+        conn.execute(
+            text("UPDATE titles SET internal_id = :internal_id WHERE id = :id"),
+            {"internal_id": candidate, "id": row[0]},
+        )
+
+
 def _ensure_common_indexes(conn) -> None:
     # Hot path indexes for title list + artwork lookups.
+    conn.execute(
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_titles_internal_id "
+            "ON titles (internal_id)"
+        )
+    )
     conn.execute(
         text(
             "CREATE INDEX IF NOT EXISTS idx_titles_updated_at ON titles (updated_at DESC)"
@@ -252,11 +296,13 @@ def run_migrations() -> None:
             _upgrade_postgres_enums_to_varchar(conn)
             # Re-inspect; if enums remain, try adding values
             _ensure_pg_enum_values(conn)
+            _ensure_title_internal_ids(conn)
             _ensure_common_indexes(conn)
             if "ingest_manifests" in inspect(conn).get_table_names():
                 _seed_default_ingest_manifest(conn)
     else:
         with engine.begin() as conn:
+            _ensure_title_internal_ids(conn)
             _ensure_common_indexes(conn)
             if "ingest_manifests" in inspect(conn).get_table_names():
                 _seed_default_ingest_manifest(conn)
