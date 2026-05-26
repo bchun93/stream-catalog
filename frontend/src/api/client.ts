@@ -185,6 +185,10 @@ export const titlesApi = {
       return filterArtworkAssets(fallbackAssets);
     }
   },
+  syncArtwork: (id: number) =>
+    requestWithRetry<MediaAsset[]>(`/titles/${id}/artwork/sync`, {
+      method: "POST",
+    }).then(filterArtworkAssets),
   saveArtwork: (id: number, items: ArtworkItem[]) =>
     request<MediaAsset[]>(`/titles/${id}/artwork`, {
       method: "POST",

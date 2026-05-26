@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { metadataApi, titlesApi } from "../api/client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { titlesApi } from "../api/client";
 import { specLinesForItem } from "../utils/artworkSpecs";
 import { filterArtworkAssets } from "../utils/artworkTypes";
 import {
@@ -166,8 +166,10 @@ export function ArtworkTab({
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const autoSyncedTitleIds = useRef<Set<number>>(new Set());
 
   const canFetch = Boolean(externalId?.startsWith("tmdb:"));
 
@@ -212,6 +214,45 @@ export function ArtworkTab({
     }
   }, [titleId]);
 
+  const syncArtwork = useCallback(
+    async (mode: "auto" | "manual" = "manual") => {
+      if (!titleId || !canFetch) {
+        if (mode === "manual") {
+          setError("Import TMDB metadata on the Details tab first.");
+        }
+        return [];
+      }
+      setSyncing(true);
+      if (mode === "manual") setFetching(true);
+      setError(null);
+      setSuccess(null);
+      try {
+        const stored = await titlesApi.syncArtwork(titleId);
+        const artworkOnly = filterArtworkAssets(stored);
+        setSaved(artworkOnly);
+        setCandidates([]);
+        setSelected(new Set());
+        if (mode === "manual") {
+          setSuccess(
+            `Synced ${artworkOnly.length} artwork asset${
+              artworkOnly.length === 1 ? "" : "s"
+            } to the catalog.`
+          );
+        }
+        onSaved?.();
+        return artworkOnly;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Failed to sync artwork";
+        setError(message);
+        return [];
+      } finally {
+        setSyncing(false);
+        if (mode === "manual") setFetching(false);
+      }
+    },
+    [canFetch, onSaved, titleId]
+  );
+
   // Load whenever title changes (e.g. open edit modal).
   useEffect(() => {
     void loadSaved();
@@ -224,6 +265,18 @@ export function ArtworkTab({
     }
   }, [visible, titleId, loadSaved]);
 
+  useEffect(() => {
+    if (!visible || !titleId || !canFetch || autoSyncedTitleIds.current.has(titleId)) {
+      return;
+    }
+    autoSyncedTitleIds.current.add(titleId);
+    void loadSaved().then((list) => {
+      if (list.length === 0) {
+        void syncArtwork("auto");
+      }
+    });
+  }, [canFetch, loadSaved, syncArtwork, titleId, visible]);
+
   const handleFetch = async () => {
     if (!canFetch || !externalId) {
       setError("Import TMDB metadata on the Details tab first.");
@@ -233,9 +286,9 @@ export function ArtworkTab({
     setError(null);
     setSuccess(null);
     try {
-      const items = await metadataApi.importArtwork(externalId);
-      setCandidates(items);
-      setSelected(new Set());
+      if (titleId) {
+        await syncArtwork("manual");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch artwork");
     } finally {
@@ -308,10 +361,14 @@ export function ArtworkTab({
           <button
             type="button"
             className="btn btn-primary artwork-fetch-btn"
-            disabled={fetching || saving}
+            disabled={fetching || saving || syncing}
             onClick={handleFetch}
           >
-            {fetching ? "Fetching…" : candidates.length ? "Refresh browse" : "Fetch artwork"}
+            {fetching || syncing
+              ? "Syncing…"
+              : saved.length
+                ? "Refresh artwork"
+                : "Fetch artwork"}
           </button>
         )}
       </header>
@@ -350,9 +407,14 @@ export function ArtworkTab({
             <div className="artwork-spinner" aria-hidden />
             <p>Loading catalog artwork…</p>
           </div>
+        ) : syncing ? (
+          <div className="artwork-state">
+            <div className="artwork-spinner" aria-hidden />
+            <p>Saving TMDB artwork to this title…</p>
+          </div>
         ) : saved.length === 0 ? (
           <p className="artwork-view-empty">
-            No artwork saved yet. Fetch from TMDB below and add selected images.
+            No artwork saved yet. Fetch from TMDB to save matching artwork automatically.
           </p>
         ) : (
           <ArtworkStrip
@@ -378,8 +440,7 @@ export function ArtworkTab({
         ) : candidates.length === 0 ? (
           <p className="artwork-view-empty">
             Click Fetch artwork to browse posters, backdrops, logos, and more.
-            Selected images are added to your catalog — nothing is saved until you
-            confirm.
+            Matching images are automatically saved to your catalog.
           </p>
         ) : (
           <>

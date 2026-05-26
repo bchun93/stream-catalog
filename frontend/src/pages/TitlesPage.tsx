@@ -68,48 +68,81 @@ function filterTree(nodes: TitleTree[], search: string, typeFilter: string): Tit
     .filter((node): node is TitleTree => node !== null);
 }
 
-function HierarchyNode({
+function titleContextLabel(title: Title): string | null {
+  if (title.title_type === "episode" && title.episode_number) {
+    return `Episode ${title.episode_number}`;
+  }
+  if (title.title_type === "season" && title.season_number != null) {
+    return title.season_number === 0 ? "Specials" : `Season ${title.season_number}`;
+  }
+  return title.genres ?? null;
+}
+
+function TitleTableRow({
   node,
   depth = 0,
   opening,
+  expandedIds,
+  forceExpanded,
+  onToggle,
   onEdit,
-  onArtwork,
+  onDelete,
 }: {
   node: TitleTree;
   depth?: number;
   opening: boolean;
+  expandedIds: Set<number>;
+  forceExpanded: boolean;
+  onToggle: (id: number) => void;
   onEdit: (title: Title, tab?: "details" | "artwork") => void;
-  onArtwork: (title: Title) => void;
+  onDelete: (title: Title) => void;
 }) {
+  const hasChildren = node.children.length > 0;
+  const expanded = hasChildren && (forceExpanded || expandedIds.has(node.id));
+  const context = titleContextLabel(node);
+
   return (
-    <li className="title-hierarchy-node">
-      <div className="title-hierarchy-row" style={{ paddingLeft: `${depth * 1.25}rem` }}>
-        <div className="title-row-main">
-          {node.poster_url ? (
-            <TitleRowPoster url={node.poster_url} />
-          ) : (
-            <div className="title-row-poster title-row-poster-empty" aria-hidden>
-              ?
-            </div>
-          )}
-          <div className="title-row-text">
-            <strong>{node.name}</strong>
-            <div className="title-row-genres">
-              {node.title_type === "episode" && node.episode_number
-                ? `Episode ${node.episode_number}`
-                : node.title_type === "season" && node.season_number != null
-                  ? node.season_number === 0
-                    ? "Specials"
-                    : `Season ${node.season_number}`
-                  : node.release_year ?? "—"}
+    <>
+      <tr className={`title-table-row title-depth-${Math.min(depth, 3)}`}>
+        <td className="title-row-cell">
+          <div className="title-row-main" style={{ paddingLeft: `${depth * 1.1}rem` }}>
+            <button
+              type="button"
+              className={`title-expand-toggle ${expanded ? "expanded" : ""}`}
+              disabled={!hasChildren}
+              onClick={() => onToggle(node.id)}
+              aria-label={expanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
+            >
+              {hasChildren ? "›" : ""}
+            </button>
+            {node.poster_url ? (
+              <TitleRowPoster url={node.poster_url} />
+            ) : (
+              <div className="title-row-poster title-row-poster-empty" aria-hidden>
+                ?
+              </div>
+            )}
+            <div className="title-row-text">
+              <strong>{node.name}</strong>
+              {context && <div className="title-row-genres">{context}</div>}
             </div>
           </div>
-        </div>
-        <Badge value={node.title_type} kind="type" />
-        <Badge value={node.status} />
-        <div className="title-hierarchy-actions">
+        </td>
+        <td>
+          <span className="mono table-slug">{node.slug}</span>
+        </td>
+        <td>
+          <Badge value={node.title_type} kind="type" />
+        </td>
+        <td>
+          <Badge value={node.status} />
+        </td>
+        <td>{node.release_year ?? "—"}</td>
+        <td className="title-studio-cell">{node.studio ?? "—"}</td>
+        <td className="title-actions-cell">
           <button
             className="btn btn-ghost"
+            style={{ marginRight: "0.35rem" }}
             disabled={opening}
             onClick={() => onEdit(node, "details")}
           >
@@ -117,28 +150,32 @@ function HierarchyNode({
           </button>
           <button
             className="btn btn-ghost"
+            style={{ marginRight: "0.35rem" }}
             disabled={opening}
-            onClick={() => onArtwork(node)}
+            onClick={() => onEdit(node, "artwork")}
           >
             Artwork
           </button>
-        </div>
-      </div>
-      {node.children.length > 0 && (
-        <ul>
-          {node.children.map((child) => (
-            <HierarchyNode
+          <button className="btn btn-danger" onClick={() => onDelete(node)}>
+            Delete
+          </button>
+        </td>
+      </tr>
+      {expanded &&
+        node.children.map((child) => (
+            <TitleTableRow
               key={child.id}
               node={child}
               depth={depth + 1}
               opening={opening}
+              expandedIds={expandedIds}
+              forceExpanded={forceExpanded}
+              onToggle={onToggle}
               onEdit={onEdit}
-              onArtwork={onArtwork}
+              onDelete={onDelete}
             />
-          ))}
-        </ul>
-      )}
-    </li>
+        ))}
+    </>
   );
 }
 
@@ -148,7 +185,7 @@ export function TitlesPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [viewMode, setViewMode] = useState<"table" | "hierarchy">("table");
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<Title | null>(null);
   const [formTab, setFormTab] = useState<"details" | "artwork">("details");
@@ -224,6 +261,18 @@ export function TitlesPage() {
   };
 
   const filteredTree = filterTree(tree, debouncedSearch, typeFilter);
+  const forceExpanded = Boolean(debouncedSearch || typeFilter);
+  const toggleExpanded = (id: number) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   return (
     <>
@@ -272,32 +321,12 @@ export function TitlesPage() {
           <option value="season">Season</option>
           <option value="episode">Episode</option>
         </select>
-        <select value={viewMode} onChange={(e) => setViewMode(e.target.value as "table" | "hierarchy")}>
-          <option value="table">Table view</option>
-          <option value="hierarchy">Hierarchy view</option>
-        </select>
       </div>
 
       <div className="card">
         {loading ? (
           <p className="empty">Loading titles… Render may need a moment to wake up.</p>
-        ) : viewMode === "hierarchy" ? (
-          filteredTree.length === 0 ? (
-            <p className="empty">No titles match your filters.</p>
-          ) : (
-            <ul className="title-hierarchy">
-              {filteredTree.map((node) => (
-                <HierarchyNode
-                  key={node.id}
-                  node={node}
-                  opening={opening}
-                  onEdit={openEdit}
-                  onArtwork={(title) => openEdit(title, "artwork")}
-                />
-              ))}
-            </ul>
-          )
-        ) : titles.length === 0 ? (
+        ) : filteredTree.length === 0 ? (
           <p className="empty">No titles match your filters.</p>
         ) : (
           <table>
@@ -313,60 +342,17 @@ export function TitlesPage() {
               </tr>
             </thead>
             <tbody>
-              {titles.map((t) => (
-                <tr key={t.id}>
-                  <td className="title-row-cell">
-                    <div className="title-row-main">
-                      {t.poster_url ? (
-                        <TitleRowPoster url={t.poster_url} />
-                      ) : (
-                        <div className="title-row-poster title-row-poster-empty" aria-hidden>
-                          ?
-                        </div>
-                      )}
-                      <div className="title-row-text">
-                        <strong>{t.name}</strong>
-                        {t.genres && (
-                          <div className="title-row-genres">{t.genres}</div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="mono table-slug">{t.slug}</span>
-                  </td>
-                  <td>
-                    <Badge value={t.title_type} kind="type" />
-                  </td>
-                  <td>
-                    <Badge value={t.status} />
-                  </td>
-                  <td>{t.release_year ?? "—"}</td>
-                  <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {t.studio ?? "—"}
-                  </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ marginRight: "0.35rem" }}
-                      disabled={opening}
-                      onClick={() => openEdit(t, "details")}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ marginRight: "0.35rem" }}
-                      disabled={opening}
-                      onClick={() => openEdit(t, "artwork")}
-                    >
-                      Artwork
-                    </button>
-                    <button className="btn btn-danger" onClick={() => handleDelete(t)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+              {filteredTree.map((node) => (
+                <TitleTableRow
+                  key={node.id}
+                  node={node}
+                  opening={opening}
+                  expandedIds={expandedIds}
+                  forceExpanded={forceExpanded}
+                  onToggle={toggleExpanded}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                />
               ))}
             </tbody>
           </table>

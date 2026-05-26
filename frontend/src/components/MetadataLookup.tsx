@@ -20,6 +20,7 @@ export function MetadataLookup({ onApply, onHierarchyApplied }: MetadataLookupPr
   const [applyingHierarchy, setApplyingHierarchy] = useState(false);
   const [hierarchyPreview, setHierarchyPreview] = useState<SeriesHierarchyPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     metadataApi
@@ -36,6 +37,7 @@ export function MetadataLookup({ onApply, onHierarchyApplied }: MetadataLookupPr
     if (!query.trim()) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     setResults([]);
     setHierarchyPreview(null);
     try {
@@ -61,6 +63,7 @@ export function MetadataLookup({ onApply, onHierarchyApplied }: MetadataLookupPr
   const handleSelect = async (item: MetadataSearchResult) => {
     setImporting(item.external_id);
     setError(null);
+    setNotice(null);
     try {
       const meta = await metadataApi.import(item.external_id);
       onApply({ ...meta, artwork: [] });
@@ -77,6 +80,7 @@ export function MetadataLookup({ onApply, onHierarchyApplied }: MetadataLookupPr
   const handlePreviewHierarchy = async (item: MetadataSearchResult) => {
     setPreviewing(item.external_id);
     setError(null);
+    setNotice(null);
     setHierarchyPreview(null);
     try {
       const preview = await metadataApi.hierarchyPreview(item.external_id);
@@ -92,15 +96,16 @@ export function MetadataLookup({ onApply, onHierarchyApplied }: MetadataLookupPr
     if (!hierarchyPreview) return;
     setApplyingHierarchy(true);
     setError(null);
+    setNotice(null);
     try {
       const result = await metadataApi.applyHierarchy(hierarchyPreview.external_id);
       setHierarchyPreview(null);
       setResults([]);
       setQuery("");
-      onHierarchyApplied?.();
-      setError(
+      setNotice(
         `Imported hierarchy for ${result.series.name}: ${result.season_count} seasons, ${result.episode_count} episodes (${result.created_count} created, ${result.updated_count} updated).`
       );
+      onHierarchyApplied?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not import hierarchy");
     } finally {
@@ -133,6 +138,7 @@ export function MetadataLookup({ onApply, onHierarchyApplied }: MetadataLookupPr
         </button>
       </div>
       {error && <div className="error-banner metadata-error">{error}</div>}
+      {notice && <div className="metadata-applied-banner metadata-notice">{notice}</div>}
       {hierarchyPreview && (
         <div className="hierarchy-preview">
           <div>

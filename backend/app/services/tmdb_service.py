@@ -58,6 +58,13 @@ _IMAGES_KEY_TO_TYPE = {
     "logos": AssetType.LOGO,
     "stills": AssetType.STILL,
 }
+
+_IMAGES_KEY_LABELS = {
+    "posters": "Vertical poster / Box art",
+    "backdrops": "Horizontal poster / Hero image",
+    "logos": "Logo",
+    "stills": "Still frame",
+}
 # trust_env=False — ignore HTTP_PROXY / ALL_PROXY so TMDB calls work in dev shells.
 _TMDb_HTTP = httpx.Client(timeout=20.0, trust_env=False)
 
@@ -579,7 +586,13 @@ async def collect_artwork_from_tmdb(
             continue
         batch = images_data.get(key) or []
         if batch:
-            items.extend(_items_from_images(batch, asset_type))
+            items.extend(
+                _items_from_images(
+                    batch,
+                    asset_type,
+                    note_prefix=_IMAGES_KEY_LABELS.get(key),
+                )
+            )
 
     credits_data = await _get(
         f"/{media_type}/{tmdb_id}",

@@ -269,7 +269,13 @@ export function TitleForm({
       {tab === "details" && (
         <>
           {(isCreate || !form.external_id?.startsWith("tmdb:")) && (
-            <MetadataLookup onApply={applyMetadata} onHierarchyApplied={onSaved} />
+            <MetadataLookup
+              onApply={applyMetadata}
+              onHierarchyApplied={() => {
+                onSaved?.();
+                onCancel();
+              }}
+            />
           )}
           {metadataApplied && (
             <div className="metadata-applied-banner">

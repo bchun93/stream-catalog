@@ -86,8 +86,18 @@ def save_artwork_selection(
     if not items:
         return list_artwork_assets(db, title_id)
 
-    existing_uris = {a.storage_uri for a in list_artwork_assets(db, title_id)}
-    to_add = [item for item in items if item.storage_uri not in existing_uris]
+    existing_assets = list_artwork_assets(db, title_id)
+    existing_by_uri = {a.storage_uri: a for a in existing_assets}
+    to_add = [item for item in items if item.storage_uri not in existing_by_uri]
+    for item in items:
+        asset = existing_by_uri.get(item.storage_uri)
+        if not asset:
+            continue
+        if item.notes and asset.notes != item.notes:
+            asset.notes = item.notes
+        metadata_json = artwork_item_metadata_json(item)
+        if metadata_json and asset.metadata_json != metadata_json:
+            asset.metadata_json = metadata_json
     if to_add:
         created = _persist_artwork(db, title_id, to_add)
         if not created:
@@ -99,6 +109,8 @@ def save_artwork_selection(
         for asset in created:
             db.refresh(asset)
         sync_title_poster_cache(db, title_id)
+    elif existing_assets:
+        db.commit()
 
     return list_artwork_assets(db, title_id)
 

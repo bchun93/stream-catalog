@@ -183,6 +183,47 @@ textarea {
   min-height: 54px;
 }
 
+.title-table-row.title-depth-1 td {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.title-table-row.title-depth-2 td,
+.title-table-row.title-depth-3 td {
+  background: rgba(91, 141, 239, 0.035);
+}
+
+.title-expand-toggle {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: transform 0.15s, color 0.15s, background 0.15s;
+}
+
+.title-expand-toggle:not(:disabled):hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.title-expand-toggle.expanded {
+  transform: rotate(90deg);
+  color: var(--text);
+}
+
+.title-expand-toggle:disabled {
+  cursor: default;
+  opacity: 0.25;
+}
+
 .title-row-poster {
   width: 36px;
   height: 54px;
@@ -264,6 +305,17 @@ tr:hover td {
   overflow-wrap: normal;
   hyphens: none;
   vertical-align: bottom;
+}
+
+.title-studio-cell {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-actions-cell {
+  white-space: nowrap;
 }
 
 .badge {
@@ -499,6 +551,11 @@ tr:hover td {
   border-radius: var(--radius);
   font-size: 0.85rem;
   margin-bottom: 1rem;
+}
+
+.metadata-notice {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
 }
 
 .metadata-results {
