@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { ApiStatus } from "./components/ApiStatus";
+import { AITrainingPage } from "./pages/AITrainingPage";
 import { AssetsPage } from "./pages/AssetsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TitlesPage } from "./pages/TitlesPage";
@@ -17,6 +18,7 @@ export default function App() {
           </NavLink>
           <NavLink to="/titles">Titles</NavLink>
           <NavLink to="/assets">Media assets</NavLink>
+          <NavLink to="/ai-training">AI training</NavLink>
         </nav>
         <ApiStatus />
         <p style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: "0.75rem" }}>
@@ -28,6 +30,7 @@ export default function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/titles" element={<TitlesPage />} />
           <Route path="/assets" element={<AssetsPage />} />
+          <Route path="/ai-training" element={<AITrainingPage />} />
         </Routes>
       </main>
     </div>
