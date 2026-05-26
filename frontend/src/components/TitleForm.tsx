@@ -386,6 +386,7 @@ export function TitleForm({
           key={activeTitleId}
           titleId={activeTitleId}
           externalId={form.external_id || null}
+          metadataJson={stringifyCoreMetadata(form.core_metadata)}
           visible={tab === "artwork"}
           onSaved={onArtworkSaved}
         />
@@ -394,6 +395,7 @@ export function TitleForm({
           <ArtworkTab
             key="new"
             externalId={form.external_id || null}
+            metadataJson={stringifyCoreMetadata(form.core_metadata)}
             visible
             onSaved={onArtworkSaved}
           />

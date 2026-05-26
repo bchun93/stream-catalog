@@ -13,6 +13,7 @@ import {
 interface ArtworkTabProps {
   titleId?: number;
   externalId?: string | null;
+  metadataJson?: string | null;
   /** When false, panel is hidden but stays mounted so catalog state persists. */
   visible?: boolean;
   onSaved?: () => void;
@@ -29,6 +30,62 @@ const ARTWORK_HINTS: Record<ArtworkType, string> = {
 
 function artworkKey(item: { storage_uri: string }): string {
   return item.storage_uri;
+}
+
+const CORE_ARTWORK_LABELS: Record<string, string> = {
+  h_poster: "Horizontal poster",
+  still_frame: "Still frame",
+  v_poster: "Vertical poster",
+  logo: "Logo",
+  hero_image: "Hero image",
+  hero_image_vertical: "Hero image vertical",
+  box_art: "Box art",
+};
+
+function uriBasename(uri: string): string {
+  return uri.split("?")[0].replace(/\/+$/, "").split("/").pop() ?? uri;
+}
+
+function metadataArtworkLabels(raw?: string | null): Map<string, string[]> {
+  const byFilename = new Map<string, string[]>();
+  if (!raw) return byFilename;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const [key, label] of Object.entries(CORE_ARTWORK_LABELS)) {
+      const value = parsed[key];
+      if (typeof value !== "string" || !value.trim()) continue;
+      const filename = value.trim().split("/").pop() ?? value.trim();
+      const labels = byFilename.get(filename) ?? [];
+      if (!labels.includes(label)) labels.push(label);
+      byFilename.set(filename, labels);
+    }
+  } catch {
+    return byFilename;
+  }
+  return byFilename;
+}
+
+function filterToMetadataArtwork(
+  items: ArtworkItem[],
+  metadataJson?: string | null
+): ArtworkItem[] {
+  const labelsByFilename = metadataArtworkLabels(metadataJson);
+  if (labelsByFilename.size === 0) return items;
+  const selected = new Map<string, ArtworkItem>();
+  for (const item of items) {
+    const labels = labelsByFilename.get(uriBasename(item.storage_uri));
+    if (!labels || selected.has(item.storage_uri)) continue;
+    const label = labels.join(" / ");
+    selected.set(item.storage_uri, {
+      ...item,
+      notes: `source:tmdb; ${label}${item.language && item.language !== "en" ? `; lang:${item.language}` : ""}`,
+      specs: {
+        ...(item.specs ?? {}),
+        label,
+      },
+    });
+  }
+  return [...selected.values()];
 }
 
 function assetToArtworkItem(asset: MediaAsset): ArtworkItem {
@@ -157,6 +214,7 @@ function ArtworkStrip({
 export function ArtworkTab({
   titleId,
   externalId,
+  metadataJson,
   visible = true,
   onSaved,
 }: ArtworkTabProps) {
@@ -173,14 +231,18 @@ export function ArtworkTab({
 
   const canFetch = Boolean(externalId?.startsWith("tmdb:"));
 
-  const savedUris = useMemo(
-    () => new Set(saved.map((a) => a.storage_uri)),
-    [saved]
+  const savedItems: DisplayItem[] = useMemo(
+    () =>
+      filterToMetadataArtwork(
+        saved.map((a) => ({ ...assetToArtworkItem(a), catalogId: a.id })),
+        metadataJson
+      ),
+    [metadataJson, saved]
   );
 
-  const savedItems: DisplayItem[] = useMemo(
-    () => saved.map((a) => ({ ...assetToArtworkItem(a), catalogId: a.id })),
-    [saved]
+  const savedUris = useMemo(
+    () => new Set(savedItems.map((a) => a.storage_uri)),
+    [savedItems]
   );
 
   const newCandidates = useMemo(
@@ -233,7 +295,10 @@ export function ArtworkTab({
         } catch (syncErr) {
           if (!externalId) throw syncErr;
           const items = await metadataApi.importArtwork(externalId);
-          stored = await titlesApi.saveArtwork(titleId, items);
+          stored = await titlesApi.saveArtwork(
+            titleId,
+            filterToMetadataArtwork(items, metadataJson)
+          );
         }
         const artworkOnly = filterArtworkAssets(stored);
         setSaved(artworkOnly);
@@ -257,7 +322,7 @@ export function ArtworkTab({
         if (mode === "manual") setFetching(false);
       }
     },
-    [canFetch, externalId, onSaved, titleId]
+    [canFetch, externalId, metadataJson, onSaved, titleId]
   );
 
   // Load whenever title changes (e.g. open edit modal).
@@ -381,9 +446,9 @@ export function ArtworkTab({
       </header>
 
       <div className="artwork-meta-row">
-        {titleId && saved.length > 0 && (
+        {titleId && savedItems.length > 0 && (
           <span className="artwork-pill artwork-pill-saved">
-            {saved.length} in catalog
+            {savedItems.length} in catalog
           </span>
         )}
         {candidates.length > 0 && (
@@ -419,7 +484,7 @@ export function ArtworkTab({
             <div className="artwork-spinner" aria-hidden />
             <p>Saving TMDB artwork to this title…</p>
           </div>
-        ) : saved.length === 0 ? (
+        ) : savedItems.length === 0 ? (
           <p className="artwork-view-empty">
             No artwork saved yet. Fetch from TMDB to save matching artwork automatically.
           </p>

@@ -1,10 +1,12 @@
 """Sync TMDB artwork into MediaAsset rows for a title."""
 
+import json
+
 from sqlalchemy.orm import Session
 
 from app.models.media_asset import AssetStatus, AssetType, MediaAsset
 from app.models.title import Title
-from app.schemas.artwork import ArtworkItem
+from app.schemas.artwork import ArtworkItem, ArtworkSpecs
 from app.services.artwork_metadata import artwork_item_metadata_json
 from app.services.poster_resolver import is_usable_poster_url
 from app.services.title_service import sync_title_poster_cache
@@ -25,9 +27,71 @@ _ARTWORK_TYPES = (
     AssetType.SEASON_POSTER,
 )
 
+_CORE_ARTWORK_LABELS = {
+    "h_poster": "Horizontal poster",
+    "still_frame": "Still frame",
+    "v_poster": "Vertical poster",
+    "logo": "Logo",
+    "hero_image": "Hero image",
+    "hero_image_vertical": "Hero image vertical",
+    "box_art": "Box art",
+}
+
 
 def _is_tmdb_external_id(external_id: str | None) -> bool:
     return bool(external_id and external_id.startswith("tmdb:"))
+
+
+def _uri_basename(uri: str) -> str:
+    return uri.split("?", 1)[0].rstrip("/").split("/")[-1]
+
+
+def _metadata_artwork_labels(metadata_json: str | None) -> dict[str, list[str]]:
+    if not metadata_json:
+        return {}
+    try:
+        raw = json.loads(metadata_json)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    labels_by_filename: dict[str, list[str]] = {}
+    for key, label in _CORE_ARTWORK_LABELS.items():
+        value = raw.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        filename = value.strip().split("/")[-1]
+        labels = labels_by_filename.setdefault(filename, [])
+        if label not in labels:
+            labels.append(label)
+    return labels_by_filename
+
+
+def _with_artwork_label(item: ArtworkItem, labels: list[str]) -> ArtworkItem:
+    label = " / ".join(labels)
+    specs = item.specs or ArtworkSpecs()
+    specs = specs.model_copy(update={"label": label})
+    note = f"{TMDB_SOURCE_NOTE}; {label}"
+    if item.language and item.language != "en":
+        note = f"{note}; lang:{item.language}"
+    return item.model_copy(update={"notes": note, "specs": specs})
+
+
+def _filter_to_metadata_artwork(
+    items: list[ArtworkItem], metadata_json: str | None
+) -> list[ArtworkItem]:
+    labels_by_filename = _metadata_artwork_labels(metadata_json)
+    if not labels_by_filename:
+        return items
+
+    selected: dict[str, ArtworkItem] = {}
+    for item in items:
+        labels = labels_by_filename.get(_uri_basename(item.storage_uri))
+        if not labels:
+            continue
+        if item.storage_uri not in selected:
+            selected[item.storage_uri] = _with_artwork_label(item, labels)
+    return list(selected.values())
 
 
 async def fetch_artwork_preview(external_id: str) -> list[ArtworkItem]:
@@ -40,6 +104,18 @@ def _clear_tmdb_artwork(db: Session, title_id: int) -> None:
         MediaAsset.title_id == title_id,
         MediaAsset.storage_uri.like(f"{_TMDB_URI_PREFIX}%"),
     ).delete(synchronize_session=False)
+
+
+def _replace_tmdb_artwork(
+    db: Session, title_id: int, items: list[ArtworkItem]
+) -> list[MediaAsset]:
+    _clear_tmdb_artwork(db, title_id)
+    created = _persist_artwork(db, title_id, items)
+    db.commit()
+    for asset in created:
+        db.refresh(asset)
+    sync_title_poster_cache(db, title_id)
+    return list_artwork_assets(db, title_id)
 
 
 def _persist_artwork(db: Session, title_id: int, items: list[ArtworkItem]) -> list[MediaAsset]:
@@ -116,9 +192,10 @@ def save_artwork_selection(
 
 
 async def sync_artwork_for_title(db: Session, title: Title) -> list[MediaAsset]:
-    """Fetch all TMDB artwork and save everything (legacy bulk sync)."""
+    """Fetch TMDB artwork and save only images referenced by core metadata."""
     if not _is_tmdb_external_id(title.external_id):
         return []
     media_type, tmdb_id = parse_external_id(title.external_id)
     items = await collect_artwork_from_tmdb(media_type, tmdb_id)
-    return save_artwork_selection(db, title.id, items)
+    matching_items = _filter_to_metadata_artwork(items, title.metadata_json)
+    return _replace_tmdb_artwork(db, title.id, matching_items)
