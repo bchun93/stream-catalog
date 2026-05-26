@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { titlesApi } from "../api/client";
+import { metadataApi, titlesApi } from "../api/client";
 import { specLinesForItem } from "../utils/artworkSpecs";
 import { filterArtworkAssets } from "../utils/artworkTypes";
 import {
@@ -227,7 +227,14 @@ export function ArtworkTab({
       setError(null);
       setSuccess(null);
       try {
-        const stored = await titlesApi.syncArtwork(titleId);
+        let stored: MediaAsset[];
+        try {
+          stored = await titlesApi.syncArtwork(titleId);
+        } catch (syncErr) {
+          if (!externalId) throw syncErr;
+          const items = await metadataApi.importArtwork(externalId);
+          stored = await titlesApi.saveArtwork(titleId, items);
+        }
         const artworkOnly = filterArtworkAssets(stored);
         setSaved(artworkOnly);
         setCandidates([]);
@@ -250,7 +257,7 @@ export function ArtworkTab({
         if (mode === "manual") setFetching(false);
       }
     },
-    [canFetch, onSaved, titleId]
+    [canFetch, externalId, onSaved, titleId]
   );
 
   // Load whenever title changes (e.g. open edit modal).
