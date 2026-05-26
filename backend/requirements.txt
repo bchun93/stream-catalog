@@ -6,3 +6,4 @@ pydantic-settings==2.7.0
 python-multipart==0.0.20
 psycopg2-binary==2.9.10
 httpx==0.28.1
+boto3==1.35.90

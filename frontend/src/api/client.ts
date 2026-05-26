@@ -1,8 +1,13 @@
 import { filterArtworkAssets } from "../utils/artworkTypes";
 import type {
   ArtworkItem,
+  IngestJob,
+  IngestManifest,
+  IngestManifestValidateResponse,
   MediaAsset,
   MetadataSearchResult,
+  SeriesHierarchyApplyResult,
+  SeriesHierarchyPreview,
   Title,
   TitleMetadataImport,
   TitleTree,
@@ -12,6 +17,7 @@ import type {
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const API = `${API_BASE}/api/v1`;
 const IS_PROD = import.meta.env.PROD;
+const REQUEST_TIMEOUT_MS = IS_PROD ? 90000 : 30000;
 
 function isArtworkRouteDatabaseError(message: string): boolean {
   const text = message.toLowerCase();
@@ -49,12 +55,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const url = `${API}${path}`;
   let res: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     res = await fetch(url, {
       ...init,
+      signal: init?.signal ?? controller.signal,
       headers: buildHeaders(init),
     });
   } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        `Request timed out after ${Math.round(
+          REQUEST_TIMEOUT_MS / 1000
+        )}s reaching ${url}. The API may be waking up; retrying usually fixes this.`
+      );
+    }
     const hint =
       err instanceof TypeError
         ? ` Network error reaching ${url}. Check VITE_API_URL (${API_BASE || "not set"}) and retry (Render may be temporarily unreachable).`
@@ -62,6 +78,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(
       `${err instanceof Error ? err.message : "Request failed"}${hint}`
     );
+  } finally {
+    clearTimeout(timeout);
   }
   if (!res.ok) {
     const raw = await res.text().catch(() => "");
@@ -80,6 +98,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       }
     }
     if (res.status === 404 && detail === "Not Found") {
+      if (path.includes("/metadata/hierarchy/")) {
+        throw new Error(
+          "Hierarchy preview is not available on this API yet. Deploy the latest Render backend or run the local backend with Python 3.10+."
+        );
+      }
       throw new Error(
         "API route not found. Redeploy Render from latest main and verify /api/v1 is live."
       );
@@ -113,6 +136,8 @@ async function requestWithRetry<T>(
         msg.includes("Network error") ||
         msg.includes("Failed to fetch") ||
         msg.includes("Load failed") ||
+        msg.includes("timed out") ||
+        msg.includes("aborted") ||
         msg.includes("503") ||
         msg.includes("Database not") ||
         msg.includes("Database error") ||
@@ -267,6 +292,15 @@ export const metadataApi = {
     requestWithRetry<TitleMetadataImport>(
       `/metadata/import/${encodeURIComponent(externalId)}`
     ),
+  hierarchyPreview: (externalId: string) =>
+    requestWithRetry<SeriesHierarchyPreview>(
+      `/metadata/hierarchy/preview?${new URLSearchParams({ external_id: externalId })}`
+    ),
+  applyHierarchy: (externalId: string) =>
+    requestWithRetry<SeriesHierarchyApplyResult>(
+      `/metadata/hierarchy/apply?${new URLSearchParams({ external_id: externalId })}`,
+      { method: "POST" }
+    ),
   importArtwork: async (externalId: string) => {
     const params = new URLSearchParams({ external_id: externalId });
     try {
@@ -301,6 +335,41 @@ export const assetsApi = {
     }),
   delete: (id: number) =>
     request<void>(`/assets/${id}`, { method: "DELETE" }),
+};
+
+export const ingestApi = {
+  listManifests: (enabledOnly = true) =>
+    requestWithRetry<IngestManifest[]>(
+      `/ingest/manifests?enabled_only=${enabledOnly ? "true" : "false"}`
+    ),
+  validateManifest: (body: {
+    manifest_id: number;
+    source_prefix?: string;
+    max_keys?: number;
+  }) =>
+    requestWithRetry<IngestManifestValidateResponse>("/ingest/manifests/validate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  createJob: (body: {
+    title_id: number;
+    manifest_id: number;
+    source_prefix?: string;
+    created_by?: string;
+    dry_run?: boolean;
+    max_keys?: number;
+  }) =>
+    request<IngestJob>("/ingest/jobs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  listJobs: (params?: { title_id?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.title_id) q.set("title_id", String(params.title_id));
+    if (params?.limit) q.set("limit", String(params.limit));
+    return requestWithRetry<IngestJob[]>(`/ingest/jobs${q.toString() ? `?${q}` : ""}`);
+  },
+  getJob: (id: number) => requestWithRetry<IngestJob>(`/ingest/jobs/${id}`),
 };
 
 export function apiBaseUrl(): string {

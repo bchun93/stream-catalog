@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react";
 import { metadataApi } from "../api/client";
-import type { MetadataSearchResult, TitleMetadataImport } from "../types";
+import type {
+  MetadataSearchResult,
+  SeriesHierarchyPreview,
+  TitleMetadataImport,
+} from "../types";
 
 interface MetadataLookupProps {
   onApply: (metadata: TitleMetadataImport) => void;
+  onHierarchyApplied?: () => void;
 }
 
-export function MetadataLookup({ onApply }: MetadataLookupProps) {
+export function MetadataLookup({ onApply, onHierarchyApplied }: MetadataLookupProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MetadataSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [applyingHierarchy, setApplyingHierarchy] = useState(false);
+  const [hierarchyPreview, setHierarchyPreview] = useState<SeriesHierarchyPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,6 +37,7 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
     setLoading(true);
     setError(null);
     setResults([]);
+    setHierarchyPreview(null);
     try {
       const data = await metadataApi.search(query.trim());
       setResults(data);
@@ -57,10 +66,45 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
       onApply({ ...meta, artwork: [] });
       setResults([]);
       setQuery("");
+      setHierarchyPreview(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     } finally {
       setImporting(null);
+    }
+  };
+
+  const handlePreviewHierarchy = async (item: MetadataSearchResult) => {
+    setPreviewing(item.external_id);
+    setError(null);
+    setHierarchyPreview(null);
+    try {
+      const preview = await metadataApi.hierarchyPreview(item.external_id);
+      setHierarchyPreview(preview);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not preview hierarchy");
+    } finally {
+      setPreviewing(null);
+    }
+  };
+
+  const handleApplyHierarchy = async () => {
+    if (!hierarchyPreview) return;
+    setApplyingHierarchy(true);
+    setError(null);
+    try {
+      const result = await metadataApi.applyHierarchy(hierarchyPreview.external_id);
+      setHierarchyPreview(null);
+      setResults([]);
+      setQuery("");
+      onHierarchyApplied?.();
+      setError(
+        `Imported hierarchy for ${result.series.name}: ${result.season_count} seasons, ${result.episode_count} episodes (${result.created_count} created, ${result.updated_count} updated).`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not import hierarchy");
+    } finally {
+      setApplyingHierarchy(false);
     }
   };
 
@@ -89,32 +133,86 @@ export function MetadataLookup({ onApply }: MetadataLookupProps) {
         </button>
       </div>
       {error && <div className="error-banner metadata-error">{error}</div>}
+      {hierarchyPreview && (
+        <div className="hierarchy-preview">
+          <div>
+            <strong>{hierarchyPreview.name}</strong>
+            <p>
+              Preview: {hierarchyPreview.season_count} seasons and{" "}
+              {hierarchyPreview.episode_count} episodes.{" "}
+              {hierarchyPreview.action === "update"
+                ? "Existing series will be updated."
+                : "A new series hierarchy will be created."}
+            </p>
+          </div>
+          <ul>
+            {hierarchyPreview.seasons.slice(0, 6).map((season) => (
+              <li key={season.external_id}>
+                {season.name}: {season.episode_count} episodes
+              </li>
+            ))}
+            {hierarchyPreview.seasons.length > 6 && (
+              <li>+ {hierarchyPreview.seasons.length - 6} more seasons</li>
+            )}
+          </ul>
+          <div className="hierarchy-preview-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={applyingHierarchy}
+              onClick={handleApplyHierarchy}
+            >
+              {applyingHierarchy ? "Importing…" : "Create / update hierarchy"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={applyingHierarchy}
+              onClick={() => setHierarchyPreview(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {results.length > 0 && (
         <ul className="metadata-results">
           {results.map((item) => (
             <li key={item.external_id}>
-              <button
-                type="button"
-                className="metadata-result-btn"
-                onClick={() => handleSelect(item)}
-                disabled={importing === item.external_id}
-              >
-                {item.poster_url ? (
-                  <img src={item.poster_url} alt="" className="metadata-poster" />
-                ) : (
-                  <div className="metadata-poster metadata-poster-empty">?</div>
-                )}
-                <span className="metadata-result-text">
-                  <span className="metadata-result-title">{item.name}</span>
-                  <span className="metadata-result-meta">
-                    {item.title_type}
-                    {item.release_year ? ` · ${item.release_year}` : ""}
-                  </span>
-                  {item.overview && (
-                    <span className="metadata-result-overview">{item.overview}</span>
+              <div className="metadata-result-row">
+                <button
+                  type="button"
+                  className="metadata-result-btn"
+                  onClick={() => handleSelect(item)}
+                  disabled={importing === item.external_id}
+                >
+                  {item.poster_url ? (
+                    <img src={item.poster_url} alt="" className="metadata-poster" />
+                  ) : (
+                    <div className="metadata-poster metadata-poster-empty">?</div>
                   )}
-                </span>
-              </button>
+                  <span className="metadata-result-text">
+                    <span className="metadata-result-title">{item.name}</span>
+                    <span className="metadata-result-meta">
+                      {item.title_type}
+                      {item.release_year ? ` · ${item.release_year}` : ""}
+                    </span>
+                    {item.overview && (
+                      <span className="metadata-result-overview">{item.overview}</span>
+                    )}
+                  </span>
+                </button>
+                {item.title_type === "series" && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost metadata-hierarchy-btn"
+                    onClick={() => handlePreviewHierarchy(item)}
+                    disabled={previewing === item.external_id}
+                  >
+                    {previewing === item.external_id ? "Previewing…" : "Preview hierarchy"}
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>

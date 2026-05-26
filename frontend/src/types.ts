@@ -78,8 +78,10 @@ export interface Title {
   studio?: string | null;
   cast?: string | null;
   crew?: string | null;
+  eidr?: string | null;
   external_id?: string | null;
   metadata_source?: string | null;
+  metadata_json?: string | null;
   parent_id?: number | null;
   season_number?: number | null;
   episode_number?: number | null;
@@ -126,6 +128,84 @@ export interface MetadataSearchResult {
   poster_url?: string | null;
 }
 
+export type IngestJobStatus = "pending" | "running" | "completed" | "failed";
+export type IngestItemStatus = "discovered" | "skipped" | "ingested" | "failed";
+
+export interface IngestManifestRule {
+  name?: string | null;
+  pattern: string;
+  use_regex?: boolean;
+  asset_type: AssetType;
+  status?: AssetStatus;
+  language?: string | null;
+  resolution?: string | null;
+  mime_type?: string | null;
+  notes?: string | null;
+}
+
+export interface IngestManifest {
+  id: number;
+  name: string;
+  version: number;
+  description?: string | null;
+  enabled: boolean;
+  rules: IngestManifestRule[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IngestItemPreview {
+  s3_key: string;
+  filename: string;
+  inferred_asset_type?: AssetType | null;
+  language?: string | null;
+  resolution?: string | null;
+  matched_rule?: string | null;
+  media_info?: Record<string, unknown> | null;
+  warnings: string[];
+}
+
+export interface IngestManifestValidateResponse {
+  manifest_id: number;
+  source_prefix: string;
+  discovered_count: number;
+  matched_count: number;
+  skipped_count: number;
+  items: IngestItemPreview[];
+}
+
+export interface IngestItem {
+  id: number;
+  s3_key: string;
+  filename: string;
+  inferred_asset_type?: AssetType | null;
+  status: IngestItemStatus;
+  error_message?: string | null;
+  resulting_asset_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IngestJob {
+  id: number;
+  title_id: number;
+  manifest_id?: number | null;
+  source_prefix: string;
+  status: IngestJobStatus;
+  dry_run: boolean;
+  created_by?: string | null;
+  error_message?: string | null;
+  discovered_count: number;
+  ingested_count: number;
+  skipped_count: number;
+  failed_count: number;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: IngestItem[] | null;
+}
+
 export interface TitleMetadataImport {
   source: string;
   external_id: string;
@@ -145,7 +225,69 @@ export interface TitleMetadataImport {
   cast?: string | null;
   crew?: string | null;
   poster_url?: string | null;
+  core_metadata?: Record<string, string | null>;
   artwork?: ArtworkItem[];
+}
+
+export interface EpisodeHierarchyPreview {
+  external_id: string;
+  name: string;
+  slug: string;
+  season_number: number;
+  episode_number: number;
+  synopsis?: string | null;
+  release_date?: string | null;
+  runtime_minutes?: number | null;
+  still_url?: string | null;
+  core_metadata: Record<string, string | null>;
+  existing_title_id?: number | null;
+  action: "create" | "update";
+}
+
+export interface SeasonHierarchyPreview {
+  external_id: string;
+  name: string;
+  slug: string;
+  season_number: number;
+  synopsis?: string | null;
+  release_date?: string | null;
+  poster_url?: string | null;
+  episode_count: number;
+  core_metadata: Record<string, string | null>;
+  episodes: EpisodeHierarchyPreview[];
+  existing_title_id?: number | null;
+  action: "create" | "update";
+}
+
+export interface SeriesHierarchyPreview {
+  external_id: string;
+  name: string;
+  slug: string;
+  synopsis?: string | null;
+  short_description?: string | null;
+  release_date?: string | null;
+  release_year?: number | null;
+  rating?: string | null;
+  genres?: string | null;
+  runtime_minutes?: number | null;
+  studio?: string | null;
+  cast?: string | null;
+  crew?: string | null;
+  poster_url?: string | null;
+  core_metadata: Record<string, string | null>;
+  seasons: SeasonHierarchyPreview[];
+  season_count: number;
+  episode_count: number;
+  existing_title_id?: number | null;
+  action: "create" | "update";
+}
+
+export interface SeriesHierarchyApplyResult {
+  series: Title;
+  season_count: number;
+  episode_count: number;
+  created_count: number;
+  updated_count: number;
 }
 
 export const ARTWORK_TYPES: ArtworkType[] = [

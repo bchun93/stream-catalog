@@ -27,9 +27,11 @@ class TitleBase(BaseModel):
     studio: str | None = None
     cast: str | None = None
     crew: str | None = None
+    eidr: str | None = None
     external_id: str | None = None
     metadata_source: str | None = None
     poster_url: str | None = None
+    metadata_json: str | None = None
 
 
 class TitleCreate(TitleBase):
@@ -58,9 +60,11 @@ class TitleUpdate(BaseModel):
     studio: str | None = None
     cast: str | None = None
     crew: str | None = None
+    eidr: str | None = None
     external_id: str | None = None
     metadata_source: str | None = None
     poster_url: str | None = None
+    metadata_json: str | None = None
 
 
 class TitleRead(TitleBase):

@@ -7,6 +7,11 @@ import type {
   TitleStatus,
   TitleType,
 } from "../types";
+import {
+  CORE_METADATA_FIELDS,
+  parseCoreMetadata,
+  stringifyCoreMetadata,
+} from "../utils/metadataRequirements";
 
 interface TitleFormProps {
   initial?: Partial<Title>;
@@ -30,6 +35,48 @@ const STATUSES: TitleStatus[] = [
   "archived",
 ];
 
+function toIsoDate(value: string): string | null {
+  const text = value.trim();
+  if (!text) return null;
+  const mmddyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  const m = text.match(mmddyyyy);
+  if (!m) return null;
+  const [, mm, dd, yyyy] = m;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function metadataImportToCore(meta: TitleMetadataImport): Record<string, string> {
+  const fromPayload: Record<string, string> = {};
+  for (const [key, value] of Object.entries(meta.core_metadata ?? {})) {
+    if (typeof value === "string" && value.trim()) fromPayload[key] = value;
+  }
+  if (Object.keys(fromPayload).length > 0) return fromPayload;
+
+  const fallback: Record<string, string> = {};
+  if (meta.media_type === "movie") fallback.content_type = "movie";
+  if (meta.media_type === "tv") fallback.content_type = "series";
+  if (meta.name) fallback.name = meta.name;
+  if (meta.synopsis) fallback.synopsis = meta.synopsis;
+  if (meta.short_description) fallback.short_synopsis = meta.short_description;
+  if (meta.rating) fallback.rating = meta.rating;
+  if (meta.release_date) {
+    const asDate = new Date(meta.release_date);
+    if (!Number.isNaN(asDate.getTime())) {
+      const mm = String(asDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(asDate.getDate()).padStart(2, "0");
+      const yyyy = String(asDate.getFullYear());
+      fallback.release_date = `${mm}/${dd}/${yyyy}`;
+    }
+  }
+  if (meta.release_year != null) fallback.latest_release_year = String(meta.release_year);
+  if (meta.runtime_minutes != null) fallback.runtime = String(meta.runtime_minutes);
+  if (meta.studio) fallback.studio = meta.studio.replace(/,\s*/g, "\n");
+  if (meta.genres) fallback.genre = meta.genres.replace(/,\s*/g, "\n");
+  if (meta.cast) fallback.actors = meta.cast.replace(/;\s*/g, "\n");
+  if (meta.crew) fallback.producers = meta.crew.replace(/;\s*/g, "\n");
+  return fallback;
+}
+
 const emptyForm = (initial?: Partial<Title>) => ({
   slug: initial?.slug ?? "",
   name: initial?.name ?? "",
@@ -45,6 +92,7 @@ const emptyForm = (initial?: Partial<Title>) => ({
   studio: initial?.studio ?? "",
   cast: initial?.cast ?? "",
   crew: initial?.crew ?? "",
+  eidr: initial?.eidr ?? "",
   external_id: initial?.external_id ?? "",
   metadata_source: initial?.metadata_source ?? "",
   poster_url: initial?.poster_url ?? "",
@@ -52,6 +100,7 @@ const emptyForm = (initial?: Partial<Title>) => ({
   season_number: initial?.season_number?.toString() ?? "",
   episode_number: initial?.episode_number?.toString() ?? "",
   runtime_minutes: initial?.runtime_minutes?.toString() ?? "",
+  core_metadata: parseCoreMetadata(initial?.metadata_json),
 });
 
 export function TitleForm({
@@ -88,6 +137,11 @@ export function TitleForm({
 
   const set = (key: string, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
+  const setCoreMetadata = (key: string, value: string) =>
+    setForm((f) => ({
+      ...f,
+      core_metadata: { ...f.core_metadata, [key]: value },
+    }));
 
   const applyMetadata = (meta: TitleMetadataImport) => {
     setForm((f) => ({
@@ -109,6 +163,10 @@ export function TitleForm({
       external_id: meta.external_id,
       metadata_source: meta.source,
       poster_url: meta.poster_url ?? "",
+      core_metadata: {
+        ...f.core_metadata,
+        ...metadataImportToCore(meta),
+      },
     }));
     setMetadataApplied(true);
     setError(null);
@@ -134,16 +192,32 @@ export function TitleForm({
         name: form.name,
         title_type: form.title_type as TitleType,
         status: form.status as TitleStatus,
-        synopsis: form.synopsis || null,
-        short_description: form.short_description || null,
-        genres: form.genres || null,
-        rating: form.rating || null,
-        release_date: form.release_date || null,
-        release_year: form.release_year ? Number(form.release_year) : null,
+        synopsis: (form.core_metadata["synopsis"] || form.synopsis) || null,
+        short_description:
+          (form.core_metadata["short_synopsis"] || form.short_description) || null,
+        genres: (form.core_metadata["genre"] || form.genres) || null,
+        rating: (form.core_metadata["rating"] || form.rating) || null,
+        release_date: form.core_metadata["release_date"]
+          ? toIsoDate(form.core_metadata["release_date"])
+          : form.release_date || null,
+        release_year: form.release_year
+          ? Number(form.release_year)
+          : form.core_metadata["latest_release_year"]
+            ? Number(form.core_metadata["latest_release_year"])
+            : null,
         licensor: form.licensor || null,
-        studio: form.studio || null,
-        cast: form.cast || null,
-        crew: form.crew || null,
+        studio: (form.core_metadata["studio"] || form.studio) || null,
+        cast: (form.core_metadata["actors"] || form.cast) || null,
+        crew:
+          [
+            form.core_metadata["directors"],
+            form.core_metadata["writers"],
+            form.core_metadata["producers"],
+            form.crew,
+          ]
+            .filter(Boolean)
+            .join("\n") || null,
+        eidr: form.eidr || null,
         external_id: form.external_id || null,
         metadata_source: form.metadata_source || null,
         poster_url: form.poster_url || null,
@@ -152,7 +226,10 @@ export function TitleForm({
         episode_number: form.episode_number ? Number(form.episode_number) : null,
         runtime_minutes: form.runtime_minutes
           ? Number(form.runtime_minutes)
-          : null,
+          : form.core_metadata["runtime"]
+            ? Number(form.core_metadata["runtime"])
+            : null,
+        metadata_json: stringifyCoreMetadata(form.core_metadata),
       };
       const result = await onSubmit(payload);
       if (result?.id) {
@@ -192,12 +269,11 @@ export function TitleForm({
       {tab === "details" && (
         <>
           {(isCreate || !form.external_id?.startsWith("tmdb:")) && (
-            <MetadataLookup onApply={applyMetadata} />
+            <MetadataLookup onApply={applyMetadata} onHierarchyApplied={onSaved} />
           )}
           {metadataApplied && (
             <div className="metadata-applied-banner">
-              Metadata imported — review fields below, add licensor if needed, then save.
-              Fetch artwork separately on the Artwork tab.
+              Metadata imported — review the core metadata fields below and save.
             </div>
           )}
           <div className="form-grid">
@@ -233,47 +309,11 @@ export function TitleForm({
               </select>
             </label>
             <label>
-              Release year
+              EIDR
               <input
-                type="number"
-                value={form.release_year}
-                onChange={(e) => set("release_year", e.target.value)}
-              />
-            </label>
-            <label>
-              Release date
-              <input
-                type="date"
-                value={form.release_date}
-                onChange={(e) => set("release_date", e.target.value)}
-              />
-            </label>
-            <label>
-              Genres
-              <input value={form.genres} onChange={(e) => set("genres", e.target.value)} />
-            </label>
-            <label>
-              Content rating
-              <input value={form.rating} onChange={(e) => set("rating", e.target.value)} />
-            </label>
-            <label>
-              Studio
-              <input value={form.studio} onChange={(e) => set("studio", e.target.value)} />
-            </label>
-            <label>
-              Licensor
-              <input
-                value={form.licensor}
-                onChange={(e) => set("licensor", e.target.value)}
-                placeholder="Your distribution / rights holder"
-              />
-            </label>
-            <label>
-              Runtime (minutes)
-              <input
-                type="number"
-                value={form.runtime_minutes}
-                onChange={(e) => set("runtime_minutes", e.target.value)}
+                value={form.eidr}
+                onChange={(e) => set("eidr", e.target.value)}
+                placeholder="10.5240/XXXX-XXXX-XXXX-XXXX-XXXX-C"
               />
             </label>
             <label>
@@ -306,33 +346,31 @@ export function TitleForm({
                 onChange={(e) => set("episode_number", e.target.value)}
               />
             </label>
-            <label className="form-span-2">
-              Tagline / short description
-              <input
-                value={form.short_description}
-                onChange={(e) => set("short_description", e.target.value)}
-              />
-            </label>
-            <label className="form-span-2">
-              Synopsis
-              <textarea value={form.synopsis} onChange={(e) => set("synopsis", e.target.value)} />
-            </label>
-            <label className="form-span-2">
-              Cast
-              <textarea
-                value={form.cast}
-                onChange={(e) => set("cast", e.target.value)}
-                rows={3}
-              />
-            </label>
-            <label className="form-span-2">
-              Crew
-              <textarea
-                value={form.crew}
-                onChange={(e) => set("crew", e.target.value)}
-                rows={2}
-              />
-            </label>
+            <div className="form-span-2 metadata-requirements">
+              <h3 className="metadata-requirements-heading">Core metadata</h3>
+              <p className="metadata-hint">
+                TMDB import maps matching fields automatically; unmatched fields remain blank.
+              </p>
+              <div className="form-grid">
+                {CORE_METADATA_FIELDS.map((field) => (
+                  <label key={field.key} className={field.multiline ? "form-span-2" : undefined}>
+                    {field.label}
+                    {field.multiline ? (
+                      <textarea
+                        rows={2}
+                        value={form.core_metadata[field.key] ?? ""}
+                        onChange={(e) => setCoreMetadata(field.key, e.target.value)}
+                      />
+                    ) : (
+                      <input
+                        value={form.core_metadata[field.key] ?? ""}
+                        onChange={(e) => setCoreMetadata(field.key, e.target.value)}
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </>
       )}

@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     port: int = 8000
     tmdb_api_key: str | None = Field(default=None, validation_alias="TMDB_API_KEY")
     tmdb_base_url: str = "https://api.themoviedb.org/3"
+    ingest_s3_bucket: str | None = Field(default=None, validation_alias="INGEST_S3_BUCKET")
+    ingest_s3_prefix: str = Field(default="", validation_alias="INGEST_S3_PREFIX")
+    aspera_drop_prefix: str = Field(default="", validation_alias="ASPERA_DROP_PREFIX")
+    ingest_operator_token: str | None = Field(
+        default=None, validation_alias="INGEST_OPERATOR_TOKEN"
+    )
+    ingest_max_keys: int = Field(default=1000, validation_alias="INGEST_MAX_KEYS")
 
     @field_validator("database_url", mode="before")
     @classmethod

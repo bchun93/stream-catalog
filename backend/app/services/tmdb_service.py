@@ -10,7 +10,13 @@ from app.config import settings
 from app.models.media_asset import AssetType
 from app.models.title import TitleType
 from app.schemas.artwork import ArtworkItem, ArtworkSpecs
-from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
+from app.schemas.metadata import (
+    EpisodeHierarchyPreview,
+    MetadataSearchResult,
+    SeasonHierarchyPreview,
+    SeriesHierarchyPreview,
+    TitleMetadataImport,
+)
 
 
 class TmdbServiceError(Exception):
@@ -54,6 +60,65 @@ _IMAGES_KEY_TO_TYPE = {
 }
 # trust_env=False — ignore HTTP_PROXY / ALL_PROXY so TMDB calls work in dev shells.
 _TMDb_HTTP = httpx.Client(timeout=20.0, trust_env=False)
+
+_REQUIREMENTS_FIELDS: tuple[str, ...] = (
+    "content_type",
+    "movie_ref",
+    "series_ref",
+    "season_ref",
+    "reference_id",
+    "name",
+    "synopsis",
+    "short_synopsis",
+    "season_count",
+    "season_number",
+    "episode_count",
+    "episode_no",
+    "copyright_line",
+    "rating",
+    "advisory",
+    "release_date",
+    "initial_release_year",
+    "latest_release_year",
+    "runtime",
+    "studio",
+    "genre",
+    "language",
+    "origin",
+    "actors",
+    "directors",
+    "writers",
+    "creators",
+    "producers",
+    "h_poster",
+    "still_frame",
+    "v_poster",
+    "logo",
+    "hero_image",
+    "hero_image_vertical",
+    "box_art",
+    "source_file_name",
+    "ad_dv",
+    "hd_sd",
+    "surround",
+    "cc",
+    "cc_language",
+    "forced_narrative_cc",
+    "forced_narrative_cc_language",
+    "photosensitivity",
+    "dubbing",
+    "dubbing_language",
+    "dub_cards",
+    "skip_intro_start",
+    "skip_intro_end",
+    "skip_recap_start",
+    "skip_recap_end",
+    "skip_creds_start",
+    "ad_breaks",
+    "tags",
+    "playback_start_date",
+    "playback_end_date",
+)
 
 
 def _require_api_key() -> str:
@@ -329,6 +394,150 @@ def _format_crew(credits: dict) -> str | None:
     return "; ".join(segments) if segments else None
 
 
+def _crew_names(credits: dict, *jobs: str, limit: int = 12) -> str | None:
+    crew = credits.get("crew") or []
+    names: list[str] = []
+    wanted = set(jobs)
+    for member in crew:
+        if member.get("job") not in wanted:
+            continue
+        name = member.get("name")
+        if not name or name in names:
+            continue
+        names.append(name)
+        if len(names) >= limit:
+            break
+    return "\n".join(names) if names else None
+
+
+def _cast_names(credits: dict, limit: int = 20) -> str | None:
+    cast = credits.get("cast") or []
+    names: list[str] = []
+    for member in cast:
+        name = member.get("name")
+        if not name or name in names:
+            continue
+        names.append(name)
+        if len(names) >= limit:
+            break
+    return "\n".join(names) if names else None
+
+
+def _to_mmddyyyy(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        d = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return d.strftime("%m/%d/%Y")
+
+
+def _basename(path: str | None) -> str | None:
+    if not path:
+        return None
+    return path.strip().split("/")[-1] or None
+
+
+def _requirements_template() -> dict[str, str | None]:
+    return {field: None for field in _REQUIREMENTS_FIELDS}
+
+
+def _season_slug(series_name: str, season_number: int) -> str:
+    suffix = "specials" if season_number == 0 else f"season-{season_number}"
+    return f"{_slugify(series_name)}-{suffix}"[:120]
+
+
+def _episode_slug(series_name: str, season_number: int, episode_number: int, name: str) -> str:
+    season_part = "s00" if season_number == 0 else f"s{season_number:02d}"
+    episode_part = f"e{episode_number:02d}"
+    title_part = _slugify(name)
+    return f"{_slugify(series_name)}-{season_part}{episode_part}-{title_part}"[:120]
+
+
+def _tmdb_core_metadata(
+    *,
+    data: dict,
+    media_type: str,
+    name: str,
+    synopsis: str | None,
+    short_synopsis: str | None,
+    release_date_value: str | None,
+    release_year: int | None,
+    rating: str | None,
+    runtime: int | None,
+    studio: str | None,
+    genres: str | None,
+    credits: dict,
+) -> dict[str, str | None]:
+    values = _requirements_template()
+    values["content_type"] = "series" if media_type == "tv" else "movie"
+    values["name"] = name
+    values["synopsis"] = synopsis
+    values["short_synopsis"] = short_synopsis
+    values["rating"] = rating
+    values["release_date"] = _to_mmddyyyy(release_date_value)
+    values["runtime"] = str(runtime) if runtime is not None else None
+    values["studio"] = studio.replace(", ", "\n") if studio else None
+    values["genre"] = genres.replace(", ", "\n") if genres else None
+    values["language"] = (data.get("original_language") or "").strip().lower() or None
+
+    countries = data.get("production_countries") or []
+    country_codes = [c.get("iso_3166_1") for c in countries if c.get("iso_3166_1")]
+    if country_codes:
+        values["origin"] = "\n".join(country_codes[:10])
+
+    values["actors"] = _cast_names(credits)
+    values["directors"] = _crew_names(credits, "Director")
+    values["writers"] = _crew_names(credits, "Writer", "Screenplay")
+    values["producers"] = _crew_names(credits, "Producer", "Executive Producer")
+
+    created_by = data.get("created_by") or []
+    creators = [p.get("name") for p in created_by if p.get("name")]
+    if creators:
+        values["creators"] = "\n".join(creators[:10])
+
+    if media_type == "tv":
+        season_count = data.get("number_of_seasons")
+        if season_count is not None:
+            values["season_count"] = str(season_count)
+        first = _parse_year(data.get("first_air_date"))
+        latest = _parse_year(data.get("last_air_date")) or release_year
+        if first is not None:
+            values["initial_release_year"] = str(first)
+        if latest is not None:
+            values["latest_release_year"] = str(latest)
+
+    poster_path = data.get("poster_path")
+    backdrop_path = data.get("backdrop_path")
+    values["v_poster"] = _basename(poster_path)
+    values["h_poster"] = _basename(backdrop_path)
+    values["hero_image"] = _basename(backdrop_path)
+    values["still_frame"] = _basename(backdrop_path)
+    values["box_art"] = _basename(poster_path)
+
+    if media_type == "movie":
+        values["movie_ref"] = f"tmdb_movie_{data.get('id')}"
+    else:
+        values["series_ref"] = f"tmdb_tv_{data.get('id')}"
+
+    values["reference_id"] = f"tmdb_{media_type}_{data.get('id')}"
+
+    keyword_rows = []
+    keywords = data.get("keywords") or {}
+    keyword_list = keywords.get("keywords") if media_type == "movie" else keywords.get("results")
+    if isinstance(keyword_list, list):
+        for kw in keyword_list:
+            name = kw.get("name")
+            if name:
+                keyword_rows.append(str(name))
+            if len(keyword_rows) >= 12:
+                break
+    values["tags"] = "\n".join(keyword_rows) if keyword_rows else None
+
+    return values
+
+
 def _us_certification(movie_data: dict, media_type: str) -> str | None:
     if media_type == "movie":
         for country in movie_data.get("release_dates", {}).get("results", []):
@@ -451,7 +660,11 @@ async def fetch_metadata(
     if media_type not in ("movie", "tv"):
         raise HTTPException(status_code=400, detail="media_type must be movie or tv")
 
-    append = "credits,release_dates" if media_type == "movie" else "credits,content_ratings"
+    append = (
+        "credits,release_dates,keywords"
+        if media_type == "movie"
+        else "credits,content_ratings,keywords"
+    )
     path = f"/{media_type}/{tmdb_id}"
     data = await _get(path, append_to_response=append)
 
@@ -494,7 +707,178 @@ async def fetch_metadata(
         cast=_format_cast(credits),
         crew=_format_crew(credits),
         poster_url=_poster(data.get("poster_path")),
+        core_metadata=_tmdb_core_metadata(
+            data=data,
+            media_type=media_type,
+            name=name,
+            synopsis=data.get("overview"),
+            short_synopsis=data.get("tagline"),
+            release_date_value=release_date_value,
+            release_year=release_year,
+            rating=certification,
+            runtime=runtime,
+            studio=_studios(data, media_type),
+            genres=genres or None,
+            credits=credits,
+        ),
         artwork=[],
+    )
+
+
+def _season_core_metadata(
+    *,
+    series_id: int,
+    season_data: dict,
+    season_number: int,
+    episode_count: int,
+) -> dict[str, str | None]:
+    values = _requirements_template()
+    values["content_type"] = "season"
+    values["name"] = str(season_data.get("name") or f"Season {season_number}")
+    values["synopsis"] = season_data.get("overview")
+    values["release_date"] = _to_mmddyyyy(season_data.get("air_date"))
+    values["season_number"] = str(season_number)
+    values["episode_count"] = str(episode_count)
+    year = _parse_year(season_data.get("air_date"))
+    if year is not None:
+        values["initial_release_year"] = str(year)
+        values["latest_release_year"] = str(year)
+    values["series_ref"] = f"tmdb_tv_{series_id}"
+    values["season_ref"] = f"tmdb_tv_{series_id}_season_{season_number}"
+    values["reference_id"] = f"tmdb_tv_{series_id}_season_{season_number}"
+    values["v_poster"] = _basename(season_data.get("poster_path"))
+    values["box_art"] = _basename(season_data.get("poster_path"))
+    return values
+
+
+def _episode_core_metadata(
+    *,
+    series_id: int,
+    season_number: int,
+    episode_data: dict,
+) -> dict[str, str | None]:
+    values = _requirements_template()
+    episode_number = int(episode_data.get("episode_number") or 0)
+    runtime = episode_data.get("runtime")
+    values["content_type"] = "episode"
+    values["name"] = str(episode_data.get("name") or f"Episode {episode_number}")
+    values["synopsis"] = episode_data.get("overview")
+    values["release_date"] = _to_mmddyyyy(episode_data.get("air_date"))
+    values["season_number"] = str(season_number)
+    values["episode_no"] = str(episode_number)
+    values["runtime"] = str(runtime) if runtime is not None else None
+    year = _parse_year(episode_data.get("air_date"))
+    if year is not None:
+        values["initial_release_year"] = str(year)
+        values["latest_release_year"] = str(year)
+    values["series_ref"] = f"tmdb_tv_{series_id}"
+    values["season_ref"] = f"tmdb_tv_{series_id}_season_{season_number}"
+    values["reference_id"] = (
+        f"tmdb_tv_{series_id}_season_{season_number}_episode_{episode_number}"
+    )
+    values["still_frame"] = _basename(episode_data.get("still_path"))
+    values["hero_image"] = _basename(episode_data.get("still_path"))
+    return values
+
+
+async def fetch_series_hierarchy_preview(tmdb_id: int) -> SeriesHierarchyPreview:
+    series_meta = await fetch_metadata("tv", tmdb_id)
+    series_data = await _get(
+        f"/tv/{tmdb_id}",
+        append_to_response="credits,content_ratings,keywords",
+        language=_TMDB_LANGUAGE,
+    )
+    series_name = series_data.get("name") or series_meta.name
+    seasons: list[SeasonHierarchyPreview] = []
+
+    for season_stub in sorted(
+        series_data.get("seasons") or [],
+        key=lambda s: int(s.get("season_number") or 0),
+    ):
+        season_number = int(season_stub.get("season_number") or 0)
+        season_data = await _get(
+            f"/tv/{tmdb_id}/season/{season_number}",
+            language=_TMDB_LANGUAGE,
+        )
+        season_name = (
+            "Specials"
+            if season_number == 0
+            else str(season_data.get("name") or f"Season {season_number}")
+        )
+        episodes: list[EpisodeHierarchyPreview] = []
+        for episode in sorted(
+            season_data.get("episodes") or [],
+            key=lambda e: int(e.get("episode_number") or 0),
+        ):
+            episode_number = int(episode.get("episode_number") or 0)
+            episode_name = str(episode.get("name") or f"Episode {episode_number}")
+            external_id = (
+                f"tmdb:tv:{tmdb_id}:season:{season_number}:episode:{episode_number}"
+            )
+            episodes.append(
+                EpisodeHierarchyPreview(
+                    external_id=external_id,
+                    name=episode_name,
+                    slug=_episode_slug(
+                        series_name,
+                        season_number,
+                        episode_number,
+                        episode_name,
+                    ),
+                    season_number=season_number,
+                    episode_number=episode_number,
+                    synopsis=episode.get("overview"),
+                    release_date=episode.get("air_date"),
+                    runtime_minutes=episode.get("runtime"),
+                    still_url=_image_url(episode.get("still_path"), "w300"),
+                    core_metadata=_episode_core_metadata(
+                        series_id=tmdb_id,
+                        season_number=season_number,
+                        episode_data=episode,
+                    ),
+                )
+            )
+
+        episode_count = len(episodes)
+        seasons.append(
+            SeasonHierarchyPreview(
+                external_id=f"tmdb:tv:{tmdb_id}:season:{season_number}",
+                name=season_name,
+                slug=_season_slug(series_name, season_number),
+                season_number=season_number,
+                synopsis=season_data.get("overview"),
+                release_date=season_data.get("air_date"),
+                poster_url=_poster(season_data.get("poster_path")),
+                episode_count=episode_count,
+                core_metadata=_season_core_metadata(
+                    series_id=tmdb_id,
+                    season_data=season_data,
+                    season_number=season_number,
+                    episode_count=episode_count,
+                ),
+                episodes=episodes,
+            )
+        )
+
+    return SeriesHierarchyPreview(
+        external_id=series_meta.external_id,
+        name=series_meta.name,
+        slug=series_meta.slug or _slugify(series_meta.name),
+        synopsis=series_meta.synopsis,
+        short_description=series_meta.short_description,
+        release_date=series_meta.release_date,
+        release_year=series_meta.release_year,
+        rating=series_meta.rating,
+        genres=series_meta.genres,
+        runtime_minutes=series_meta.runtime_minutes,
+        studio=series_meta.studio,
+        cast=series_meta.cast,
+        crew=series_meta.crew,
+        poster_url=series_meta.poster_url,
+        core_metadata=series_meta.core_metadata,
+        seasons=seasons,
+        season_count=len(seasons),
+        episode_count=sum(season.episode_count for season in seasons),
     )
 
 

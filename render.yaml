@@ -13,6 +13,14 @@ services:
         sync: false
       - key: TMDB_API_KEY
         sync: false
+      - key: INGEST_S3_BUCKET
+        sync: false
+      - key: INGEST_S3_PREFIX
+        sync: false
+      - key: ASPERA_DROP_PREFIX
+        sync: false
+      - key: INGEST_OPERATOR_TOKEN
+        sync: false
       - key: SEED_ON_STARTUP
         value: "true"
       # Do not set PORT — Render injects it at runtime (e.g. 10000). The app must listen on $PORT.

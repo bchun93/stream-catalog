@@ -6,6 +6,7 @@ from sqlalchemy.engine import make_url
 
 from app.config import settings
 from app.database import SessionLocal
+from app.models.ingest_manifest import IngestManifest
 
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 
@@ -18,7 +19,15 @@ def _mask_host(host: str | None) -> str | None:
     return host[:24] + ("…" if len(host) > 24 else "")
 
 
-def _hints(*, db_ready: bool, neon_pooler: bool, migration_error: str | None, tmdb: bool) -> list[str]:
+def _hints(
+    *,
+    db_ready: bool,
+    neon_pooler: bool,
+    migration_error: str | None,
+    tmdb: bool,
+    ingest_bucket_configured: bool,
+    ingest_token_required: bool,
+) -> list[str]:
     hints: list[str] = []
     if not db_ready:
         hints.append(
@@ -33,6 +42,12 @@ def _hints(*, db_ready: bool, neon_pooler: bool, migration_error: str | None, tm
             hints.append(f"Last migration error: {migration_error[:200]}")
     if not tmdb:
         hints.append("TMDB_API_KEY is missing or still a placeholder on Render.")
+    if not ingest_bucket_configured:
+        hints.append("INGEST_S3_BUCKET is not set. Ingest jobs cannot read delivery files yet.")
+    if not ingest_token_required:
+        hints.append(
+            "INGEST_OPERATOR_TOKEN is not set. Ingest endpoints are currently unprotected."
+        )
     hints.append(
         "Amplify VITE_API_URL is baked in at build time — changing it in Amplify requires a full redeploy."
     )
@@ -49,10 +64,16 @@ def get_diagnostics(request: Request):
 
     titles_count: int | None = None
     titles_error: str | None = None
+    ingest_manifest_count: int | None = None
+    ingest_enabled_count: int | None = None
     if db_ready:
         try:
             with SessionLocal() as db:
                 titles_count = db.execute(text("SELECT COUNT(*) FROM titles")).scalar()
+                ingest_manifest_count = db.query(IngestManifest).count()
+                ingest_enabled_count = (
+                    db.query(IngestManifest).filter(IngestManifest.enabled.is_(True)).count()
+                )
         except Exception as exc:
             titles_error = str(exc)
 
@@ -66,10 +87,23 @@ def get_diagnostics(request: Request):
         "tmdb_configured": settings.tmdb_configured,
         "titles_count": titles_count,
         "titles_error": titles_error,
+        "ingest": {
+            "bucket_configured": bool((settings.ingest_s3_bucket or "").strip()),
+            "bucket": settings.ingest_s3_bucket,
+            "s3_prefix": settings.ingest_s3_prefix,
+            "aspera_drop_prefix": settings.aspera_drop_prefix,
+            "operator_token_required": bool(
+                (settings.ingest_operator_token or "").strip()
+            ),
+            "manifest_count": ingest_manifest_count,
+            "enabled_manifest_count": ingest_enabled_count,
+        },
         "hints": _hints(
             db_ready=db_ready,
             neon_pooler=neon_pooler,
             migration_error=migration_error,
             tmdb=settings.tmdb_configured,
+            ingest_bucket_configured=bool((settings.ingest_s3_bucket or "").strip()),
+            ingest_token_required=bool((settings.ingest_operator_token or "").strip()),
         ),
     }

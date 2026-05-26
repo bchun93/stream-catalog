@@ -1,15 +1,25 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.database import get_db
+from app.deps import require_db
 from app.models.title import TitleType
-from app.schemas.metadata import MetadataSearchResult, TitleMetadataImport
+from app.schemas.metadata import (
+    MetadataSearchResult,
+    SeriesHierarchyApplyResult,
+    SeriesHierarchyPreview,
+    TitleMetadataImport,
+)
 from app.schemas.artwork import ArtworkItem
+from app.services import title_service
 from app.services.tmdb_service import (
     check_tmdb_connectivity,
     collect_artwork_from_tmdb,
     fetch_metadata,
+    fetch_series_hierarchy_preview,
     parse_external_id,
     search_metadata,
 )
@@ -63,6 +73,38 @@ async def metadata_artwork(
 async def metadata_import_artwork(external_id: str):
     media_type, tmdb_id = parse_external_id(external_id)
     return await collect_artwork_from_tmdb(media_type, tmdb_id)
+
+
+@router.get("/hierarchy/preview", response_model=SeriesHierarchyPreview)
+async def metadata_import_hierarchy_preview(
+    external_id: str = Query(..., description="TMDB id, e.g. tmdb:tv:90296"),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
+    media_type, tmdb_id = parse_external_id(external_id)
+    if media_type != "tv":
+        raise HTTPException(
+            status_code=400,
+            detail="Hierarchy import is only available for TMDB series.",
+        )
+    preview = await fetch_series_hierarchy_preview(tmdb_id)
+    return title_service.annotate_series_hierarchy_preview(db, preview)
+
+
+@router.post("/hierarchy/apply", response_model=SeriesHierarchyApplyResult)
+async def metadata_import_hierarchy_apply(
+    external_id: str = Query(..., description="TMDB id, e.g. tmdb:tv:90296"),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
+    media_type, tmdb_id = parse_external_id(external_id)
+    if media_type != "tv":
+        raise HTTPException(
+            status_code=400,
+            detail="Hierarchy import is only available for TMDB series.",
+        )
+    preview = await fetch_series_hierarchy_preview(tmdb_id)
+    return title_service.apply_series_hierarchy_preview(db, preview)
 
 
 @router.get("/import/{external_id:path}", response_model=TitleMetadataImport)

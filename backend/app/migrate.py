@@ -1,8 +1,10 @@
 import logging
+import json
 
 from sqlalchemy import inspect, text
 
 from app.database import engine
+from app.models.ingest_job import IngestItemStatus, IngestJobStatus
 from app.models.media_asset import AssetStatus, AssetType
 from app.models.title import TitleStatus, TitleType
 
@@ -14,9 +16,11 @@ _NEW_COLUMNS = [
     ("studio", "VARCHAR(500)"),
     ("cast", "TEXT"),
     ("crew", "TEXT"),
+    ("eidr", "VARCHAR(128)"),
     ("external_id", "VARCHAR(64)"),
     ("metadata_source", "VARCHAR(32)"),
     ("poster_url", "VARCHAR(1024)"),
+    ("metadata_json", "TEXT"),
 ]
 
 _MEDIA_ASSET_COLUMNS = [
@@ -29,6 +33,8 @@ _PG_ENUM_TYPES = (
     "assetstatus",
     "titletype",
     "titlestatus",
+    "ingestjobstatus",
+    "ingestitemstatus",
 )
 
 # Columns that must be VARCHAR to match SQLAlchemy native_enum=False + SQLite locally.
@@ -37,6 +43,9 @@ _PG_ENUM_COLUMNS: tuple[tuple[str, str, int], ...] = (
     ("media_assets", "status", 32),
     ("titles", "title_type", 32),
     ("titles", "status", 32),
+    ("ingest_jobs", "status", 32),
+    ("ingest_items", "inferred_asset_type", 32),
+    ("ingest_items", "status", 32),
 )
 
 
@@ -114,6 +123,8 @@ def _ensure_pg_enum_values(conn) -> None:
         "assetstatus": _enum_labels(AssetStatus),
         "titletype": _enum_labels(TitleType),
         "titlestatus": _enum_labels(TitleStatus),
+        "ingestjobstatus": _enum_labels(IngestJobStatus),
+        "ingestitemstatus": _enum_labels(IngestItemStatus),
     }
     for type_name, labels in additions.items():
         for label in labels:
@@ -123,6 +134,85 @@ def _ensure_pg_enum_values(conn) -> None:
                 )
             except Exception:
                 pass
+
+
+def _seed_default_ingest_manifest(conn) -> None:
+    existing = conn.execute(
+        text("SELECT id FROM ingest_manifests WHERE name = :name AND version = 1 LIMIT 1"),
+        {"name": "ott-default-v1"},
+    ).fetchone()
+    if existing:
+        return
+    default_rules = [
+        {
+            "name": "video-master",
+            "pattern": "*master*.mp4",
+            "asset_type": "video_master",
+            "status": "uploaded",
+        },
+        {
+            "name": "video-trailer",
+            "pattern": "*trailer*.mp4",
+            "asset_type": "trailer",
+            "status": "uploaded",
+        },
+        {
+            "name": "audio",
+            "pattern": "*audio*.*",
+            "asset_type": "audio",
+            "status": "uploaded",
+        },
+        {
+            "name": "subtitle",
+            "pattern": "*.{srt,vtt}",
+            "asset_type": "subtitle",
+            "status": "uploaded",
+        },
+        {
+            "name": "caption",
+            "pattern": "*caption*.*",
+            "asset_type": "caption",
+            "status": "uploaded",
+        },
+    ]
+    conn.execute(
+        text(
+            """
+            INSERT INTO ingest_manifests
+            (name, version, description, rules_json, enabled, created_at, updated_at)
+            VALUES
+            (:name, :version, :description, :rules_json, :enabled, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """
+        ),
+        {
+            "name": "ott-default-v1",
+            "version": 1,
+            "description": "Starter OTT ingest rules for common file naming conventions.",
+            "rules_json": json.dumps(default_rules),
+            "enabled": True,
+        },
+    )
+
+
+def _ensure_common_indexes(conn) -> None:
+    # Hot path indexes for title list + artwork lookups.
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_titles_updated_at ON titles (updated_at DESC)"
+        )
+    )
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_media_assets_title_type_updated "
+            "ON media_assets (title_id, asset_type, updated_at DESC)"
+        )
+    )
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_media_assets_storage_uri "
+            "ON media_assets (storage_uri)"
+        )
+    )
 
 
 def run_migrations() -> None:
@@ -162,3 +252,11 @@ def run_migrations() -> None:
             _upgrade_postgres_enums_to_varchar(conn)
             # Re-inspect; if enums remain, try adding values
             _ensure_pg_enum_values(conn)
+            _ensure_common_indexes(conn)
+            if "ingest_manifests" in inspect(conn).get_table_names():
+                _seed_default_ingest_manifest(conn)
+    else:
+        with engine.begin() as conn:
+            _ensure_common_indexes(conn)
+            if "ingest_manifests" in inspect(conn).get_table_names():
+                _seed_default_ingest_manifest(conn)

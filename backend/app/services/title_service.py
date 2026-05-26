@@ -1,11 +1,14 @@
 import logging
+import json
 from collections import defaultdict
+from datetime import date
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.media_asset import AssetType, MediaAsset
-from app.models.title import Title, TitleType
+from app.models.title import Title, TitleStatus, TitleType
+from app.schemas.metadata import SeriesHierarchyApplyResult, SeriesHierarchyPreview
 from app.schemas.title import TitleCreate, TitleRead, TitleUpdate
 from app.services.poster_resolver import pick_best_poster_uri, resolve_poster_url
 
@@ -58,6 +61,160 @@ def _poster_assets_by_title(
     for asset in assets:
         grouped[asset.title_id].append(asset)
     return grouped
+
+
+def _parse_iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _merge_metadata_json(existing_raw: str | None, incoming: dict[str, str | None]) -> str | None:
+    if not incoming:
+        return existing_raw
+    existing: dict[str, str | None] = {}
+    if existing_raw:
+        try:
+            parsed = json.loads(existing_raw)
+            if isinstance(parsed, dict):
+                existing = {
+                    str(key): value if isinstance(value, str) else None
+                    for key, value in parsed.items()
+                }
+        except json.JSONDecodeError:
+            existing = {}
+    for key, value in incoming.items():
+        if existing.get(key):
+            continue
+        existing[key] = value
+    if not any(value for value in existing.values()):
+        return None
+    return json.dumps(existing)
+
+
+def _find_title_for_hierarchy(
+    db: Session,
+    *,
+    external_id: str,
+    slug: str,
+    parent_id: int | None,
+) -> Title | None:
+    title = db.query(Title).filter(Title.external_id == external_id).first()
+    if title:
+        return title
+    return (
+        db.query(Title)
+        .filter(Title.slug == slug, Title.parent_id == parent_id)
+        .first()
+    )
+
+
+def _unique_slug(db: Session, slug: str, title_id: int | None = None) -> str:
+    base = slug[:120] or "title"
+    candidate = base
+    counter = 2
+    while True:
+        query = db.query(Title).filter(Title.slug == candidate)
+        if title_id is not None:
+            query = query.filter(Title.id != title_id)
+        if not query.first():
+            return candidate
+        suffix = f"-{counter}"
+        candidate = f"{base[: 120 - len(suffix)]}{suffix}"
+        counter += 1
+
+
+def _set_if_blank(title: Title, field: str, value) -> None:
+    if value is None:
+        return
+    current = getattr(title, field)
+    if current in (None, ""):
+        setattr(title, field, value)
+
+
+def _upsert_hierarchy_title(
+    db: Session,
+    *,
+    external_id: str,
+    slug: str,
+    name: str,
+    title_type: TitleType,
+    parent_id: int | None,
+    season_number: int | None = None,
+    episode_number: int | None = None,
+    synopsis: str | None = None,
+    short_description: str | None = None,
+    release_date_value: str | None = None,
+    release_year: int | None = None,
+    rating: str | None = None,
+    genres: str | None = None,
+    runtime_minutes: int | None = None,
+    studio: str | None = None,
+    cast: str | None = None,
+    crew: str | None = None,
+    poster_url: str | None = None,
+    core_metadata: dict[str, str | None] | None = None,
+) -> tuple[Title, bool]:
+    title = _find_title_for_hierarchy(
+        db,
+        external_id=external_id,
+        slug=slug,
+        parent_id=parent_id,
+    )
+    created = title is None
+    if title is None:
+        title = Title(
+            slug=_unique_slug(db, slug),
+            name=name,
+            title_type=title_type,
+            status=TitleStatus.DRAFT,
+            parent_id=parent_id,
+            season_number=season_number,
+            episode_number=episode_number,
+            synopsis=synopsis,
+            short_description=short_description,
+            release_date=_parse_iso_date(release_date_value),
+            release_year=release_year,
+            rating=rating,
+            genres=genres,
+            runtime_minutes=runtime_minutes,
+            studio=studio,
+            cast=cast,
+            crew=crew,
+            external_id=external_id,
+            metadata_source="tmdb",
+            poster_url=poster_url,
+            metadata_json=_merge_metadata_json(None, core_metadata or {}),
+        )
+        db.add(title)
+        db.flush()
+        return title, True
+
+    title.title_type = title_type
+    title.parent_id = parent_id
+    title.season_number = season_number
+    title.episode_number = episode_number
+    if not title.external_id:
+        title.external_id = external_id
+    if not title.metadata_source:
+        title.metadata_source = "tmdb"
+    _set_if_blank(title, "name", name)
+    _set_if_blank(title, "synopsis", synopsis)
+    _set_if_blank(title, "short_description", short_description)
+    _set_if_blank(title, "release_date", _parse_iso_date(release_date_value))
+    _set_if_blank(title, "release_year", release_year)
+    _set_if_blank(title, "rating", rating)
+    _set_if_blank(title, "genres", genres)
+    _set_if_blank(title, "runtime_minutes", runtime_minutes)
+    _set_if_blank(title, "studio", studio)
+    _set_if_blank(title, "cast", cast)
+    _set_if_blank(title, "crew", crew)
+    _set_if_blank(title, "poster_url", poster_url)
+    title.metadata_json = _merge_metadata_json(title.metadata_json, core_metadata or {})
+    return title, created
 
 
 def poster_urls_for_titles(db: Session, title_ids: list[int]) -> dict[int, str]:
@@ -175,6 +332,126 @@ def update_title(db: Session, title: Title, payload: TitleUpdate) -> Title:
 def delete_title(db: Session, title: Title) -> None:
     db.delete(title)
     db.commit()
+
+
+def annotate_series_hierarchy_preview(
+    db: Session, preview: SeriesHierarchyPreview
+) -> SeriesHierarchyPreview:
+    series = _find_title_for_hierarchy(
+        db,
+        external_id=preview.external_id,
+        slug=preview.slug,
+        parent_id=None,
+    )
+    preview.existing_title_id = series.id if series else None
+    preview.action = "update" if series else "create"
+    series_parent_id = series.id if series else None
+
+    for season in preview.seasons:
+        existing_season = (
+            _find_title_for_hierarchy(
+                db,
+                external_id=season.external_id,
+                slug=season.slug,
+                parent_id=series_parent_id,
+            )
+            if series_parent_id is not None
+            else None
+        )
+        season.existing_title_id = existing_season.id if existing_season else None
+        season.action = "update" if existing_season else "create"
+        season_parent_id = existing_season.id if existing_season else None
+        for episode in season.episodes:
+            existing_episode = (
+                _find_title_for_hierarchy(
+                    db,
+                    external_id=episode.external_id,
+                    slug=episode.slug,
+                    parent_id=season_parent_id,
+                )
+                if season_parent_id is not None
+                else None
+            )
+            episode.existing_title_id = existing_episode.id if existing_episode else None
+            episode.action = "update" if existing_episode else "create"
+    return preview
+
+
+def apply_series_hierarchy_preview(
+    db: Session, preview: SeriesHierarchyPreview
+) -> SeriesHierarchyApplyResult:
+    created_count = 0
+    updated_count = 0
+
+    series, created = _upsert_hierarchy_title(
+        db,
+        external_id=preview.external_id,
+        slug=preview.slug,
+        name=preview.name,
+        title_type=TitleType.SERIES,
+        parent_id=None,
+        synopsis=preview.synopsis,
+        short_description=preview.short_description,
+        release_date_value=preview.release_date,
+        release_year=preview.release_year,
+        rating=preview.rating,
+        genres=preview.genres,
+        runtime_minutes=preview.runtime_minutes,
+        studio=preview.studio,
+        cast=preview.cast,
+        crew=preview.crew,
+        poster_url=preview.poster_url,
+        core_metadata=preview.core_metadata,
+    )
+    created_count += 1 if created else 0
+    updated_count += 0 if created else 1
+
+    for season_preview in preview.seasons:
+        season, created = _upsert_hierarchy_title(
+            db,
+            external_id=season_preview.external_id,
+            slug=season_preview.slug,
+            name=season_preview.name,
+            title_type=TitleType.SEASON,
+            parent_id=series.id,
+            season_number=season_preview.season_number,
+            synopsis=season_preview.synopsis,
+            release_date_value=season_preview.release_date,
+            poster_url=season_preview.poster_url,
+            core_metadata=season_preview.core_metadata,
+        )
+        created_count += 1 if created else 0
+        updated_count += 0 if created else 1
+
+        for episode_preview in season_preview.episodes:
+            episode, created = _upsert_hierarchy_title(
+                db,
+                external_id=episode_preview.external_id,
+                slug=episode_preview.slug,
+                name=episode_preview.name,
+                title_type=TitleType.EPISODE,
+                parent_id=season.id,
+                season_number=episode_preview.season_number,
+                episode_number=episode_preview.episode_number,
+                synopsis=episode_preview.synopsis,
+                release_date_value=episode_preview.release_date,
+                runtime_minutes=episode_preview.runtime_minutes,
+                poster_url=episode_preview.still_url,
+                core_metadata=episode_preview.core_metadata,
+            )
+            created_count += 1 if created else 0
+            updated_count += 0 if created else 1
+
+    db.commit()
+    db.refresh(series)
+    read = get_title_read(db, series.id) or TitleRead.model_validate(series)
+    return SeriesHierarchyApplyResult(
+        series=read,
+        season_count=preview.season_count,
+        episode_count=preview.episode_count,
+        created_count=created_count,
+        updated_count=updated_count,
+    )
 
 
 def build_title_tree(db: Session, root_id: int | None = None) -> list[Title]:

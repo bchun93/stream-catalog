@@ -53,9 +53,11 @@ class Title(Base):
     studio: Mapped[str | None] = mapped_column(String(500), nullable=True)
     cast: Mapped[str | None] = mapped_column(Text, nullable=True)
     crew: Mapped[str | None] = mapped_column(Text, nullable=True)
+    eidr: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     external_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metadata_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     poster_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )
