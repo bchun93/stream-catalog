@@ -466,6 +466,15 @@ def _season_display_name(series_name: str, season_number: int) -> str:
     return f"{series_name}: {season_label}"
 
 
+def _first_logo_basename(logos: list[dict]) -> str | None:
+    """First English/neutral TMDB logo filename for core metadata."""
+    for image in _rank_images_english_first(logos):
+        basename = _basename(image.get("file_path"))
+        if basename:
+            return basename
+    return None
+
+
 def _tmdb_core_metadata(
     *,
     data: dict,
@@ -480,6 +489,7 @@ def _tmdb_core_metadata(
     studio: str | None,
     genres: str | None,
     credits: dict,
+    logos: list[dict] | None = None,
 ) -> dict[str, str | None]:
     values = _requirements_template()
     values["content_type"] = "series" if media_type == "tv" else "movie"
@@ -526,6 +536,7 @@ def _tmdb_core_metadata(
     values["hero_image"] = _basename(backdrop_path)
     values["still_frame"] = _basename(backdrop_path)
     values["box_art"] = _basename(poster_path)
+    values["logo"] = _first_logo_basename(logos or [])
 
     if media_type == "movie":
         values["movie_ref"] = f"tmdb_movie_{data.get('id')}"
@@ -682,6 +693,11 @@ async def fetch_metadata(
     )
     path = f"/{media_type}/{tmdb_id}"
     data = await _get(path, append_to_response=append)
+    images_data = await _get(
+        f"/{media_type}/{tmdb_id}/images",
+        **_tmdb_image_params(),
+    )
+    logos = images_data.get("logos") or []
 
     name = data.get("title") or data.get("name") or "Unknown"
     date_str = data.get("release_date") or data.get("first_air_date")
@@ -735,6 +751,7 @@ async def fetch_metadata(
             studio=_studios(data, media_type),
             genres=genres or None,
             credits=credits,
+            logos=logos,
         ),
         artwork=[],
     )
