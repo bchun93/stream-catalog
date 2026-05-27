@@ -172,15 +172,13 @@ def _persist_artwork(db: Session, title_id: int, items: list[ArtworkItem]) -> li
 
 
 def list_artwork_assets(db: Session, title_id: int) -> list[MediaAsset]:
-    return (
+    assets = (
         db.query(MediaAsset)
-        .filter(
-            MediaAsset.title_id == title_id,
-            MediaAsset.asset_type.in_(_ARTWORK_TYPES),
-        )
-        .order_by(MediaAsset.asset_type, MediaAsset.updated_at.desc())
+        .filter(MediaAsset.title_id == title_id)
+        .order_by(MediaAsset.updated_at.desc())
         .all()
     )
+    return [asset for asset in assets if asset.asset_type in _ARTWORK_TYPES]
 
 
 def save_artwork_selection(

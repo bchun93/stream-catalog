@@ -116,8 +116,8 @@ def _upgrade_postgres_enums_to_varchar(conn) -> None:
             )
         )
 
-    for enum_name in _PG_ENUM_TYPES:
-        conn.execute(text(f"DROP TYPE IF EXISTS {enum_name}"))
+    # Leave legacy enum types in place after column migration. Dropping enum types can
+    # abort the whole startup migration if any old dependency remains on Neon.
 
 
 def _ensure_pg_enum_values(conn) -> None:
