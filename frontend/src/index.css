@@ -874,6 +874,88 @@ tr:hover td {
   color: var(--accent);
 }
 
+.metadata-config-card {
+  padding: 1rem;
+}
+
+.metadata-config-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.75rem;
+}
+
+.metadata-config-tabs .title-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+}
+
+.metadata-config-tabs .title-tab span {
+  color: var(--accent);
+  font-size: 0.78rem;
+}
+
+.metadata-config-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.metadata-config-toolbar h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.metadata-config-toolbar p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.metadata-config-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.metadata-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.65rem;
+}
+
+.metadata-field-toggle {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+}
+
+.metadata-field-toggle input {
+  margin-top: 0.25rem;
+}
+
+.metadata-field-toggle strong,
+.metadata-field-toggle code {
+  display: block;
+}
+
+.metadata-field-toggle code {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+}
+
 /* Artwork tab */
 .artwork-panel {
   min-height: 220px;

@@ -9,6 +9,8 @@ import type {
   IngestManifest,
   IngestManifestValidateResponse,
   MediaAsset,
+  MetadataConfig,
+  MetadataDisplaySettings,
   MetadataSearchResult,
   SeriesHierarchyApplyResult,
   SeriesHierarchyPreview,
@@ -289,6 +291,15 @@ export type ApiDiagnostics = {
 
 export const diagnosticsApi = {
   get: () => requestWithRetry<ApiDiagnostics>("/diagnostics"),
+};
+
+export const metadataConfigApi = {
+  get: () => requestWithRetry<MetadataConfig>("/metadata-config"),
+  update: (settings: MetadataDisplaySettings) =>
+    request<MetadataConfig>("/metadata-config", {
+      method: "PUT",
+      body: JSON.stringify({ settings }),
+    }),
 };
 
 export const metadataApi = {

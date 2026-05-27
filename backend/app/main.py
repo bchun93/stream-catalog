@@ -13,7 +13,15 @@ from app.config import settings
 from app.database import Base, SessionLocal, check_database, engine
 from app.middleware.cors import EchoOriginCORSMiddleware
 from app.migrate import run_migrations
-from app.routers import artwork_ai, diagnostics, ingest, media_assets, metadata, titles
+from app.routers import (
+    artwork_ai,
+    diagnostics,
+    ingest,
+    media_assets,
+    metadata,
+    metadata_config,
+    titles,
+)
 from app.seed import seed
 
 
@@ -117,6 +125,7 @@ api = settings.api_prefix
 app.include_router(diagnostics.router, prefix=api)
 app.include_router(ingest.router, prefix=api)
 app.include_router(metadata.router, prefix=api)
+app.include_router(metadata_config.router, prefix=api)
 app.include_router(titles.router, prefix=api)
 app.include_router(artwork_ai.router, prefix=api)
 app.include_router(media_assets.router, prefix=api)

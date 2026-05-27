@@ -9,6 +9,7 @@ from app.models.artwork_ai import ArtworkRole, ArtworkTrainingDecision
 from app.models.ingest_job import IngestItemStatus, IngestJobStatus
 from app.models.media_asset import AssetStatus, AssetType
 from app.models.title import TitleStatus, TitleType
+from app.services.metadata_config_service import CONFIG_KEY, default_settings
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,29 @@ def _seed_default_ingest_manifest(conn) -> None:
             "description": "Starter OTT ingest rules for common file naming conventions.",
             "rules_json": json.dumps(default_rules),
             "enabled": True,
+        },
+    )
+
+
+def _seed_default_metadata_config(conn) -> None:
+    existing = conn.execute(
+        text("SELECT id FROM metadata_field_configs WHERE key = :key LIMIT 1"),
+        {"key": CONFIG_KEY},
+    ).fetchone()
+    if existing:
+        return
+    conn.execute(
+        text(
+            """
+            INSERT INTO metadata_field_configs
+            (key, settings_json, created_at, updated_at)
+            VALUES
+            (:key, :settings_json, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """
+        ),
+        {
+            "key": CONFIG_KEY,
+            "settings_json": json.dumps(default_settings().model_dump()),
         },
     )
 
@@ -405,6 +429,8 @@ def run_migrations() -> None:
             _ensure_common_indexes(conn)
             if "ingest_manifests" in inspect(conn).get_table_names():
                 _seed_default_ingest_manifest(conn)
+            if "metadata_field_configs" in inspect(conn).get_table_names():
+                _seed_default_metadata_config(conn)
     else:
         with engine.begin() as conn:
             _ensure_title_internal_ids(conn)
@@ -412,3 +438,5 @@ def run_migrations() -> None:
             _ensure_common_indexes(conn)
             if "ingest_manifests" in inspect(conn).get_table_names():
                 _seed_default_ingest_manifest(conn)
+            if "metadata_field_configs" in inspect(conn).get_table_names():
+                _seed_default_metadata_config(conn)

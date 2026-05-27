@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { metadataConfigApi } from "../api/client";
 import { ArtworkTab } from "./ArtworkTab";
 import { MetadataLookup } from "./MetadataLookup";
 import type {
+  MetadataDisplaySettings,
   Title,
   TitleMetadataImport,
   TitleStatus,
@@ -136,6 +138,7 @@ export function TitleForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [metadataApplied, setMetadataApplied] = useState(false);
+  const [metadataSettings, setMetadataSettings] = useState<MetadataDisplaySettings | null>(null);
   const [savedTitleId, setSavedTitleId] = useState<number | undefined>(titleId);
 
   useEffect(() => {
@@ -152,11 +155,24 @@ export function TitleForm({
     setMetadataApplied(false);
   }, [initial?.id, isCreate]);
 
+  useEffect(() => {
+    metadataConfigApi
+      .get()
+      .then((config) => setMetadataSettings(config.settings))
+      .catch(() => setMetadataSettings(null));
+  }, []);
+
   const parentType = allowedParentType(form.title_type);
   const parentOptions = useMemo(
     () => (parentType ? parents.filter((parent) => parent.title_type === parentType) : []),
     [parents, parentType]
   );
+  const visibleCoreMetadataFields = useMemo(() => {
+    const configuredKeys = metadataSettings?.[form.title_type as TitleType];
+    if (!configuredKeys) return CORE_METADATA_FIELDS;
+    const selected = new Set(configuredKeys);
+    return CORE_METADATA_FIELDS.filter((field) => selected.has(field.key));
+  }, [metadataSettings, form.title_type]);
 
   useEffect(() => {
     if (!form.parent_id) return;
@@ -404,7 +420,7 @@ export function TitleForm({
                 TMDB import maps matching fields automatically; unmatched fields remain blank.
               </p>
               <div className="form-grid">
-                {CORE_METADATA_FIELDS.map((field) => (
+                {visibleCoreMetadataFields.map((field) => (
                   <label key={field.key} className={field.multiline ? "form-span-2" : undefined}>
                     {field.label}
                     {field.multiline ? (
@@ -421,6 +437,11 @@ export function TitleForm({
                     )}
                   </label>
                 ))}
+                {visibleCoreMetadataFields.length === 0 && (
+                  <p className="empty form-span-2">
+                    No Core metadata fields are configured for this content type.
+                  </p>
+                )}
               </div>
             </div>
           </div>

@@ -6,6 +6,15 @@ export type TitleStatus =
   | "published"
   | "archived";
 
+export type MetadataDisplaySettings = Record<TitleType, string[]>;
+
+export interface MetadataConfig {
+  key: string;
+  settings: MetadataDisplaySettings;
+  defaults: MetadataDisplaySettings;
+  updated_at?: string | null;
+}
+
 export type AssetType =
   | "video_master"
   | "trailer"

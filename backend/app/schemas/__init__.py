@@ -20,12 +20,20 @@ from app.schemas.artwork_ai import (
     ArtworkTrainingExampleRead,
 )
 from app.schemas.title import TitleCreate, TitleRead, TitleTree, TitleUpdate
+from app.schemas.metadata_config import (
+    MetadataConfigRead,
+    MetadataConfigUpdate,
+    MetadataDisplaySettings,
+)
 
 __all__ = [
     "TitleCreate",
     "TitleRead",
     "TitleUpdate",
     "TitleTree",
+    "MetadataDisplaySettings",
+    "MetadataConfigRead",
+    "MetadataConfigUpdate",
     "MediaAssetCreate",
     "MediaAssetRead",
     "MediaAssetUpdate",
