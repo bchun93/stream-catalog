@@ -1,11 +1,15 @@
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
+import httpx
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_db
+from app.models.media_asset import MediaAsset
 from app.models.title import Title, TitleType
 from app.schemas.artwork import SaveArtworkRequest
 from app.schemas.media_asset import MediaAssetRead
@@ -20,6 +24,11 @@ from app.services.artwork_service import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/titles", tags=["titles"])
+
+
+def _download_filename(value: str | None, fallback: str) -> str:
+    raw = (value or fallback).split("/")[-1].strip() or fallback
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", raw)[:180]
 
 
 def _title_to_tree(title) -> TitleTree:
@@ -103,6 +112,42 @@ def list_title_artwork(
         raise HTTPException(status_code=404, detail="Title not found")
     assets = list_artwork_assets(db, title_id)
     return [enrich_asset_read(a) for a in assets]
+
+
+@router.get("/{title_id}/artwork/{asset_id}/download")
+def download_title_artwork(
+    title_id: int,
+    asset_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
+    title = title_service.get_title(db, title_id)
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    asset = (
+        db.query(MediaAsset)
+        .filter(MediaAsset.id == asset_id, MediaAsset.title_id == title_id)
+        .first()
+    )
+    if not asset:
+        raise HTTPException(status_code=404, detail="Artwork asset not found")
+    try:
+        with httpx.Client(timeout=30.0, follow_redirects=True, trust_env=False) as client:
+            resp = client.get(asset.storage_uri)
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not download artwork source: {exc}",
+        ) from exc
+
+    filename = _download_filename(asset.filename, f"artwork-{asset.id}.jpg")
+    media_type = asset.mime_type or resp.headers.get("content-type") or "application/octet-stream"
+    return Response(
+        content=resp.content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{title_id}/artwork", response_model=list[MediaAssetRead])

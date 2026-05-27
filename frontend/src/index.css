@@ -1206,6 +1206,13 @@ tr:hover td {
   font-size: 0.72rem;
 }
 
+.artwork-download-btn {
+  display: inline-flex;
+  margin-top: 0.65rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.78rem;
+}
+
 .artwork-training-upload {
   margin-top: 1rem;
   display: grid;

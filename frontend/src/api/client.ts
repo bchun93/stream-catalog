@@ -193,6 +193,8 @@ export const titlesApi = {
     requestWithRetry<MediaAsset[]>(`/titles/${id}/artwork/sync`, {
       method: "POST",
     }).then(filterArtworkAssets),
+  artworkDownloadUrl: (titleId: number, assetId: number) =>
+    `${API}/titles/${titleId}/artwork/${assetId}/download`,
   saveArtwork: (id: number, items: ArtworkItem[]) =>
     request<MediaAsset[]>(`/titles/${id}/artwork`, {
       method: "POST",

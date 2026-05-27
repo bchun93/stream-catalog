@@ -167,6 +167,7 @@ function ArtworkStrip({
   selected,
   onToggle,
   predictions,
+  downloadUrlFor,
 }: {
   items: DisplayItem[];
   mode: "catalog" | "browse";
@@ -174,6 +175,7 @@ function ArtworkStrip({
   selected: Set<string>;
   onToggle?: (uri: string) => void;
   predictions?: Map<string, ArtworkPrediction>;
+  downloadUrlFor?: (catalogId: number) => string;
 }) {
   if (items.length === 0) return null;
 
@@ -265,6 +267,14 @@ function ArtworkStrip({
                           </li>
                         ))}
                       </ul>
+                      {mode === "catalog" && item.catalogId && downloadUrlFor && (
+                        <a
+                          className="btn btn-ghost artwork-download-btn"
+                          href={downloadUrlFor(item.catalogId)}
+                        >
+                          Download
+                        </a>
+                      )}
                     </figcaption>
                   </figure>
                 );
@@ -545,6 +555,9 @@ export function ArtworkTab({
             mode="catalog"
             savedUris={savedUris}
             selected={selected}
+            downloadUrlFor={(assetId) =>
+              titleId ? titlesApi.artworkDownloadUrl(titleId, assetId) : "#"
+            }
           />
         )}
       </div>
