@@ -34,16 +34,6 @@ function artworkKey(item: { storage_uri: string }): string {
   return item.storage_uri;
 }
 
-const CORE_ARTWORK_LABELS: Record<string, string> = {
-  h_poster: "Horizontal poster",
-  still_frame: "Still frame",
-  v_poster: "Vertical poster",
-  logo: "Logo",
-  hero_image: "Hero image",
-  hero_image_vertical: "Hero image vertical",
-  box_art: "Box art",
-};
-
 const ARTWORK_ROLE_LABELS: Record<ArtworkRole, string> = {
   vertical_poster: "Vertical poster",
   box_art: "Box art",
@@ -96,53 +86,6 @@ function normalizeFetchedArtwork(items: ArtworkItem[]): ArtworkItem[] {
       },
     };
   });
-}
-
-function uriBasename(uri: string): string {
-  return uri.split("?")[0].replace(/\/+$/, "").split("/").pop() ?? uri;
-}
-
-function metadataArtworkLabels(raw?: string | null): Map<string, string[]> {
-  const byFilename = new Map<string, string[]>();
-  if (!raw) return byFilename;
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    for (const [key, label] of Object.entries(CORE_ARTWORK_LABELS)) {
-      const value = parsed[key];
-      if (typeof value !== "string" || !value.trim()) continue;
-      const filename = value.trim().split("/").pop() ?? value.trim();
-      const labels = byFilename.get(filename) ?? [];
-      if (!labels.includes(label)) labels.push(label);
-      byFilename.set(filename, labels);
-    }
-  } catch {
-    return byFilename;
-  }
-  return byFilename;
-}
-
-function filterToMetadataArtwork(
-  items: ArtworkItem[],
-  metadataJson?: string | null
-): ArtworkItem[] {
-  const labelsByFilename = metadataArtworkLabels(metadataJson);
-  if (labelsByFilename.size === 0) return items;
-  const selected = new Map<string, ArtworkItem>();
-  for (const item of items) {
-    const labels = labelsByFilename.get(uriBasename(item.storage_uri));
-    if (!labels || selected.has(item.storage_uri)) continue;
-    const label = preferredArtworkLabel(item, labels);
-    selected.set(item.storage_uri, {
-      ...item,
-      asset_type: "poster",
-      notes: `source:tmdb; ${label}${item.language && item.language !== "en" ? `; lang:${item.language}` : ""}`,
-      specs: {
-        ...(item.specs ?? {}),
-        label,
-      },
-    });
-  }
-  return [...selected.values()];
 }
 
 function assetToArtworkItem(asset: MediaAsset): ArtworkItem {
@@ -292,7 +235,6 @@ function ArtworkStrip({
 export function ArtworkTab({
   titleId,
   externalId,
-  metadataJson,
   visible = true,
   onSaved,
 }: ArtworkTabProps) {
@@ -318,8 +260,8 @@ export function ArtworkTab({
   );
 
   const savedItems: DisplayItem[] = useMemo(
-    () => filterToMetadataArtwork(savedArtworkItems, metadataJson),
-    [metadataJson, savedArtworkItems]
+    () => savedArtworkItems,
+    [savedArtworkItems]
   );
 
   const savedUris = useMemo(
