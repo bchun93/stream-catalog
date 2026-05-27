@@ -156,7 +156,9 @@ def _persist_artwork(db: Session, title_id: int, items: list[ArtworkItem]) -> li
         specs = item.specs
         asset = MediaAsset(
             title_id=title_id,
-            asset_type=item.asset_type,
+            # Store TMDB image artwork with the most broadly supported DB enum value.
+            # The actual role (hero, still, logo, etc.) remains in notes/specs.
+            asset_type=AssetType.POSTER,
             status=AssetStatus.READY,
             filename=item.filename,
             mime_type=item.mime_type,

@@ -42,6 +42,19 @@ function friendlySkippedArtworkMessage(count: number): string {
   );
 }
 
+function catalogSafeArtworkType(): "poster" {
+  // Some deployed databases still have legacy enum constraints. Store selected
+  // image artwork under the stable poster type and preserve its role in specs.
+  return "poster";
+}
+
+function artworkMetadataJson(item: ArtworkItem): string {
+  return JSON.stringify({
+    notes: item.notes ?? null,
+    specs: item.specs ?? {},
+  });
+}
+
 function buildHeaders(init?: RequestInit): HeadersInit {
   const headers = new Headers(init?.headers);
   const method = (init?.method ?? "GET").toUpperCase();
@@ -202,7 +215,7 @@ export const titlesApi = {
       method: "POST",
       body: JSON.stringify({
         items: items.map((item) => ({
-          asset_type: item.asset_type,
+          asset_type: catalogSafeArtworkType(),
           storage_uri: item.storage_uri,
           filename: item.filename,
           mime_type: item.mime_type ?? "image/jpeg",
@@ -236,7 +249,7 @@ export const titlesApi = {
               method: "POST",
               body: JSON.stringify({
                 title_id: id,
-                asset_type: item.asset_type,
+                asset_type: catalogSafeArtworkType(),
                 status: "ready",
                 filename: item.filename,
                 mime_type: item.mime_type ?? "image/jpeg",
@@ -244,7 +257,7 @@ export const titlesApi = {
                 language: item.language ?? null,
                 resolution: item.resolution ?? null,
                 notes: item.notes ?? null,
-                metadata_json: item.specs ? JSON.stringify(item.specs) : null,
+                metadata_json: artworkMetadataJson(item),
               }),
             });
             created += 1;

@@ -1,6 +1,7 @@
 """Resolve a display poster URL for titles — skips invalid/broken image links."""
 
 import re
+import json
 
 from app.models.media_asset import AssetType, MediaAsset
 
@@ -14,6 +15,14 @@ _TYPE_PRIORITY = {
     AssetType.POSTER: 0,
     AssetType.SEASON_POSTER: 1,
     AssetType.THUMBNAIL: 2,
+}
+
+_NON_POSTER_LABELS = {
+    "hero image",
+    "horizontal poster",
+    "still frame",
+    "logo",
+    "cast photo",
 }
 
 _TMDB_IMAGE_RE = re.compile(
@@ -36,12 +45,37 @@ def is_usable_poster_url(url: str | None) -> bool:
     return normalized.startswith(("http://", "https://"))
 
 
+def _artwork_label(asset: MediaAsset) -> str | None:
+    if asset.metadata_json:
+        try:
+            data = json.loads(asset.metadata_json)
+            specs = data.get("specs") if isinstance(data, dict) else None
+            label = specs.get("label") if isinstance(specs, dict) else None
+            if isinstance(label, str) and label.strip():
+                return label.strip().lower()
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    if asset.notes:
+        for part in asset.notes.split(";"):
+            text = part.strip().lower()
+            if text and not text.startswith(("source:", "locale:", "lang:")):
+                return text
+    return None
+
+
+def _is_poster_candidate(asset: MediaAsset) -> bool:
+    if asset.asset_type not in _POSTER_TYPES:
+        return False
+    label = _artwork_label(asset)
+    return label not in _NON_POSTER_LABELS
+
+
 def pick_best_poster_uri(assets: list[MediaAsset]) -> str | None:
     """Choose the best poster-like asset; ignore invalid TMDB paths."""
     candidates = [
         a
         for a in assets
-        if a.asset_type in _POSTER_TYPES and is_usable_poster_url(a.storage_uri)
+        if _is_poster_candidate(a) and is_usable_poster_url(a.storage_uri)
     ]
     if not candidates:
         return None
