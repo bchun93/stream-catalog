@@ -21,7 +21,16 @@ function displayInternalId(title: Pick<Title, "internal_id" | "slug">): string {
   return title.internal_id || "Pending";
 }
 
+function stripHierarchyPrefix(name: string): string {
+  const marker = ": Episode ";
+  if (!name.includes(marker)) return name;
+  const tail = name.split(marker)[1] ?? name;
+  return tail.replace(/^\d+: /, "");
+}
+
 function TitleModalSummary({ title }: { title: Title }) {
+  const displayName =
+    title.title_type === "episode" ? stripHierarchyPrefix(title.name) : title.name;
   return (
     <section className="title-modal-summary" aria-label="Title summary">
       {title.poster_url ? (
@@ -38,7 +47,7 @@ function TitleModalSummary({ title }: { title: Title }) {
       )}
       <div className="title-modal-summary-body">
         <div className="title-modal-kicker">Editing Title</div>
-        <h3>{title.name}</h3>
+        <h3>{displayName}</h3>
         <p>{titleMetaLine(title) || "Basic title details"}</p>
         <div className="title-modal-pills">
           <Badge value={title.status} />
@@ -73,6 +82,10 @@ function filterTree(nodes: TitleTree[], search: string, typeFilter: string): Tit
     .filter((node): node is TitleTree => node !== null);
 }
 
+function flattenTitleTree(nodes: TitleTree[]): Title[] {
+  return nodes.flatMap((node) => [node, ...flattenTitleTree(node.children)]);
+}
+
 function titleContextLabel(title: Title): string | null {
   if (title.title_type === "episode" && title.episode_number) {
     return `Episode ${title.episode_number}`;
@@ -81,14 +94,6 @@ function titleContextLabel(title: Title): string | null {
     return title.season_number === 0 ? "Specials" : `Season ${title.season_number}`;
   }
   return title.genres ?? null;
-}
-
-function stripHierarchyPrefix(name: string): string {
-  const episodeMarker = ": Episode ";
-  if (name.includes(episodeMarker)) {
-    return name.split(episodeMarker).slice(1).join(episodeMarker).replace(/^\d+: /, "");
-  }
-  return name;
 }
 
 function displayHierarchyName(
@@ -100,11 +105,8 @@ function displayHierarchyName(
     const label = title.season_number === 0 ? "Specials" : `Season ${title.season_number ?? 1}`;
     return `${seriesName}: ${label}`;
   }
-  if (title.title_type === "episode" && seriesName) {
-    const seasonLabel =
-      seasonNumber === 0 ? "Specials" : `Season ${seasonNumber ?? title.season_number ?? 1}`;
-    const episodeLabel = `Episode ${title.episode_number ?? 1}`;
-    return `${seriesName}: ${seasonLabel}: ${episodeLabel}: ${stripHierarchyPrefix(title.name)}`;
+  if (title.title_type === "episode") {
+    return stripHierarchyPrefix(title.name);
   }
   return title.name;
 }
@@ -222,7 +224,6 @@ function TitleTableRow({
 }
 
 export function TitlesPage() {
-  const [titles, setTitles] = useState<Title[]>([]);
   const [tree, setTree] = useState<TitleTree[]>([]);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -243,15 +244,11 @@ export function TitlesPage() {
 
   const load = useCallback(() => {
     const seq = ++requestSeq.current;
-    const params: Record<string, string> = {};
-    if (debouncedSearch) params.q = debouncedSearch;
-    if (typeFilter) params.title_type = typeFilter;
     setLoading(true);
     setError(null);
-    Promise.all([titlesApi.list(params), titlesApi.tree()])
-      .then(([data, treeData]) => {
+    titlesApi.tree()
+      .then((treeData) => {
         if (seq !== requestSeq.current) return;
-        setTitles(data);
         setTree(treeData);
         setError(null);
       })
@@ -265,7 +262,7 @@ export function TitlesPage() {
         if (seq !== requestSeq.current) return;
         setLoading(false);
       });
-  }, [debouncedSearch, typeFilter]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -303,6 +300,7 @@ export function TitlesPage() {
   };
 
   const filteredTree = filterTree(tree, debouncedSearch, typeFilter);
+  const parentOptions = flattenTitleTree(tree);
   const forceExpanded = Boolean(debouncedSearch || typeFilter);
   const toggleExpanded = (id: number) => {
     setExpandedIds((current) => {
@@ -416,7 +414,7 @@ export function TitlesPage() {
             titleId={editing?.id}
             isCreate={modal === "create"}
             initialTab={formTab}
-            parents={titles.filter((t) => t.id !== editing?.id)}
+            parents={parentOptions.filter((t) => t.id !== editing?.id)}
             onCancel={closeModal}
             onSaved={load}
             onArtworkSaved={load}

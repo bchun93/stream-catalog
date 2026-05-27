@@ -172,17 +172,14 @@ def _season_display_name(series_name: str, season_number: int | None) -> str:
     return f"{series_name}: {season_label}"
 
 
-def _episode_display_name(
-    series_name: str,
-    season_number: int | None,
-    episode_number: int | None,
-    current_name: str,
-) -> str:
-    season_label = "Specials" if season_number == 0 else f"Season {season_number or 1}"
-    episode_label = f"Episode {episode_number or 1}"
-    # Strip a previous hierarchy prefix if this name has already been normalized.
-    title_part = current_name.split(": ")[-1] if ": Episode " in current_name else current_name
-    return f"{series_name}: {season_label}: {episode_label}: {title_part}"
+def _episode_title_name(current_name: str) -> str:
+    text = (current_name or "").strip()
+    if ": Episode " not in text:
+        return text
+    tail = text.split(": Episode ", 1)[1]
+    if ": " not in tail:
+        return text
+    return tail.split(": ", 1)[1].strip() or text
 
 
 def _canonical_hierarchy_name(
@@ -198,16 +195,8 @@ def _canonical_hierarchy_name(
         series = db.query(Title).filter(Title.id == parent_id).first()
         if series:
             return _season_display_name(series.name, season_number)
-    if title_type == TitleType.EPISODE and parent_id is not None:
-        season = db.query(Title).filter(Title.id == parent_id).first()
-        if season:
-            series_name = season.name.split(": Season ", 1)[0].split(": Specials", 1)[0]
-            return _episode_display_name(
-                series_name,
-                season_number if season_number is not None else season.season_number,
-                episode_number,
-                name,
-            )
+    if title_type == TitleType.EPISODE:
+        return _episode_title_name(name)
     return name
 
 

@@ -77,10 +77,20 @@ function metadataImportToCore(meta: TitleMetadataImport): Record<string, string>
   return fallback;
 }
 
+function stripEpisodeHierarchyPrefix(name: string): string {
+  const marker = ": Episode ";
+  if (!name.includes(marker)) return name;
+  const tail = name.split(marker)[1] ?? name;
+  return tail.replace(/^\d+: /, "");
+}
+
 const emptyForm = (initial?: Partial<Title>) => ({
   internal_id: initial?.internal_id ?? "",
   slug: initial?.slug ?? "",
-  name: initial?.name ?? "",
+  name:
+    initial?.title_type === "episode"
+      ? stripEpisodeHierarchyPrefix(initial?.name ?? "")
+      : initial?.name ?? "",
   title_type: initial?.title_type ?? "movie",
   status: initial?.status ?? "draft",
   synopsis: initial?.synopsis ?? "",

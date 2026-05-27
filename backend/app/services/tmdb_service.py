@@ -466,13 +466,6 @@ def _season_display_name(series_name: str, season_number: int) -> str:
     return f"{series_name}: {season_label}"
 
 
-def _episode_display_name(
-    series_name: str, season_number: int, episode_number: int, episode_name: str
-) -> str:
-    season_label = "Specials" if season_number == 0 else f"Season {season_number}"
-    return f"{series_name}: {season_label}: Episode {episode_number}: {episode_name}"
-
-
 def _tmdb_core_metadata(
     *,
     data: dict,
@@ -833,16 +826,13 @@ async def fetch_series_hierarchy_preview(tmdb_id: int) -> SeriesHierarchyPreview
         ):
             episode_number = int(episode.get("episode_number") or 0)
             episode_name = str(episode.get("name") or f"Episode {episode_number}")
-            episode_display_name = _episode_display_name(
-                series_name, season_number, episode_number, episode_name
-            )
             external_id = (
                 f"tmdb:tv:{tmdb_id}:season:{season_number}:episode:{episode_number}"
             )
             episodes.append(
                 EpisodeHierarchyPreview(
                     external_id=external_id,
-                    name=episode_display_name,
+                    name=episode_name,
                     slug=_episode_slug(
                         series_name,
                         season_number,
@@ -859,7 +849,7 @@ async def fetch_series_hierarchy_preview(tmdb_id: int) -> SeriesHierarchyPreview
                         series_id=tmdb_id,
                         season_number=season_number,
                         episode_data=episode,
-                        display_name=episode_display_name,
+                        display_name=episode_name,
                     ),
                 )
             )

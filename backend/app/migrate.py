@@ -272,6 +272,15 @@ def _normalize_hierarchy_names(conn) -> None:
         for row in rows
     }
 
+    def episode_title_name(current_name: str | None, episode_number: int | None) -> str:
+        text_value = str(current_name or f"Episode {episode_number or 1}").strip()
+        if ": Episode " not in text_value:
+            return text_value
+        tail = text_value.split(": Episode ", 1)[1]
+        if ": " not in tail:
+            return text_value
+        return tail.split(": ", 1)[1].strip() or text_value
+
     for row in rows:
         title_id, current_name, raw_type, parent_id, season_number, episode_number = row
         title_type = str(raw_type).lower() if raw_type is not None else ""
@@ -300,28 +309,7 @@ def _normalize_hierarchy_names(conn) -> None:
             season_label = "Specials" if season_number == 0 else f"Season {season_number or 1}"
             expected = f"{parent['name']}: {season_label}"
         elif title_type == "episode":
-            season = parent
-            series = by_id.get(season.get("parent_id"))
-            if series is None and season.get("parent_id") is not None:
-                series_row = conn.execute(
-                    text("SELECT id, name, title_type, parent_id, season_number FROM titles WHERE id = :id"),
-                    {"id": season["parent_id"]},
-                ).fetchone()
-                if series_row:
-                    series = {
-                        "id": series_row[0],
-                        "name": series_row[1],
-                        "title_type": str(series_row[2]).lower() if series_row[2] is not None else "",
-                        "parent_id": series_row[3],
-                        "season_number": series_row[4],
-                    }
-                    by_id[series_row[0]] = series
-            if not series:
-                continue
-            season_num = season_number if season_number is not None else season.get("season_number")
-            season_label = "Specials" if season_num == 0 else f"Season {season_num or 1}"
-            title_part = str(current_name or "").split(": ")[-1] if ": Episode " in str(current_name or "") else str(current_name or f"Episode {episode_number or 1}")
-            expected = f"{series['name']}: {season_label}: Episode {episode_number or 1}: {title_part}"
+            expected = episode_title_name(current_name, episode_number)
 
         if expected and current_name != expected:
             conn.execute(
