@@ -385,21 +385,23 @@ def poster_urls_for_titles(db: Session, title_ids: list[int]) -> dict[int, str]:
 
 def sync_title_poster_cache(db: Session, title_id: int) -> None:
     """Keep titles.poster_url aligned with the best catalog poster asset."""
-    title = get_title(db, title_id)
-    if not title:
-        return
-    assets = (
-        db.query(MediaAsset)
-        .filter(
-            MediaAsset.title_id == title_id,
-            MediaAsset.asset_type.in_(_POSTER_TYPES),
+    try:
+        title = get_title(db, title_id)
+        if not title:
+            return
+        assets = (
+            db.query(MediaAsset)
+            .filter(MediaAsset.title_id == title_id)
+            .all()
         )
-        .all()
-    )
-    best = pick_best_poster_uri(assets)
-    if best and title.poster_url != best:
-        title.poster_url = best
-        db.commit()
+        poster_assets = [asset for asset in assets if asset.asset_type in _POSTER_TYPES]
+        best = pick_best_poster_uri(poster_assets)
+        if best and title.poster_url != best:
+            title.poster_url = best
+            db.commit()
+    except Exception:
+        logger.exception("Failed to sync poster cache for title %s", title_id)
+        db.rollback()
 
 
 def list_titles_read(

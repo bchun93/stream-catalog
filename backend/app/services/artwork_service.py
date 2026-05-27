@@ -1,6 +1,7 @@
 """Sync TMDB artwork into MediaAsset rows for a title."""
 
 import json
+import logging
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,8 @@ from app.services.tmdb_service import (
     collect_artwork_from_tmdb,
     parse_external_id,
 )
+
+logger = logging.getLogger(__name__)
 
 _TMDB_URI_PREFIX = "https://image.tmdb.org/"
 
@@ -205,8 +208,6 @@ def _replace_tmdb_artwork(
     _clear_tmdb_artwork(db, title_id)
     created = _persist_artwork(db, title_id, items)
     db.commit()
-    for asset in created:
-        db.refresh(asset)
     sync_title_poster_cache(db, title_id)
     return list_artwork_assets(db, title_id)
 
@@ -275,8 +276,6 @@ def save_artwork_selection(
                 "Choose valid TMDB artwork (not placeholder URLs)."
             )
         db.commit()
-        for asset in created:
-            db.refresh(asset)
         sync_title_poster_cache(db, title_id)
     elif existing_assets:
         db.commit()
@@ -288,22 +287,26 @@ async def sync_artwork_for_title(db: Session, title: Title) -> list[MediaAsset]:
     """Fetch TMDB artwork and save only images referenced by core metadata."""
     if not can_fetch_tmdb_artwork_library(title.external_id):
         return []
+    title_id = title.id
+    metadata_json = title.metadata_json
     media_type, tmdb_id = parse_external_id(title.external_id)
     items = await collect_artwork_from_tmdb(media_type, tmdb_id)
-    matching_items = _filter_to_metadata_artwork(items, title.metadata_json)
-    return _replace_tmdb_artwork(db, title.id, matching_items)
+    matching_items = _filter_to_metadata_artwork(items, metadata_json)
+    db.rollback()
+    return _replace_tmdb_artwork(db, title_id, matching_items)
 
 
 async def auto_sync_artwork_for_title(db: Session, title: Title) -> list[MediaAsset]:
     """Sync artwork for a TMDB title using the images API or a reference still/poster URL."""
     if not _is_tmdb_external_id(title.external_id):
         return list_artwork_assets(db, title.id)
+    title_id = title.id
     if can_fetch_tmdb_artwork_library(title.external_id):
         return await sync_artwork_for_title(db, title)
     items = _reference_artwork_items(title)
     if not items:
-        return list_artwork_assets(db, title.id)
-    return _replace_tmdb_artwork(db, title.id, items)
+        return list_artwork_assets(db, title_id)
+    return _replace_tmdb_artwork(db, title_id, items)
 
 
 async def sync_hierarchy_artwork(db: Session, series: Title) -> None:

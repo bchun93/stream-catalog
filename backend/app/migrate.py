@@ -343,48 +343,55 @@ def _normalize_hierarchy_names(conn) -> None:
 
 
 def _ensure_common_indexes(conn) -> None:
-    # Hot path indexes for title list + artwork lookups.
-    conn.execute(
-        text(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_titles_internal_id "
-            "ON titles (internal_id)"
+    inspector = inspect(conn)
+    tables = set(inspector.get_table_names())
+
+    if "titles" in tables:
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_titles_internal_id "
+                "ON titles (internal_id)"
+            )
         )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_titles_updated_at ON titles (updated_at DESC)"
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_titles_updated_at "
+                "ON titles (updated_at DESC)"
+            )
         )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_media_assets_title_type_updated "
-            "ON media_assets (title_id, asset_type, updated_at DESC)"
+    if "media_assets" in tables:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_media_assets_title_type_updated "
+                "ON media_assets (title_id, asset_type, updated_at DESC)"
+            )
         )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_media_assets_storage_uri "
-            "ON media_assets (storage_uri)"
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_media_assets_storage_uri "
+                "ON media_assets (storage_uri)"
+            )
         )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_artwork_training_role "
-            "ON artwork_training_examples (assigned_role)"
+    if "artwork_training_examples" in tables:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_artwork_training_role "
+                "ON artwork_training_examples (assigned_role)"
+            )
         )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_artwork_training_uri "
-            "ON artwork_training_examples (candidate_uri)"
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_artwork_training_uri "
+                "ON artwork_training_examples (candidate_uri)"
+            )
         )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_artwork_classifications_title "
-            "ON artwork_classifications (title_id, confidence DESC)"
+    if "artwork_classifications" in tables:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_artwork_classifications_title "
+                "ON artwork_classifications (title_id, confidence DESC)"
+            )
         )
-    )
 
 
 def run_migrations() -> None:
@@ -427,16 +434,18 @@ def run_migrations() -> None:
             _ensure_title_internal_ids(conn)
             _normalize_hierarchy_names(conn)
             _ensure_common_indexes(conn)
-            if "ingest_manifests" in inspect(conn).get_table_names():
+            tables = set(inspect(conn).get_table_names())
+            if "ingest_manifests" in tables:
                 _seed_default_ingest_manifest(conn)
-            if "metadata_field_configs" in inspect(conn).get_table_names():
+            if "metadata_field_configs" in tables:
                 _seed_default_metadata_config(conn)
     else:
         with engine.begin() as conn:
             _ensure_title_internal_ids(conn)
             _normalize_hierarchy_names(conn)
             _ensure_common_indexes(conn)
-            if "ingest_manifests" in inspect(conn).get_table_names():
+            tables = set(inspect(conn).get_table_names())
+            if "ingest_manifests" in tables:
                 _seed_default_ingest_manifest(conn)
-            if "metadata_field_configs" in inspect(conn).get_table_names():
+            if "metadata_field_configs" in tables:
                 _seed_default_metadata_config(conn)
