@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArtworkTab } from "./ArtworkTab";
 import { MetadataLookup } from "./MetadataLookup";
 import type {
@@ -84,6 +84,12 @@ function stripEpisodeHierarchyPrefix(name: string): string {
   return tail.replace(/^\d+: /, "");
 }
 
+function allowedParentType(titleType: string): TitleType | null {
+  if (titleType === "season") return "series";
+  if (titleType === "episode") return "season";
+  return null;
+}
+
 const emptyForm = (initial?: Partial<Title>) => ({
   internal_id: initial?.internal_id ?? "",
   slug: initial?.slug ?? "",
@@ -145,6 +151,18 @@ export function TitleForm({
     setError(null);
     setMetadataApplied(false);
   }, [initial?.id, isCreate]);
+
+  const parentType = allowedParentType(form.title_type);
+  const parentOptions = useMemo(
+    () => (parentType ? parents.filter((parent) => parent.title_type === parentType) : []),
+    [parents, parentType]
+  );
+
+  useEffect(() => {
+    if (!form.parent_id) return;
+    if (parentOptions.some((parent) => String(parent.id) === form.parent_id)) return;
+    setForm((f) => ({ ...f, parent_id: "" }));
+  }, [form.parent_id, parentOptions]);
 
   const set = (key: string, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -352,9 +370,12 @@ export function TitleForm({
               <select
                 value={form.parent_id}
                 onChange={(e) => set("parent_id", e.target.value)}
+                disabled={!parentType}
               >
-                <option value="">— None —</option>
-                {parents.map((p) => (
+                <option value="">
+                  {parentType ? `— Select ${parentType} —` : "— No parent —"}
+                </option>
+                {parentOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.title_type})
                   </option>

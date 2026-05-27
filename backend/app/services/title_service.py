@@ -49,6 +49,41 @@ def _ensure_internal_ids(db: Session, titles: list[Title]) -> bool:
     return changed
 
 
+def _allowed_parent_type(title_type: TitleType | str) -> TitleType | None:
+    value = title_type.value if isinstance(title_type, TitleType) else str(title_type)
+    if value == TitleType.SEASON.value:
+        return TitleType.SERIES
+    if value == TitleType.EPISODE.value:
+        return TitleType.SEASON
+    return None
+
+
+def _validate_parent_link(
+    db: Session,
+    *,
+    title_type: TitleType | str,
+    parent_id: int | None,
+    title_id: int | None = None,
+) -> None:
+    allowed_type = _allowed_parent_type(title_type)
+    type_value = title_type.value if isinstance(title_type, TitleType) else str(title_type)
+    if allowed_type is None:
+        if parent_id is not None:
+            raise ValueError(f"{type_value.capitalize()} titles cannot have a parent title.")
+        return
+    if parent_id is None:
+        raise ValueError(f"{type_value.capitalize()} titles require a {allowed_type.value} parent.")
+    if title_id is not None and parent_id == title_id:
+        raise ValueError("A title cannot be its own parent.")
+    parent = db.query(Title).filter(Title.id == parent_id).first()
+    if not parent:
+        raise ValueError("Parent title not found.")
+    if parent.title_type != allowed_type:
+        raise ValueError(
+            f"{type_value.capitalize()} titles can only use {allowed_type.value} titles as parents."
+        )
+
+
 def list_titles(
     db: Session,
     *,
@@ -439,7 +474,13 @@ def get_title_read(db: Session, title_id: int) -> TitleRead | None:
 
 
 def create_title(db: Session, payload: TitleCreate) -> Title:
-    title = Title(**payload.model_dump(), internal_id=_generate_unique_internal_id(db))
+    data = payload.model_dump()
+    _validate_parent_link(
+        db,
+        title_type=data["title_type"],
+        parent_id=data.get("parent_id"),
+    )
+    title = Title(**data, internal_id=_generate_unique_internal_id(db))
     db.add(title)
     db.commit()
     db.refresh(title)
@@ -448,7 +489,14 @@ def create_title(db: Session, payload: TitleCreate) -> Title:
 
 def update_title(db: Session, title: Title, payload: TitleUpdate) -> Title:
     _ensure_internal_id(db, title)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    _validate_parent_link(
+        db,
+        title_type=data.get("title_type", title.title_type),
+        parent_id=data.get("parent_id", title.parent_id),
+        title_id=title.id,
+    )
+    for key, value in data.items():
         setattr(title, key, value)
     db.commit()
     db.refresh(title)

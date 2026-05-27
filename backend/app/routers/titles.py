@@ -96,6 +96,8 @@ def create_title(
         return read or TitleRead.model_validate(title)
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         logger.exception("create_title failed")
         raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
@@ -207,7 +209,10 @@ def update_title(
     title = title_service.get_title(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
-    title_service.update_title(db, title, payload)
+    try:
+        title_service.update_title(db, title, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     read = title_service.get_title_read(db, title_id)
     return read or TitleRead.model_validate(title)
 
