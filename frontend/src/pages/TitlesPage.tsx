@@ -83,9 +83,37 @@ function titleContextLabel(title: Title): string | null {
   return title.genres ?? null;
 }
 
+function stripHierarchyPrefix(name: string): string {
+  const episodeMarker = ": Episode ";
+  if (name.includes(episodeMarker)) {
+    return name.split(episodeMarker).slice(1).join(episodeMarker).replace(/^\d+: /, "");
+  }
+  return name;
+}
+
+function displayHierarchyName(
+  title: Title,
+  seriesName?: string,
+  seasonNumber?: number | null
+): string {
+  if (title.title_type === "season" && seriesName) {
+    const label = title.season_number === 0 ? "Specials" : `Season ${title.season_number ?? 1}`;
+    return `${seriesName}: ${label}`;
+  }
+  if (title.title_type === "episode" && seriesName) {
+    const seasonLabel =
+      seasonNumber === 0 ? "Specials" : `Season ${seasonNumber ?? title.season_number ?? 1}`;
+    const episodeLabel = `Episode ${title.episode_number ?? 1}`;
+    return `${seriesName}: ${seasonLabel}: ${episodeLabel}: ${stripHierarchyPrefix(title.name)}`;
+  }
+  return title.name;
+}
+
 function TitleTableRow({
   node,
   depth = 0,
+  seriesName,
+  seasonNumber,
   opening,
   expandedIds,
   forceExpanded,
@@ -95,6 +123,8 @@ function TitleTableRow({
 }: {
   node: TitleTree;
   depth?: number;
+  seriesName?: string;
+  seasonNumber?: number | null;
   opening: boolean;
   expandedIds: Set<number>;
   forceExpanded: boolean;
@@ -105,6 +135,11 @@ function TitleTableRow({
   const hasChildren = node.children.length > 0;
   const expanded = hasChildren && (forceExpanded || expandedIds.has(node.id));
   const context = titleContextLabel(node);
+  const displayName = displayHierarchyName(node, seriesName, seasonNumber);
+  const childSeriesName =
+    node.title_type === "series" ? node.name : seriesName;
+  const childSeasonNumber =
+    node.title_type === "season" ? node.season_number : seasonNumber;
 
   return (
     <>
@@ -128,7 +163,7 @@ function TitleTableRow({
               </div>
             )}
             <div className="title-row-text">
-              <strong>{node.name}</strong>
+              <strong>{displayName}</strong>
               {context && <div className="title-row-genres">{context}</div>}
             </div>
           </div>
@@ -172,6 +207,8 @@ function TitleTableRow({
               key={child.id}
               node={child}
               depth={depth + 1}
+              seriesName={childSeriesName}
+              seasonNumber={childSeasonNumber}
               opening={opening}
               expandedIds={expandedIds}
               forceExpanded={forceExpanded}
