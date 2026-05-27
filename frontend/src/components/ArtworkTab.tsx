@@ -160,6 +160,8 @@ function assetToArtworkItem(asset: MediaAsset): ArtworkItem {
 
 type DisplayItem = ArtworkItem & { catalogId?: number };
 
+const SAVED_ARTWORK_CACHE = new Map<number, MediaAsset[]>();
+
 function ArtworkStrip({
   items,
   mode,
@@ -345,10 +347,15 @@ export function ArtworkTab({
       setSaved([]);
       return [];
     }
-    setCatalogLoading(true);
+    const cached = SAVED_ARTWORK_CACHE.get(titleId);
+    if (cached) {
+      setSaved(cached);
+    }
+    setCatalogLoading(!cached);
     setError(null);
     try {
       const list = await titlesApi.listArtwork(titleId);
+      SAVED_ARTWORK_CACHE.set(titleId, list);
       setSaved(list);
       return list;
     } catch (e) {
@@ -433,7 +440,9 @@ export function ArtworkTab({
     try {
       const response = await artworkAiApi.autoAssign(titleId);
       applyPredictions(response.predictions);
-      setSaved(filterArtworkAssets(response.assets));
+      const artworkOnly = filterArtworkAssets(response.assets);
+      SAVED_ARTWORK_CACHE.set(titleId, artworkOnly);
+      setSaved(artworkOnly);
       setSuccess(
         `AI auto-assigned ${response.saved_count} high-confidence artwork asset${
           response.saved_count === 1 ? "" : "s"
@@ -482,6 +491,7 @@ export function ArtworkTab({
     try {
       const stored = await titlesApi.saveArtwork(titleId, items);
       const artworkOnly = filterArtworkAssets(stored);
+      SAVED_ARTWORK_CACHE.set(titleId, artworkOnly);
       setSaved(artworkOnly);
       setSelected(new Set());
       setSuccess(
