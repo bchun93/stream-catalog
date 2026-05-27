@@ -17,9 +17,9 @@ from app.schemas.title import TitleCreate, TitleRead, TitleTree, TitleUpdate
 from app.services import title_service
 from app.services.artwork_metadata import enrich_asset_read
 from app.services.artwork_service import (
+    auto_sync_artwork_for_title,
     list_artwork_assets,
     save_artwork_selection,
-    sync_artwork_for_title,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ def get_title_tree(
 
 
 @router.post("", response_model=TitleRead, status_code=201)
-def create_title(
+async def create_title(
     payload: TitleCreate,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
@@ -92,6 +92,8 @@ def create_title(
         if existing:
             raise HTTPException(status_code=409, detail="Slug already exists")
         title = title_service.create_title(db, payload)
+        if title.external_id and title.external_id.startswith("tmdb:"):
+            await auto_sync_artwork_for_title(db, title)
         read = title_service.get_title_read(db, title.id)
         return read or TitleRead.model_validate(title)
     except HTTPException:
@@ -183,7 +185,7 @@ async def sync_title_artwork(
             status_code=400,
             detail="Title has no TMDB external_id — import metadata first",
         )
-    assets = await sync_artwork_for_title(db, title)
+    assets = await auto_sync_artwork_for_title(db, title)
     return [enrich_asset_read(a) for a in assets]
 
 
@@ -200,7 +202,7 @@ def get_title(
 
 
 @router.patch("/{title_id}", response_model=TitleRead)
-def update_title(
+async def update_title(
     title_id: int,
     payload: TitleUpdate,
     db: Session = Depends(get_db),
@@ -210,7 +212,14 @@ def update_title(
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
     try:
+        updates = payload.model_dump(exclude_unset=True)
         title_service.update_title(db, title, payload)
+        if title.external_id and title.external_id.startswith("tmdb:") and (
+            "metadata_json" in updates
+            or "external_id" in updates
+            or "poster_url" in updates
+        ):
+            await auto_sync_artwork_for_title(db, title)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     read = title_service.get_title_read(db, title_id)

@@ -23,6 +23,7 @@ from app.services.tmdb_service import (
     parse_external_id,
     search_metadata,
 )
+from app.services.artwork_service import sync_hierarchy_artwork
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/metadata", tags=["metadata"])
@@ -104,7 +105,11 @@ async def metadata_import_hierarchy_apply(
             detail="Hierarchy import is only available for TMDB series.",
         )
     preview = await fetch_series_hierarchy_preview(tmdb_id)
-    return title_service.apply_series_hierarchy_preview(db, preview)
+    result = title_service.apply_series_hierarchy_preview(db, preview)
+    series = title_service.get_title(db, result.series.id)
+    if series:
+        await sync_hierarchy_artwork(db, series)
+    return result
 
 
 @router.get("/import/{external_id:path}", response_model=TitleMetadataImport)

@@ -5,13 +5,14 @@ import json
 from sqlalchemy.orm import Session
 
 from app.models.media_asset import AssetStatus, AssetType, MediaAsset
-from app.models.title import Title
+from app.models.title import Title, TitleType
 from app.schemas.artwork import ArtworkItem, ArtworkSpecs
 from app.services.artwork_metadata import artwork_item_metadata_json
 from app.services.poster_resolver import is_usable_poster_url
 from app.services.title_service import sync_title_poster_cache
 from app.services.tmdb_service import (
     TMDB_SOURCE_NOTE,
+    _artwork_filename,
     collect_artwork_from_tmdb,
     parse_external_id,
 )
@@ -64,6 +65,14 @@ def _is_tmdb_external_id(external_id: str | None) -> bool:
     return bool(external_id and external_id.startswith("tmdb:"))
 
 
+def can_fetch_tmdb_artwork_library(external_id: str | None) -> bool:
+    """True for root TMDB movie/series ids that support the /images fetch."""
+    if not external_id or not external_id.startswith("tmdb:"):
+        return False
+    parts = external_id.split(":")
+    return len(parts) == 3 and parts[1] in ("movie", "tv")
+
+
 def _uri_basename(uri: str) -> str:
     return uri.split("?", 1)[0].rstrip("/").split("/")[-1]
 
@@ -105,6 +114,22 @@ def _with_artwork_label(item: ArtworkItem, labels: list[str]) -> ArtworkItem:
     )
 
 
+def _labels_for_artwork_item(
+    item: ArtworkItem, labels_by_filename: dict[str, list[str]]
+) -> list[str] | None:
+    labels = labels_by_filename.get(_uri_basename(item.storage_uri))
+    if labels:
+        return labels
+    item_fn = item.filename.rsplit("/", 1)[-1]
+    labels = labels_by_filename.get(item_fn)
+    if labels:
+        return labels
+    for meta_fn, meta_labels in labels_by_filename.items():
+        if item_fn == meta_fn or item_fn.endswith(f"_{meta_fn}"):
+            return meta_labels
+    return None
+
+
 def _filter_to_metadata_artwork(
     items: list[ArtworkItem], metadata_json: str | None
 ) -> list[ArtworkItem]:
@@ -114,12 +139,52 @@ def _filter_to_metadata_artwork(
 
     selected: dict[str, ArtworkItem] = {}
     for item in items:
-        labels = labels_by_filename.get(_uri_basename(item.storage_uri))
+        labels = _labels_for_artwork_item(item, labels_by_filename)
         if not labels:
             continue
         if item.storage_uri not in selected:
             selected[item.storage_uri] = _with_artwork_label(item, labels)
     return list(selected.values())
+
+
+def _reference_artwork_source_type(title: Title) -> AssetType:
+    if title.title_type == TitleType.EPISODE:
+        return AssetType.STILL
+    if title.title_type == TitleType.SEASON:
+        return AssetType.SEASON_POSTER
+    return AssetType.POSTER
+
+
+def _reference_artwork_items(title: Title) -> list[ArtworkItem]:
+    """Build catalog artwork from a title's poster/still URL and core metadata filenames."""
+    if not title.poster_url or not title.metadata_json:
+        return []
+    labels_by_filename = _metadata_artwork_labels(title.metadata_json)
+    if not labels_by_filename:
+        return []
+
+    uri = title.poster_url.strip()
+    basename = _uri_basename(uri)
+    labels = labels_by_filename.get(basename)
+    if not labels:
+        for meta_fn, meta_labels in labels_by_filename.items():
+            if meta_fn in uri:
+                labels = meta_labels
+                basename = meta_fn
+                break
+    if not labels or not is_usable_poster_url(uri):
+        return []
+
+    source_type = _reference_artwork_source_type(title)
+    item = ArtworkItem(
+        asset_type=source_type,
+        storage_uri=uri,
+        filename=_artwork_filename(source_type, basename, "en"),
+        mime_type="image/jpeg",
+        notes=f"{TMDB_SOURCE_NOTE}; {labels[0]}",
+        specs=ArtworkSpecs(label=labels[0]),
+    )
+    return [_with_artwork_label(item, labels)]
 
 
 async def fetch_artwork_preview(external_id: str) -> list[ArtworkItem]:
@@ -221,9 +286,32 @@ def save_artwork_selection(
 
 async def sync_artwork_for_title(db: Session, title: Title) -> list[MediaAsset]:
     """Fetch TMDB artwork and save only images referenced by core metadata."""
-    if not _is_tmdb_external_id(title.external_id):
+    if not can_fetch_tmdb_artwork_library(title.external_id):
         return []
     media_type, tmdb_id = parse_external_id(title.external_id)
     items = await collect_artwork_from_tmdb(media_type, tmdb_id)
     matching_items = _filter_to_metadata_artwork(items, title.metadata_json)
     return _replace_tmdb_artwork(db, title.id, matching_items)
+
+
+async def auto_sync_artwork_for_title(db: Session, title: Title) -> list[MediaAsset]:
+    """Sync artwork for a TMDB title using the images API or a reference still/poster URL."""
+    if not _is_tmdb_external_id(title.external_id):
+        return list_artwork_assets(db, title.id)
+    if can_fetch_tmdb_artwork_library(title.external_id):
+        return await sync_artwork_for_title(db, title)
+    items = _reference_artwork_items(title)
+    if not items:
+        return list_artwork_assets(db, title.id)
+    return _replace_tmdb_artwork(db, title.id, items)
+
+
+async def sync_hierarchy_artwork(db: Session, series: Title) -> None:
+    """Populate artwork libraries for a series and its seasons/episodes from core metadata."""
+    await auto_sync_artwork_for_title(db, series)
+    seasons = db.query(Title).filter(Title.parent_id == series.id).all()
+    for season in seasons:
+        await auto_sync_artwork_for_title(db, season)
+        episodes = db.query(Title).filter(Title.parent_id == season.id).all()
+        for episode in episodes:
+            await auto_sync_artwork_for_title(db, episode)

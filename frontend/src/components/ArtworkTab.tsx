@@ -245,6 +245,7 @@ export function ArtworkTab({
   const [fetching, setFetching] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -321,6 +322,31 @@ export function ArtworkTab({
       void loadSaved();
     }
   }, [visible, titleId, loadSaved]);
+
+  const handleSyncFromMetadata = async () => {
+    if (!titleId) {
+      setError("Save the title on the Details tab before syncing artwork.");
+      return;
+    }
+    setSyncing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const assets = await titlesApi.syncArtwork(titleId);
+      SAVED_ARTWORK_CACHE.set(titleId, assets);
+      setSaved(assets);
+      setSuccess(
+        assets.length > 0
+          ? `Synced ${assets.length} artwork image${assets.length === 1 ? "" : "s"} from core metadata.`
+          : "No artwork matched core metadata filenames for this title."
+      );
+      onSaved?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to sync artwork from metadata");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleFetch = async () => {
     if (!canFetch || !externalId) {
@@ -487,7 +513,19 @@ export function ArtworkTab({
       )}
 
       <div className="artwork-view-section">
-        <h3 className="artwork-view-heading">In your catalog</h3>
+        <div className="artwork-browse-header">
+          <h3 className="artwork-view-heading">In your catalog</h3>
+          {titleId && canFetch && (
+            <button
+              type="button"
+              className="btn btn-ghost artwork-fetch-btn"
+              disabled={syncing || fetching || saving || classifying || autoAssigning}
+              onClick={handleSyncFromMetadata}
+            >
+              {syncing ? "Syncing…" : "Sync from metadata"}
+            </button>
+          )}
+        </div>
         {!titleId ? (
           <p className="artwork-view-empty">
             Save the title on the Details tab first, then return here to store artwork.
@@ -499,7 +537,7 @@ export function ArtworkTab({
           </div>
         ) : savedItems.length === 0 ? (
           <p className="artwork-view-empty">
-            No artwork saved yet. Fetch from TMDB below, then add selected images.
+            No artwork saved yet. Sync from metadata or fetch from TMDB below.
           </p>
         ) : (
           <ArtworkStrip
