@@ -242,6 +242,94 @@ def _ensure_title_internal_ids(conn) -> None:
         )
 
 
+def _normalize_hierarchy_names(conn) -> None:
+    inspector = inspect(conn)
+    if "titles" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("titles")}
+    required = {"id", "name", "title_type", "parent_id", "season_number", "episode_number"}
+    if not required.issubset(cols):
+        return
+
+    rows = conn.execute(
+        text(
+            """
+            SELECT id, name, title_type, parent_id, season_number, episode_number
+            FROM titles
+            WHERE title_type IN ('season', 'episode', 'SEASON', 'EPISODE')
+            """
+        )
+    ).fetchall()
+    by_id = {
+        row[0]: {
+            "id": row[0],
+            "name": row[1],
+            "title_type": str(row[2]).lower() if row[2] is not None else "",
+            "parent_id": row[3],
+            "season_number": row[4],
+            "episode_number": row[5],
+        }
+        for row in rows
+    }
+
+    for row in rows:
+        title_id, current_name, raw_type, parent_id, season_number, episode_number = row
+        title_type = str(raw_type).lower() if raw_type is not None else ""
+        if parent_id is None:
+            continue
+        parent = by_id.get(parent_id)
+        if parent is None:
+            parent_row = conn.execute(
+                text("SELECT id, name, title_type, parent_id, season_number FROM titles WHERE id = :id"),
+                {"id": parent_id},
+            ).fetchone()
+            if parent_row:
+                parent = {
+                    "id": parent_row[0],
+                    "name": parent_row[1],
+                    "title_type": str(parent_row[2]).lower() if parent_row[2] is not None else "",
+                    "parent_id": parent_row[3],
+                    "season_number": parent_row[4],
+                }
+                by_id[parent_id] = parent
+        if not parent:
+            continue
+
+        expected = None
+        if title_type == "season":
+            season_label = "Specials" if season_number == 0 else f"Season {season_number or 1}"
+            expected = f"{parent['name']}: {season_label}"
+        elif title_type == "episode":
+            season = parent
+            series = by_id.get(season.get("parent_id"))
+            if series is None and season.get("parent_id") is not None:
+                series_row = conn.execute(
+                    text("SELECT id, name, title_type, parent_id, season_number FROM titles WHERE id = :id"),
+                    {"id": season["parent_id"]},
+                ).fetchone()
+                if series_row:
+                    series = {
+                        "id": series_row[0],
+                        "name": series_row[1],
+                        "title_type": str(series_row[2]).lower() if series_row[2] is not None else "",
+                        "parent_id": series_row[3],
+                        "season_number": series_row[4],
+                    }
+                    by_id[series_row[0]] = series
+            if not series:
+                continue
+            season_num = season_number if season_number is not None else season.get("season_number")
+            season_label = "Specials" if season_num == 0 else f"Season {season_num or 1}"
+            title_part = str(current_name or "").split(": ")[-1] if ": Episode " in str(current_name or "") else str(current_name or f"Episode {episode_number or 1}")
+            expected = f"{series['name']}: {season_label}: Episode {episode_number or 1}: {title_part}"
+
+        if expected and current_name != expected:
+            conn.execute(
+                text("UPDATE titles SET name = :name WHERE id = :id"),
+                {"name": expected, "id": title_id},
+            )
+
+
 def _ensure_common_indexes(conn) -> None:
     # Hot path indexes for title list + artwork lookups.
     conn.execute(
@@ -325,12 +413,14 @@ def run_migrations() -> None:
             # Re-inspect; if enums remain, try adding values
             _ensure_pg_enum_values(conn)
             _ensure_title_internal_ids(conn)
+            _normalize_hierarchy_names(conn)
             _ensure_common_indexes(conn)
             if "ingest_manifests" in inspect(conn).get_table_names():
                 _seed_default_ingest_manifest(conn)
     else:
         with engine.begin() as conn:
             _ensure_title_internal_ids(conn)
+            _normalize_hierarchy_names(conn)
             _ensure_common_indexes(conn)
             if "ingest_manifests" in inspect(conn).get_table_names():
                 _seed_default_ingest_manifest(conn)

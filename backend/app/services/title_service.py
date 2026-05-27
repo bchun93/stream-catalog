@@ -167,6 +167,86 @@ def _set_if_blank(title: Title, field: str, value) -> None:
         setattr(title, field, value)
 
 
+def _season_display_name(series_name: str, season_number: int | None) -> str:
+    season_label = "Specials" if season_number == 0 else f"Season {season_number or 1}"
+    return f"{series_name}: {season_label}"
+
+
+def _episode_display_name(
+    series_name: str,
+    season_number: int | None,
+    episode_number: int | None,
+    current_name: str,
+) -> str:
+    season_label = "Specials" if season_number == 0 else f"Season {season_number or 1}"
+    episode_label = f"Episode {episode_number or 1}"
+    # Strip a previous hierarchy prefix if this name has already been normalized.
+    title_part = current_name.split(": ")[-1] if ": Episode " in current_name else current_name
+    return f"{series_name}: {season_label}: {episode_label}: {title_part}"
+
+
+def _canonical_hierarchy_name(
+    db: Session,
+    *,
+    title_type: TitleType,
+    parent_id: int | None,
+    season_number: int | None,
+    episode_number: int | None,
+    name: str,
+) -> str:
+    if title_type == TitleType.SEASON and parent_id is not None:
+        series = db.query(Title).filter(Title.id == parent_id).first()
+        if series:
+            return _season_display_name(series.name, season_number)
+    if title_type == TitleType.EPISODE and parent_id is not None:
+        season = db.query(Title).filter(Title.id == parent_id).first()
+        if season:
+            series_name = season.name.split(": Season ", 1)[0].split(": Specials", 1)[0]
+            return _episode_display_name(
+                series_name,
+                season_number if season_number is not None else season.season_number,
+                episode_number,
+                name,
+            )
+    return name
+
+
+def normalize_hierarchy_names(db: Session) -> bool:
+    changed = False
+    seasons = db.query(Title).filter(Title.title_type == TitleType.SEASON).all()
+    for season in seasons:
+        if season.parent_id is None:
+            continue
+        expected = _canonical_hierarchy_name(
+            db,
+            title_type=TitleType.SEASON,
+            parent_id=season.parent_id,
+            season_number=season.season_number,
+            episode_number=None,
+            name=season.name,
+        )
+        if season.name != expected:
+            season.name = expected
+            changed = True
+
+    episodes = db.query(Title).filter(Title.title_type == TitleType.EPISODE).all()
+    for episode in episodes:
+        if episode.parent_id is None:
+            continue
+        expected = _canonical_hierarchy_name(
+            db,
+            title_type=TitleType.EPISODE,
+            parent_id=episode.parent_id,
+            season_number=episode.season_number,
+            episode_number=episode.episode_number,
+            name=episode.name,
+        )
+        if episode.name != expected:
+            episode.name = expected
+            changed = True
+    return changed
+
+
 def _upsert_hierarchy_title(
     db: Session,
     *,
@@ -190,6 +270,14 @@ def _upsert_hierarchy_title(
     poster_url: str | None = None,
     core_metadata: dict[str, str | None] | None = None,
 ) -> tuple[Title, bool]:
+    name = _canonical_hierarchy_name(
+        db,
+        title_type=title_type,
+        parent_id=parent_id,
+        season_number=season_number,
+        episode_number=episode_number,
+        name=name,
+    )
     title = _find_title_for_hierarchy(
         db,
         external_id=external_id,
@@ -235,7 +323,10 @@ def _upsert_hierarchy_title(
         title.external_id = external_id
     if not title.metadata_source:
         title.metadata_source = "tmdb"
-    _set_if_blank(title, "name", name)
+    if title.title_type in (TitleType.SEASON, TitleType.EPISODE):
+        title.name = name
+    else:
+        _set_if_blank(title, "name", name)
     _set_if_blank(title, "synopsis", synopsis)
     _set_if_blank(title, "short_description", short_description)
     _set_if_blank(title, "release_date", _parse_iso_date(release_date_value))
@@ -306,6 +397,8 @@ def list_titles_read(
     )
     if _ensure_internal_ids(db, titles):
         db.commit()
+    if normalize_hierarchy_names(db):
+        db.commit()
     # List view uses titles.poster_url only — avoids media_assets enum/query failures on Neon.
     result: list[TitleRead] = []
     for title in titles:
@@ -328,6 +421,9 @@ def get_title_read(db: Session, title_id: int) -> TitleRead | None:
         return None
     if not title.internal_id:
         _ensure_internal_id(db, title)
+        db.commit()
+        db.refresh(title)
+    if normalize_hierarchy_names(db):
         db.commit()
         db.refresh(title)
     assets: list[MediaAsset] = []
@@ -499,6 +595,9 @@ def build_title_tree(db: Session, root_id: int | None = None) -> list[Title]:
     titles = db.query(Title).order_by(Title.name).all()
     if _ensure_internal_ids(db, titles):
         db.commit()
+    if normalize_hierarchy_names(db):
+        db.commit()
+        titles = db.query(Title).order_by(Title.name).all()
     by_parent: dict[int | None, list[Title]] = {}
     for title in titles:
         by_parent.setdefault(title.parent_id, []).append(title)

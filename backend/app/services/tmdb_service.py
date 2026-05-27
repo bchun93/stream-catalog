@@ -461,6 +461,18 @@ def _episode_slug(series_name: str, season_number: int, episode_number: int, nam
     return f"{_slugify(series_name)}-{season_part}{episode_part}-{title_part}"[:120]
 
 
+def _season_display_name(series_name: str, season_number: int) -> str:
+    season_label = "Specials" if season_number == 0 else f"Season {season_number}"
+    return f"{series_name}: {season_label}"
+
+
+def _episode_display_name(
+    series_name: str, season_number: int, episode_number: int, episode_name: str
+) -> str:
+    season_label = "Specials" if season_number == 0 else f"Season {season_number}"
+    return f"{series_name}: {season_label}: Episode {episode_number}: {episode_name}"
+
+
 def _tmdb_core_metadata(
     *,
     data: dict,
@@ -741,10 +753,11 @@ def _season_core_metadata(
     season_data: dict,
     season_number: int,
     episode_count: int,
+    display_name: str | None = None,
 ) -> dict[str, str | None]:
     values = _requirements_template()
     values["content_type"] = "season"
-    values["name"] = str(season_data.get("name") or f"Season {season_number}")
+    values["name"] = display_name or str(season_data.get("name") or f"Season {season_number}")
     values["synopsis"] = season_data.get("overview")
     values["release_date"] = _to_mmddyyyy(season_data.get("air_date"))
     values["season_number"] = str(season_number)
@@ -765,12 +778,13 @@ def _episode_core_metadata(
     series_id: int,
     season_number: int,
     episode_data: dict,
+    display_name: str | None = None,
 ) -> dict[str, str | None]:
     values = _requirements_template()
     episode_number = int(episode_data.get("episode_number") or 0)
     runtime = episode_data.get("runtime")
     values["content_type"] = "episode"
-    values["name"] = str(episode_data.get("name") or f"Episode {episode_number}")
+    values["name"] = display_name or str(episode_data.get("name") or f"Episode {episode_number}")
     values["synopsis"] = episode_data.get("overview")
     values["release_date"] = _to_mmddyyyy(episode_data.get("air_date"))
     values["season_number"] = str(season_number)
@@ -811,6 +825,7 @@ async def fetch_series_hierarchy_preview(tmdb_id: int) -> SeriesHierarchyPreview
             if season_number == 0
             else str(season_data.get("name") or f"Season {season_number}")
         )
+        season_display_name = _season_display_name(series_name, season_number)
         episodes: list[EpisodeHierarchyPreview] = []
         for episode in sorted(
             season_data.get("episodes") or [],
@@ -818,13 +833,16 @@ async def fetch_series_hierarchy_preview(tmdb_id: int) -> SeriesHierarchyPreview
         ):
             episode_number = int(episode.get("episode_number") or 0)
             episode_name = str(episode.get("name") or f"Episode {episode_number}")
+            episode_display_name = _episode_display_name(
+                series_name, season_number, episode_number, episode_name
+            )
             external_id = (
                 f"tmdb:tv:{tmdb_id}:season:{season_number}:episode:{episode_number}"
             )
             episodes.append(
                 EpisodeHierarchyPreview(
                     external_id=external_id,
-                    name=episode_name,
+                    name=episode_display_name,
                     slug=_episode_slug(
                         series_name,
                         season_number,
@@ -841,6 +859,7 @@ async def fetch_series_hierarchy_preview(tmdb_id: int) -> SeriesHierarchyPreview
                         series_id=tmdb_id,
                         season_number=season_number,
                         episode_data=episode,
+                        display_name=episode_display_name,
                     ),
                 )
             )
@@ -849,7 +868,7 @@ async def fetch_series_hierarchy_preview(tmdb_id: int) -> SeriesHierarchyPreview
         seasons.append(
             SeasonHierarchyPreview(
                 external_id=f"tmdb:tv:{tmdb_id}:season:{season_number}",
-                name=season_name,
+                name=season_display_name,
                 slug=_season_slug(series_name, season_number),
                 season_number=season_number,
                 synopsis=season_data.get("overview"),
@@ -861,6 +880,7 @@ async def fetch_series_hierarchy_preview(tmdb_id: int) -> SeriesHierarchyPreview
                     season_data=season_data,
                     season_number=season_number,
                     episode_count=episode_count,
+                    display_name=season_display_name,
                 ),
                 episodes=episodes,
             )
