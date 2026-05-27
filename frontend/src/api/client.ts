@@ -376,6 +376,8 @@ export const artworkAiApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  listTraining: () =>
+    requestWithRetry<ArtworkTrainingExample[]>("/artwork-ai/training"),
 };
 
 export const assetsApi = {

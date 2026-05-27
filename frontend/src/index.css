@@ -1352,6 +1352,28 @@ tr:hover td {
   margin-bottom: 1rem;
 }
 
+.ai-training-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.ai-training-list-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+}
+
+.ai-training-list-item p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.ai-training-list-meta {
+  font-size: 0.78rem !important;
+}
+
 .ai-training-card h3 {
   margin: 0 0 0.5rem;
 }

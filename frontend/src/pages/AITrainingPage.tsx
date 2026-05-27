@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { artworkAiApi } from "../api/client";
-import type { ArtworkItem, ArtworkRole, ArtworkType } from "../types";
+import type { ArtworkItem, ArtworkRole, ArtworkTrainingExample, ArtworkType } from "../types";
 
 const ARTWORK_ROLE_OPTIONS: ArtworkRole[] = [
   "vertical_poster",
@@ -39,9 +39,26 @@ export function AITrainingPage() {
   const [role, setRole] = useState<ArtworkRole>("vertical_poster");
   const [item, setItem] = useState<ArtworkItem | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [examples, setExamples] = useState<ArtworkTrainingExample[]>([]);
+  const [loadingExamples, setLoadingExamples] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const loadExamples = () => {
+    setLoadingExamples(true);
+    artworkAiApi
+      .listTraining()
+      .then(setExamples)
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : "Could not load training examples");
+      })
+      .finally(() => setLoadingExamples(false));
+  };
+
+  useEffect(() => {
+    loadExamples();
+  }, []);
 
   const handleFile = (file: File | null) => {
     if (preview) URL.revokeObjectURL(preview);
@@ -116,6 +133,7 @@ export function AITrainingPage() {
         decision: "approved",
       });
       setSuccess(`Saved training example as ${ARTWORK_ROLE_LABELS[role]}.`);
+      loadExamples();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save training example");
     } finally {
@@ -183,11 +201,47 @@ export function AITrainingPage() {
       </section>
 
       <section className="card ai-training-card">
+        <h3>Submitted training examples</h3>
+        <p className="metadata-hint">
+          These global examples are what AI Classify compares against when labeling TMDB
+          candidates. The classifier uses image features (aspect ratio, dimensions, TMDB
+          source type), not the uploaded file pixels.
+        </p>
+        {loadingExamples ? (
+          <p className="empty">Loading training examples…</p>
+        ) : examples.length === 0 ? (
+          <p className="empty">No training examples saved yet.</p>
+        ) : (
+          <div className="ai-training-list">
+            {examples.map((example) => (
+              <div key={example.id} className="ai-training-list-item">
+                <div>
+                  <strong>{example.filename || "Untitled image"}</strong>
+                  <p>
+                    {ARTWORK_ROLE_LABELS[example.assigned_role]} · {example.decision}
+                    {example.source_asset_type ? ` · ${example.source_asset_type}` : ""}
+                  </p>
+                  <p className="ai-training-list-meta">
+                    Saved {new Date(example.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card ai-training-card">
         <h3>How the tool uses this</h3>
         <p className="metadata-hint">
+          This is not an LLM. It is a lightweight nearest-neighbor classifier: when you run
+          AI Classify on a title, TMDB image metadata is compared to your labeled examples.
+          More diverse examples improve labeling, especially for roles that look similar
+          (hero vs horizontal poster, vertical poster vs box art).
+        </p>
+        <p className="metadata-hint">
           On each title, use Browse TMDB to fetch candidates, then run AI Classify or
-          Auto-assign high confidence. The classifier compares TMDB image features against
-          this global training set and automatically assigns confident matches to the title.
+          Auto-assign high confidence. Confident matches can be saved automatically.
         </p>
       </section>
     </>

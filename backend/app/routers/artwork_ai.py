@@ -68,6 +68,18 @@ async def auto_assign_title_artwork(
     )
 
 
+@router.get(
+    "/artwork-ai/training",
+    response_model=list[ArtworkTrainingExampleRead],
+)
+def list_artwork_training(
+    limit: int = Query(200, le=500),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+):
+    return artwork_classifier.list_training_examples(db, limit=limit)
+
+
 @router.post(
     "/artwork-ai/labels",
     response_model=ArtworkTrainingExampleRead,

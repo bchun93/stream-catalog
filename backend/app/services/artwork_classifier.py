@@ -257,6 +257,18 @@ async def auto_assign_title_artwork(
     )
 
 
+def list_training_examples(
+    db: Session, *, limit: int = 200
+) -> list[ArtworkTrainingExampleRead]:
+    rows = (
+        db.query(ArtworkTrainingExample)
+        .order_by(ArtworkTrainingExample.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [ArtworkTrainingExampleRead.model_validate(row) for row in rows]
+
+
 def record_label(db: Session, request) -> ArtworkTrainingExampleRead:
     item: ArtworkItem = request.item
     example = ArtworkTrainingExample(
