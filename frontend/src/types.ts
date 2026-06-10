@@ -360,6 +360,48 @@ export interface SeriesHierarchyApplyResult {
   updated_count: number;
 }
 
+export interface StorageConfig {
+  bucket: string;
+  root_prefix: string;
+  token_required: boolean;
+}
+
+export interface StorageFolder {
+  name: string;
+  prefix: string;
+}
+
+export interface StorageObject {
+  key: string;
+  name: string;
+  size_bytes?: number | null;
+  last_modified?: string | null;
+  storage_uri: string;
+}
+
+export interface StorageBrowse {
+  bucket: string;
+  root_prefix: string;
+  prefix: string;
+  folders: StorageFolder[];
+  objects: StorageObject[];
+  truncated: boolean;
+}
+
+export interface StoragePresignUpload {
+  key: string;
+  storage_uri: string;
+  upload_url: string;
+  method: string;
+  headers: Record<string, string>;
+}
+
+export interface StoragePresignDownload {
+  download_url: string;
+  key: string;
+  storage_uri: string;
+}
+
 export const ARTWORK_TYPES: ArtworkType[] = [
   "poster",
   "backdrop",

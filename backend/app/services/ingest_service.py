@@ -21,6 +21,7 @@ from app.schemas.ingest import (
     IngestManifestValidateRequest,
     IngestManifestValidateResponse,
 )
+from app.services import s3_service
 from app.services.mediainfo_service import infer_resolution_from_name, summarize_media_info
 
 logger = logging.getLogger(__name__)
@@ -177,7 +178,7 @@ def create_job(db: Session, payload: IngestJobCreateRequest, *, request_id: str 
             )
             continue
 
-        storage_uri = f"s3://{_required_bucket()}/{obj.key}"
+        storage_uri = s3_service.storage_uri(obj.key)
         existing = existing_by_uri.get(storage_uri)
         if existing:
             job.skipped_count += 1
@@ -385,58 +386,12 @@ def _asset_metadata_json(
 
 
 def _list_s3_objects(source_prefix: str, *, max_keys: int) -> list[_S3Object]:
-    bucket = _required_bucket()
-    key_prefix = _joined_prefix(source_prefix)
-    client = _s3_client()
-
-    listed: list[_S3Object] = []
-    token: str | None = None
-    while len(listed) < max_keys:
-        kwargs: dict[str, Any] = {
-            "Bucket": bucket,
-            "Prefix": key_prefix,
-            "MaxKeys": min(1000, max_keys - len(listed)),
-        }
-        if token:
-            kwargs["ContinuationToken"] = token
-        resp = client.list_objects_v2(**kwargs)
-        for obj in resp.get("Contents", []):
-            key = obj.get("Key")
-            if not isinstance(key, str):
-                continue
-            listed.append(_S3Object(key=key, size=obj.get("Size")))
-            if len(listed) >= max_keys:
-                break
-        if not resp.get("IsTruncated"):
-            break
-        token = resp.get("NextContinuationToken")
-        if not token:
-            break
-    return listed
+    rows = s3_service.list_all_objects(source_prefix, max_keys=max_keys)
+    return [_S3Object(key=row.key, size=row.size_bytes) for row in rows]
 
 
 def _get_s3_object_bytes(key: str) -> bytes:
-    client = _s3_client()
-    resp = client.get_object(Bucket=_required_bucket(), Key=key)
-    body = resp["Body"].read()
-    return body if isinstance(body, bytes) else bytes(body)
-
-
-def _required_bucket() -> str:
-    bucket = (settings.ingest_s3_bucket or "").strip()
-    if not bucket:
-        raise ValueError("INGEST_S3_BUCKET is not configured.")
-    return bucket
-
-
-def _joined_prefix(source_prefix: str) -> str:
-    parts = []
-    for value in (settings.ingest_s3_prefix, settings.aspera_drop_prefix, source_prefix):
-        v = (value or "").strip().strip("/")
-        if v:
-            parts.append(v)
-    joined = "/".join(parts)
-    return f"{joined}/" if joined else ""
+    return s3_service.get_object_bytes(key)
 
 
 def _require_manifest(db: Session, manifest_id: int) -> IngestManifest:
@@ -447,10 +402,3 @@ def _require_manifest(db: Session, manifest_id: int) -> IngestManifest:
         raise ValueError("Selected ingest manifest is disabled.")
     return manifest
 
-
-def _s3_client():
-    try:
-        import boto3
-    except Exception as exc:
-        raise RuntimeError("boto3 is required for S3 ingest integration.") from exc
-    return boto3.client("s3")

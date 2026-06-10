@@ -14,6 +14,10 @@ import type {
   MetadataSearchResult,
   SeriesHierarchyApplyResult,
   SeriesHierarchyPreview,
+  StorageBrowse,
+  StorageConfig,
+  StoragePresignDownload,
+  StoragePresignUpload,
   Title,
   TitleMetadataImport,
   TitleTree,
@@ -24,6 +28,13 @@ const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const API = `${API_BASE}/api/v1`;
 const IS_PROD = import.meta.env.PROD;
 const REQUEST_TIMEOUT_MS = IS_PROD ? 90000 : 30000;
+const INGEST_OPERATOR_TOKEN = (
+  import.meta.env.VITE_INGEST_OPERATOR_TOKEN as string | undefined
+)?.trim();
+
+function operatorHeaders(): HeadersInit {
+  return INGEST_OPERATOR_TOKEN ? { "X-Ingest-Token": INGEST_OPERATOR_TOKEN } : {};
+}
 
 function isArtworkRouteDatabaseError(message: string): boolean {
   const text = message.toLowerCase();
@@ -400,9 +411,17 @@ export const assetsApi = {
     request<void>(`/assets/${id}`, { method: "DELETE" }),
 };
 
+function operatorRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  for (const [key, value] of Object.entries(operatorHeaders())) {
+    headers.set(key, value);
+  }
+  return requestWithRetry<T>(path, { ...init, headers });
+}
+
 export const ingestApi = {
   listManifests: (enabledOnly = true) =>
-    requestWithRetry<IngestManifest[]>(
+    operatorRequest<IngestManifest[]>(
       `/ingest/manifests?enabled_only=${enabledOnly ? "true" : "false"}`
     ),
   validateManifest: (body: {
@@ -410,7 +429,7 @@ export const ingestApi = {
     source_prefix?: string;
     max_keys?: number;
   }) =>
-    requestWithRetry<IngestManifestValidateResponse>("/ingest/manifests/validate", {
+    operatorRequest<IngestManifestValidateResponse>("/ingest/manifests/validate", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -422,7 +441,7 @@ export const ingestApi = {
     dry_run?: boolean;
     max_keys?: number;
   }) =>
-    request<IngestJob>("/ingest/jobs", {
+    operatorRequest<IngestJob>("/ingest/jobs", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -430,9 +449,28 @@ export const ingestApi = {
     const q = new URLSearchParams();
     if (params?.title_id) q.set("title_id", String(params.title_id));
     if (params?.limit) q.set("limit", String(params.limit));
-    return requestWithRetry<IngestJob[]>(`/ingest/jobs${q.toString() ? `?${q}` : ""}`);
+    return operatorRequest<IngestJob[]>(`/ingest/jobs${q.toString() ? `?${q}` : ""}`);
   },
-  getJob: (id: number) => requestWithRetry<IngestJob>(`/ingest/jobs/${id}`),
+  getJob: (id: number) => operatorRequest<IngestJob>(`/ingest/jobs/${id}`),
+};
+
+export const storageApi = {
+  getConfig: () => operatorRequest<StorageConfig>("/storage/config"),
+  browse: (prefix = "", maxKeys = 500) => {
+    const q = new URLSearchParams();
+    if (prefix) q.set("prefix", prefix);
+    q.set("max_keys", String(maxKeys));
+    return operatorRequest<StorageBrowse>(`/storage/browse?${q}`);
+  },
+  presignUpload: (body: { prefix?: string; filename: string; content_type?: string }) =>
+    operatorRequest<StoragePresignUpload>("/storage/presign-upload", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  presignDownload: (key: string) =>
+    operatorRequest<StoragePresignDownload>(
+      `/storage/presign-download?${new URLSearchParams({ key })}`
+    ),
 };
 
 export function apiBaseUrl(): string {

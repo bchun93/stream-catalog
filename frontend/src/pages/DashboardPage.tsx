@@ -1,21 +1,53 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { assetsApi, titlesApi } from "../api/client";
 import type { MediaAsset, Title, TitleTree } from "../types";
 import { Badge } from "../components/Badge";
 
-function TreeNode({ node }: { node: TitleTree }) {
+function isHierarchyRoot(node: TitleTree): boolean {
+  return node.title_type === "series" || node.title_type === "movie";
+}
+
+function TreeNode({
+  node,
+  expandedIds,
+  onToggle,
+}: {
+  node: TitleTree;
+  expandedIds: Set<number>;
+  onToggle: (id: number) => void;
+}) {
+  const hasChildren = node.children.length > 0;
+  const expanded = hasChildren && expandedIds.has(node.id);
+
   return (
     <li>
       <div className="tree-item">
+        {hasChildren ? (
+          <button
+            type="button"
+            className={`title-expand-toggle ${expanded ? "expanded" : ""}`}
+            onClick={() => onToggle(node.id)}
+            aria-label={expanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
+          >
+            ›
+          </button>
+        ) : (
+          <span className="title-expand-toggle-spacer" aria-hidden />
+        )}
         <Badge value={node.title_type} kind="type" />
         <strong>{node.name}</strong>
         <Badge value={node.status} />
       </div>
-      {node.children.length > 0 && (
+      {expanded && (
         <ul>
           {node.children.map((c) => (
-            <TreeNode key={c.id} node={c} />
+            <TreeNode
+              key={c.id}
+              node={c}
+              expandedIds={expandedIds}
+              onToggle={onToggle}
+            />
           ))}
         </ul>
       )}
@@ -27,19 +59,36 @@ export function DashboardPage() {
   const [titles, setTitles] = useState<Title[]>([]);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [tree, setTree] = useState<TitleTree[]>([]);
+  const [treeLoading, setTreeLoading] = useState(true);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
-    Promise.all([titlesApi.list(), assetsApi.list(), titlesApi.tree()]).then(
-      ([t, a, tr]) => {
-        setTitles(t);
-        setAssets(a);
-        setTree(tr);
-      }
-    );
+    titlesApi.list().then(setTitles).catch(() => setTitles([]));
+    assetsApi.list().then(setAssets).catch(() => setAssets([]));
+    setTreeLoading(true);
+    titlesApi
+      .tree()
+      .then(setTree)
+      .catch(() => setTree([]))
+      .finally(() => setTreeLoading(false));
   }, []);
+
+  const hierarchyRoots = useMemo(
+    () => tree.filter(isHierarchyRoot),
+    [tree]
+  );
 
   const published = titles.filter((t) => t.status === "published").length;
   const readyAssets = assets.filter((a) => a.status === "ready").length;
+
+  const toggleExpanded = (id: number) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <>
@@ -72,12 +121,19 @@ export function DashboardPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
         <section className="card" style={{ padding: "1.25rem" }}>
           <h3 style={{ margin: "0 0 1rem" }}>Title hierarchy</h3>
-          {tree.length === 0 ? (
-            <p className="empty">No titles yet.</p>
+          {treeLoading ? (
+            <p className="empty">Loading hierarchy…</p>
+          ) : hierarchyRoots.length === 0 ? (
+            <p className="empty">No series or movies yet.</p>
           ) : (
             <ul className="tree">
-              {tree.map((n) => (
-                <TreeNode key={n.id} node={n} />
+              {hierarchyRoots.map((n) => (
+                <TreeNode
+                  key={n.id}
+                  node={n}
+                  expandedIds={expandedIds}
+                  onToggle={toggleExpanded}
+                />
               ))}
             </ul>
           )}

@@ -79,7 +79,7 @@ class IngestServiceTests(unittest.TestCase):
     def tearDown(self):
         self.db.close()
 
-    @patch("app.services.ingest_service._s3_client", return_value=_FakeS3Client())
+    @patch("app.services.s3_service.s3_client", return_value=_FakeS3Client())
     def test_validate_manifest_matches_files(self, _):
         with patch("app.services.ingest_service.settings.ingest_s3_bucket", "catalog-ingest"), patch(
             "app.services.ingest_service.settings.ingest_s3_prefix", "deliveries"
@@ -96,7 +96,7 @@ class IngestServiceTests(unittest.TestCase):
         self.assertEqual(result.matched_count, 2)
         self.assertTrue(any(item.inferred_asset_type == "video_master" for item in result.items))
 
-    @patch("app.services.ingest_service._s3_client", return_value=_FakeS3Client())
+    @patch("app.services.s3_service.s3_client", return_value=_FakeS3Client())
     def test_create_job_creates_assets(self, _):
         with patch("app.services.ingest_service.settings.ingest_s3_bucket", "catalog-ingest"), patch(
             "app.services.ingest_service.settings.ingest_s3_prefix", "deliveries"

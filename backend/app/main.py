@@ -20,6 +20,7 @@ from app.routers import (
     media_assets,
     metadata,
     metadata_config,
+    storage,
     titles,
 )
 from app.seed import seed
@@ -124,6 +125,7 @@ async def unhandled_exception(request: Request, exc: Exception):
 api = settings.api_prefix
 app.include_router(diagnostics.router, prefix=api)
 app.include_router(ingest.router, prefix=api)
+app.include_router(storage.router, prefix=api)
 app.include_router(metadata.router, prefix=api)
 app.include_router(metadata_config.router, prefix=api)
 app.include_router(titles.router, prefix=api)
