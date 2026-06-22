@@ -15,7 +15,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-brand">
         <div className="sidebar-mark" aria-hidden>
-          <RelayMark size={20} />
+          <RelayMark />
         </div>
         <div className="sidebar-wordmark">Relay</div>
       </div>
@@ -41,7 +41,17 @@ export function Sidebar() {
 
       <div className="sidebar-footer">
         <ApiStatus />
-        <p className="sidebar-footer-note">Title &amp; asset management</p>
+        <p className="sidebar-footer-credit">
+          <a
+            href="https://bchun93.github.io"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            bchun93.github.io
+          </a>
+          {" "}
+          2026
+        </p>
       </div>
     </aside>
   );

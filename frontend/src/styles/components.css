@@ -34,13 +34,17 @@
 .sidebar-mark {
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md);
-  background: var(--accent-muted);
-  color: var(--accent);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+}
+
+.sidebar-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-md);
 }
 
 .sidebar-wordmark {
@@ -90,11 +94,19 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-.sidebar-footer-note {
+.sidebar-footer-credit {
   margin: var(--space-2) var(--space-2) 0;
   font-size: 0.6875rem;
   color: var(--text-tertiary);
-  letter-spacing: 0.02em;
+}
+
+.sidebar-footer-credit a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.sidebar-footer-credit a:hover {
+  color: var(--accent);
 }
 
 /* Page header */
