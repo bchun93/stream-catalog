@@ -57,6 +57,13 @@ class Settings(BaseSettings):
         default=None, validation_alias="INGEST_OPERATOR_TOKEN"
     )
     ingest_max_keys: int = Field(default=1000, validation_alias="INGEST_MAX_KEYS")
+    aws_profile: str | None = Field(default=None, validation_alias="AWS_PROFILE")
+    aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")
+    aws_access_key_id: str | None = Field(default=None, validation_alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str | None = Field(
+        default=None, validation_alias="AWS_SECRET_ACCESS_KEY"
+    )
+    aws_endpoint_url: str | None = Field(default=None, validation_alias="AWS_ENDPOINT_URL")
 
     @field_validator("database_url", mode="before")
     @classmethod

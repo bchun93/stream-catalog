@@ -1,4 +1,4 @@
-# Stream Catalog
+# Relay
 
 Title management (TM) and media asset management (MAM) for video streaming services. Manage your content hierarchy—movies, series, seasons, episodes—and register masters, artwork, subtitles, and promos with storage locations and processing status.
 

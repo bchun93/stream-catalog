@@ -115,12 +115,6 @@ export function MetadataLookup({ onApply, onHierarchyApplied }: MetadataLookupPr
 
   return (
     <div className="metadata-lookup">
-      <div className="metadata-lookup-header">
-        <strong>Import metadata</strong>
-        <span className="metadata-hint">
-          Powered by TMDB — metadata import also syncs referenced artwork into each title library
-        </span>
-      </div>
       <div className="metadata-search-row">
         <input
           placeholder="Search by title name…"

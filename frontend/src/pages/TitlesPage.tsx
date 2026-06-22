@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Film, Plus, Search } from "lucide-react";
 import { apiBaseUrl, titlesApi } from "../api/client";
-import { Badge } from "../components/Badge";
-import { Modal } from "../components/Modal";
+import { StatusBadge, TypeBadge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import { EmptyState } from "../components/ui/EmptyState";
+import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Sheet } from "../components/ui/Sheet";
+import { TableSkeleton } from "../components/ui/TableSkeleton";
 import { TitleForm } from "../components/TitleForm";
 import { TitleRowPoster } from "../components/TitleRowPoster";
 import type { Title, TitleTree } from "../types";
+
+const TITLE_FORM_ID = "title-form";
 
 function titleMetaLine(title: Title): string {
   return [
@@ -28,29 +36,24 @@ function stripHierarchyPrefix(name: string): string {
   return tail.replace(/^\d+: /, "");
 }
 
-function TitleModalSummary({ title }: { title: Title }) {
+function TitleSheetSummary({ title }: { title: Title }) {
   const displayName =
     title.title_type === "episode" ? stripHierarchyPrefix(title.name) : title.name;
   return (
     <section className="title-modal-summary" aria-label="Title summary">
       {title.poster_url ? (
-        <img
-          src={title.poster_url}
-          alt=""
-          className="title-modal-poster"
-          loading="lazy"
-        />
+        <img src={title.poster_url} alt="" className="title-modal-poster" loading="lazy" />
       ) : (
         <div className="title-modal-poster title-modal-poster-empty" aria-hidden>
-          ?
+          —
         </div>
       )}
       <div className="title-modal-summary-body">
-        <div className="title-modal-kicker">Editing Title</div>
+        <div className="title-modal-kicker">Editing title</div>
         <h3>{displayName}</h3>
         <p>{titleMetaLine(title) || "Basic title details"}</p>
         <div className="title-modal-pills">
-          <Badge value={title.status} />
+          <StatusBadge value={title.status} />
           <span className="title-modal-pill mono">{displayInternalId(title)}</span>
           {title.eidr && <span className="title-modal-pill mono">EIDR {title.eidr}</span>}
         </div>
@@ -138,16 +141,14 @@ function TitleTableRow({
   const expanded = hasChildren && (forceExpanded || expandedIds.has(node.id));
   const context = titleContextLabel(node);
   const displayName = displayHierarchyName(node, seriesName, seasonNumber);
-  const childSeriesName =
-    node.title_type === "series" ? node.name : seriesName;
-  const childSeasonNumber =
-    node.title_type === "season" ? node.season_number : seasonNumber;
+  const childSeriesName = node.title_type === "series" ? node.name : seriesName;
+  const childSeasonNumber = node.title_type === "season" ? node.season_number : seasonNumber;
 
   return (
     <>
       <tr className={`title-table-row title-depth-${Math.min(depth, 3)}`}>
-        <td className="title-row-cell">
-          <div className="title-row-main" style={{ paddingLeft: `${depth * 1.1}rem` }}>
+        <td>
+          <div className="title-row-main" style={{ paddingLeft: `${depth * 16}px` }}>
             <button
               type="button"
               className={`title-expand-toggle ${expanded ? "expanded" : ""}`}
@@ -160,64 +161,75 @@ function TitleTableRow({
             {node.poster_url ? (
               <TitleRowPoster url={node.poster_url} />
             ) : (
-              <div className="title-row-poster title-row-poster-empty" aria-hidden>
-                ?
+              <div className="title-row-poster title-row-poster-fallback" aria-hidden>
+                {node.name.charAt(0).toUpperCase()}
               </div>
             )}
             <div className="title-row-text">
-              <strong>{displayName}</strong>
-              {context && <div className="title-row-genres">{context}</div>}
+              <strong title={displayName}>{displayName}</strong>
+              {context && <div className="title-row-meta">{context}</div>}
             </div>
           </div>
         </td>
         <td>
-          <span className="mono table-internal-id">{displayInternalId(node)}</span>
+          <span className="table-meta-id" title={displayInternalId(node)}>
+            {displayInternalId(node)}
+          </span>
         </td>
         <td>
-          <Badge value={node.title_type} kind="type" />
+          <TypeBadge value={node.title_type} />
         </td>
         <td>
-          <Badge value={node.status} />
+          <StatusBadge value={node.status} />
         </td>
-        <td>{node.release_year ?? "—"}</td>
-        <td className="title-studio-cell">{node.studio ?? "—"}</td>
-        <td className="title-actions-cell">
-          <button
-            className="btn btn-ghost"
-            style={{ marginRight: "0.35rem" }}
-            disabled={opening}
-            onClick={() => onEdit(node, "details")}
-          >
-            Edit
-          </button>
-          <button
-            className="btn btn-ghost"
-            style={{ marginRight: "0.35rem" }}
-            disabled={opening}
-            onClick={() => onEdit(node, "artwork")}
-          >
-            Artwork
-          </button>
-          <button className="btn btn-danger" onClick={() => onDelete(node)}>
-            Delete
-          </button>
+        <td className="num">{node.release_year ?? "—"}</td>
+        <td>
+          <span className="table-truncate" title={node.studio ?? undefined}>
+            {node.studio ?? "—"}
+          </span>
+        </td>
+        <td className="actions-cell">
+          <div className="row-actions">
+            <Button
+              variant="ghost"
+              disabled={opening}
+              onClick={() => onEdit(node, "details")}
+            >
+              Edit
+            </Button>
+            <OverflowMenu
+              label={`Actions for ${node.name}`}
+              items={[
+                {
+                  label: "Artwork",
+                  onClick: () => onEdit(node, "artwork"),
+                  disabled: opening,
+                },
+                {
+                  label: "Delete",
+                  danger: true,
+                  onClick: () => onDelete(node),
+                },
+              ]}
+            />
+          </div>
         </td>
       </tr>
       {expanded &&
         node.children.map((child) => (
-            <TitleTableRow
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              seriesName={childSeriesName}
-              seasonNumber={childSeasonNumber}
-              opening={opening}
-              expandedIds={expandedIds}
-              forceExpanded={forceExpanded}
-              onToggle={onToggle}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
+          <TitleTableRow
+            key={child.id}
+            node={child}
+            depth={depth + 1}
+            seriesName={childSeriesName}
+            seasonNumber={childSeasonNumber}
+            opening={opening}
+            expandedIds={expandedIds}
+            forceExpanded={forceExpanded}
+            onToggle={onToggle}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
         ))}
     </>
   );
@@ -229,12 +241,13 @@ export function TitlesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
-  const [modal, setModal] = useState<"create" | "edit" | null>(null);
+  const [sheet, setSheet] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<Title | null>(null);
   const [formTab, setFormTab] = useState<"details" | "artwork">("details");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
+  const [saving, setSaving] = useState(false);
   const requestSeq = useRef(0);
 
   useEffect(() => {
@@ -246,11 +259,11 @@ export function TitlesPage() {
     const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
-    titlesApi.tree()
+    titlesApi
+      .tree()
       .then((treeData) => {
         if (seq !== requestSeq.current) return;
         setTree(treeData);
-        setError(null);
       })
       .catch((e) => {
         if (seq !== requestSeq.current) return;
@@ -268,10 +281,11 @@ export function TitlesPage() {
     load();
   }, [load]);
 
-  const closeModal = () => {
-    setModal(null);
+  const closeSheet = () => {
+    setSheet(null);
     setEditing(null);
     setFormTab("details");
+    setSaving(false);
   };
 
   const openEdit = async (t: Title, tab: "details" | "artwork" = "details") => {
@@ -281,7 +295,7 @@ export function TitlesPage() {
       const full = await titlesApi.get(t.id);
       setEditing(full);
       setFormTab(tab);
-      setModal("edit");
+      setSheet("edit");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load title");
     } finally {
@@ -302,84 +316,107 @@ export function TitlesPage() {
   const filteredTree = filterTree(tree, debouncedSearch, typeFilter);
   const parentOptions = flattenTitleTree(tree);
   const forceExpanded = Boolean(debouncedSearch || typeFilter);
+
   const toggleExpanded = (id: number) => {
     setExpandedIds((current) => {
       const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   return (
     <>
-      <header className="page-header">
-        <div>
-          <h1>Titles</h1>
-          <p>Movies, series, seasons, and episodes with lifecycle and availability metadata.</p>
-        </div>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setError(null);
-            setEditing(null);
-            setFormTab("details");
-            setModal("create");
-          }}
-        >
-          + New title
-        </button>
-      </header>
+      <PageHeader
+        title="Titles"
+        description="Movies, series, seasons, and episodes with lifecycle and availability metadata."
+        actions={
+          <Button
+            variant="primary"
+            icon={<Plus size={16} />}
+            onClick={() => {
+              setError(null);
+              setEditing(null);
+              setFormTab("details");
+              setSheet("create");
+            }}
+          >
+            New title
+          </Button>
+        }
+      />
 
       {error && (
         <div className="error-banner">
-          {error}
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ marginLeft: "0.75rem" }}
-            onClick={load}
-          >
+          <span>{error}</span>
+          <Button variant="ghost" onClick={load}>
             Retry
-          </button>
+          </Button>
         </div>
       )}
 
-      <div className="toolbar">
-        <input
-          placeholder="Search name, slug, or internal ID…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-          <option value="">All types</option>
-          <option value="movie">Movie</option>
-          <option value="series">Series</option>
-          <option value="season">Season</option>
-          <option value="episode">Episode</option>
-        </select>
-      </div>
-
       <div className="card titles-table-card">
+        <div className="table-toolbar">
+          <label className="table-toolbar-search">
+            <Search size={16} aria-hidden />
+            <input
+              placeholder="Search name, slug, or internal ID…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search titles"
+            />
+          </label>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            aria-label="Filter by type"
+          >
+            <option value="">All types</option>
+            <option value="movie">Movie</option>
+            <option value="series">Series</option>
+            <option value="season">Season</option>
+            <option value="episode">Episode</option>
+          </select>
+        </div>
+
         {loading ? (
-          <p className="empty">Loading titles… Render may need a moment to wake up.</p>
+          <TableSkeleton rows={10} cols={7} />
         ) : filteredTree.length === 0 ? (
-          <p className="empty">No titles match your filters.</p>
+          <EmptyState
+            icon={Film}
+            title="No titles found"
+            description={
+              debouncedSearch || typeFilter
+                ? "Try adjusting your search or filters."
+                : "Create your first title to start building the catalog."
+            }
+            action={
+              !debouncedSearch && !typeFilter ? (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setEditing(null);
+                    setSheet("create");
+                  }}
+                >
+                  New title
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <div className="titles-table-scroll">
-            <table className="titles-table">
+          <div className="data-table-wrap titles-table-scroll">
+            <table className="data-table titles-table">
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Internal ID</th>
                   <th>Type</th>
                   <th>Status</th>
-                  <th>Year</th>
+                  <th className="num">Year</th>
                   <th>Studio</th>
-                  <th>Actions</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -401,37 +438,60 @@ export function TitlesPage() {
         )}
       </div>
 
-      {modal && (
-        <Modal
+      {sheet && (
+        <Sheet
           wide
-          title={modal === "create" ? "Create Title" : "Edit Title"}
-          onClose={closeModal}
+          title={sheet === "create" ? "Create title" : "Edit title"}
+          subtitle={
+            sheet === "create"
+              ? "Import from TMDB or enter metadata manually."
+              : undefined
+          }
+          onClose={closeSheet}
+          footer={
+            <>
+              <Button variant="ghost" onClick={closeSheet}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                type="submit"
+                form={TITLE_FORM_ID}
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save title"}
+              </Button>
+            </>
+          }
         >
-          {modal === "edit" && editing && <TitleModalSummary title={editing} />}
+          {sheet === "edit" && editing && <TitleSheetSummary title={editing} />}
           <TitleForm
             key={editing?.id ?? "new"}
+            formId={TITLE_FORM_ID}
+            hideActions
+            onSavingChange={setSaving}
             initial={editing ?? undefined}
             titleId={editing?.id}
-            isCreate={modal === "create"}
+            isCreate={sheet === "create"}
             initialTab={formTab}
             parents={parentOptions.filter((t) => t.id !== editing?.id)}
-            onCancel={closeModal}
+            onCancel={closeSheet}
             onSaved={load}
             onArtworkSaved={load}
             onSubmit={async (data) => {
-              if (modal === "create") {
+              if (sheet === "create") {
                 return await titlesApi.create(data);
               }
               const id = editing?.id;
               if (id == null) {
                 throw new Error(
-                  "Could not save — close the dialog, reopen the title, and try again."
+                  "Could not save — close the panel, reopen the title, and try again."
                 );
               }
               return await titlesApi.update(id, data);
             }}
           />
-        </Modal>
+        </Sheet>
       )}
     </>
   );

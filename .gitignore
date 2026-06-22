@@ -6,6 +6,7 @@ backend/app/**/__pycache__/
 *.pyc
 backend/.env
 data/*.db
+data/minio/
 .venv*/
 frontend/node_modules/
 frontend/dist/

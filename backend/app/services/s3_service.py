@@ -99,7 +99,17 @@ def s3_client():
         import boto3
     except Exception as exc:
         raise RuntimeError("boto3 is required for S3 integration.") from exc
-    return boto3.client("s3")
+
+    session_kwargs: dict[str, str] = {"region_name": settings.aws_region}
+    if settings.aws_profile:
+        session_kwargs["profile_name"] = settings.aws_profile
+    if settings.aws_access_key_id and settings.aws_secret_access_key:
+        session_kwargs["aws_access_key_id"] = settings.aws_access_key_id
+        session_kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+    client_kwargs: dict[str, str] = {}
+    if settings.aws_endpoint_url:
+        client_kwargs["endpoint_url"] = settings.aws_endpoint_url
+    return boto3.Session(**session_kwargs).client("s3", **client_kwargs)
 
 
 def list_all_objects(relative_prefix: str, *, max_keys: int) -> list[S3ObjectRow]:

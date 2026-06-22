@@ -10,8 +10,8 @@ export function TitleRowPoster({ url }: TitleRowPosterProps) {
 
   if (failed) {
     return (
-      <div className="title-row-poster title-row-poster-empty" aria-hidden>
-        ?
+      <div className="title-row-poster title-row-poster-fallback" aria-hidden>
+        —
       </div>
     );
   }

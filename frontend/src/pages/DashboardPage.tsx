@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { CheckCircle2, Film, HardDrive, Play } from "lucide-react";
 import { assetsApi, titlesApi } from "../api/client";
 import type { MediaAsset, Title, TitleTree } from "../types";
-import { Badge } from "../components/Badge";
+import { StatusBadge, TypeBadge } from "../components/ui/Badge";
+import { PageHeader } from "../components/ui/PageHeader";
+import { StatCard } from "../components/ui/StatCard";
+import { assetPrimaryLabel, isImageUri } from "../utils/assetLabel";
 
 function isHierarchyRoot(node: TitleTree): boolean {
   return node.title_type === "series" || node.title_type === "movie";
@@ -35,9 +39,9 @@ function TreeNode({
         ) : (
           <span className="title-expand-toggle-spacer" aria-hidden />
         )}
-        <Badge value={node.title_type} kind="type" />
-        <strong>{node.name}</strong>
-        <Badge value={node.status} />
+        <TypeBadge value={node.title_type} />
+        <strong title={node.name}>{node.name}</strong>
+        <StatusBadge value={node.status} />
       </div>
       {expanded && (
         <ul>
@@ -73,13 +77,10 @@ export function DashboardPage() {
       .finally(() => setTreeLoading(false));
   }, []);
 
-  const hierarchyRoots = useMemo(
-    () => tree.filter(isHierarchyRoot),
-    [tree]
-  );
-
+  const hierarchyRoots = useMemo(() => tree.filter(isHierarchyRoot), [tree]);
   const published = titles.filter((t) => t.status === "published").length;
   const readyAssets = assets.filter((a) => a.status === "ready").length;
+  const recentAssets = assets.slice(0, 5);
 
   const toggleExpanded = (id: number) => {
     setExpandedIds((current) => {
@@ -92,35 +93,51 @@ export function DashboardPage() {
 
   return (
     <>
-      <header className="page-header">
-        <div>
-          <h1>Catalog overview</h1>
-          <p>Title management and media asset inventory for your streaming library.</p>
-        </div>
-      </header>
+      <PageHeader
+        title="Overview"
+        description="Title management and media asset inventory for your streaming library."
+      />
 
       <div className="stats">
-        <div className="stat-card">
-          <strong>{titles.length}</strong>
-          <span>Titles</span>
-        </div>
-        <div className="stat-card">
-          <strong>{published}</strong>
-          <span>Published</span>
-        </div>
-        <div className="stat-card">
-          <strong>{assets.length}</strong>
-          <span>Media assets</span>
-        </div>
-        <div className="stat-card">
-          <strong>{readyAssets}</strong>
-          <span>Ready for playback</span>
-        </div>
+        <StatCard
+          icon={Film}
+          value={titles.length}
+          label="Titles"
+          context="Across all types"
+        />
+        <StatCard
+          icon={CheckCircle2}
+          value={published}
+          label="Published"
+          context={published === 0 ? "None live yet" : "Live in catalog"}
+          attention={published === 0}
+        />
+        <StatCard
+          icon={HardDrive}
+          value={assets.length}
+          label="Media assets"
+          context="Linked to titles"
+        />
+        <StatCard
+          icon={Play}
+          value={readyAssets}
+          label="Ready for playback"
+          context={
+            assets.length > 0
+              ? `${readyAssets} of ${assets.length} processed`
+              : "No assets yet"
+          }
+        />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
-        <section className="card" style={{ padding: "1.25rem" }}>
-          <h3 style={{ margin: "0 0 1rem" }}>Title hierarchy</h3>
+      <div className="dashboard-grid">
+        <section className="card card-padded">
+          <div className="panel-header">
+            <h3>Title hierarchy</h3>
+            <Link to="/titles" className="panel-link">
+              Manage titles →
+            </Link>
+          </div>
           {treeLoading ? (
             <p className="empty">Loading hierarchy…</p>
           ) : hierarchyRoots.length === 0 ? (
@@ -137,42 +154,67 @@ export function DashboardPage() {
               ))}
             </ul>
           )}
-          <p style={{ marginTop: "1rem" }}>
-            <Link to="/titles">Manage titles →</Link>
-          </p>
         </section>
 
-        <section className="card" style={{ padding: "1.25rem" }}>
-          <h3 style={{ margin: "0 0 1rem" }}>Recent assets</h3>
-          {assets.length === 0 ? (
+        <section className="card card-padded">
+          <div className="panel-header">
+            <h3>Recent assets</h3>
+            <Link to="/assets" className="panel-link">
+              Manage assets →
+            </Link>
+          </div>
+          {recentAssets.length === 0 ? (
             <p className="empty">No assets yet.</p>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>File</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assets.slice(0, 5).map((a) => (
-                  <tr key={a.id}>
-                    <td className="mono">{a.filename}</td>
-                    <td>
-                      <Badge value={a.asset_type} kind="asset" />
-                    </td>
-                    <td>
-                      <Badge value={a.status} />
-                    </td>
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Type</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recentAssets.map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        <div className="asset-row-main">
+                          {isImageUri(a.storage_uri) ? (
+                            <img
+                              src={a.storage_uri}
+                              alt=""
+                              className="asset-thumb"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="asset-thumb asset-thumb-fallback" aria-hidden>
+                              <HardDrive size={16} />
+                            </div>
+                          )}
+                          <div className="asset-row-label">
+                            <strong>{assetPrimaryLabel(a.filename, a.asset_type)}</strong>
+                            <span className="mono" title={a.filename}>
+                              {a.filename}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <TypeBadge value={a.asset_type} />
+                      </td>
+                      <td>
+                        <StatusBadge
+                          value={a.status}
+                          pulse={a.status === "processing"}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-          <p style={{ marginTop: "1rem" }}>
-            <Link to="/assets">Manage assets →</Link>
-          </p>
         </section>
       </div>
     </>

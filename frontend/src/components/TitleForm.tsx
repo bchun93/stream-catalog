@@ -21,6 +21,9 @@ interface TitleFormProps {
   parents?: Title[];
   isCreate?: boolean;
   initialTab?: "details" | "artwork";
+  formId?: string;
+  hideActions?: boolean;
+  onSavingChange?: (saving: boolean) => void;
   onSubmit: (data: Partial<Title>) => Promise<Title | void>;
   onCancel: () => void;
   /** Called after title details save succeeds (e.g. refresh list). */
@@ -128,6 +131,9 @@ export function TitleForm({
   parents = [],
   isCreate = false,
   initialTab = "details",
+  formId = "title-form",
+  hideActions = false,
+  onSavingChange,
   onSubmit,
   onCancel,
   onSaved,
@@ -230,6 +236,7 @@ export function TitleForm({
       return;
     }
     setSaving(true);
+    onSavingChange?.(true);
     setError(null);
     try {
       const payload: Partial<Title> = {
@@ -286,13 +293,14 @@ export function TitleForm({
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
+      onSavingChange?.(false);
     }
   };
 
   const activeTitleId = savedTitleId ?? titleId;
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
+    <form id={formId} onSubmit={handleSubmit} noValidate>
       {error && <div className="error-banner">{error}</div>}
       <div className="title-tabs">
         <button
@@ -314,27 +322,32 @@ export function TitleForm({
       {tab === "details" && (
         <>
           {(isCreate || !form.external_id?.startsWith("tmdb:")) && (
-            <MetadataLookup
-              onApply={applyMetadata}
-              onHierarchyApplied={() => {
-                onSaved?.();
-                onCancel();
-              }}
-            />
+            <section className="form-section form-section-hero">
+              <h3 className="form-section-title">Import metadata</h3>
+              <p className="form-section-desc">
+                Search TMDB to pre-fill fields and sync artwork into the title library.
+              </p>
+              <MetadataLookup
+                onApply={applyMetadata}
+                onHierarchyApplied={() => {
+                  onSaved?.();
+                  onCancel();
+                }}
+              />
+            </section>
           )}
           {metadataApplied && (
             <div className="metadata-applied-banner">
-              Metadata imported — review the core metadata fields below and save.
+              Metadata imported — review the fields below and save.
             </div>
           )}
-          <div className="form-grid">
-            <div className="form-span-2 metadata-requirements">
-              <h3 className="metadata-requirements-heading">Identification Metadata</h3>
-              <p className="metadata-hint">
-                Internal ID is assigned by the catalog and stays with this title.
-              </p>
-            </div>
-            <label>
+          <section className="form-section">
+            <h3 className="form-section-title">Identification</h3>
+            <p className="form-section-desc">
+              Internal ID is assigned by the catalog and stays with this title.
+            </p>
+            <div className="form-grid">
+            <label className="field-readonly">
               Internal ID
               <input
                 value={form.internal_id || "Assigned when saved"}
@@ -414,12 +427,14 @@ export function TitleForm({
                 onChange={(e) => set("episode_number", e.target.value)}
               />
             </label>
-            <div className="form-span-2 metadata-requirements">
-              <h3 className="metadata-requirements-heading">Core metadata</h3>
-              <p className="metadata-hint">
-                TMDB import maps matching fields automatically; unmatched fields remain blank.
-              </p>
-              <div className="form-grid">
+            </div>
+          </section>
+          <section className="form-section">
+            <h3 className="form-section-title">Core metadata</h3>
+            <p className="form-section-desc">
+              TMDB import maps matching fields automatically; unmatched fields remain blank.
+            </p>
+            <div className="form-grid">
                 {visibleCoreMetadataFields.map((field) => (
                   <label key={field.key} className={field.multiline ? "form-span-2" : undefined}>
                     {field.label}
@@ -439,12 +454,11 @@ export function TitleForm({
                 ))}
                 {visibleCoreMetadataFields.length === 0 && (
                   <p className="empty form-span-2">
-                    No Core metadata fields are configured for this content type.
+                    No core metadata fields are configured for this content type.
                   </p>
                 )}
-              </div>
             </div>
-          </div>
+          </section>
         </>
       )}
 
@@ -469,14 +483,16 @@ export function TitleForm({
         )
       )}
 
-      <div className="form-actions">
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? "Saving…" : "Save title"}
-        </button>
-      </div>
+      {!hideActions && (
+        <div className="form-actions">
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Saving…" : "Save title"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

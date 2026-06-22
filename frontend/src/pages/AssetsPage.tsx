@@ -1,15 +1,37 @@
 import { useCallback, useEffect, useState } from "react";
+import { HardDrive, Image, Plus } from "lucide-react";
 import { assetsApi, titlesApi } from "../api/client";
 import { AssetForm } from "../components/AssetForm";
-import { Badge } from "../components/Badge";
+import { StatusBadge, TypeBadge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import { CopyButton } from "../components/ui/CopyButton";
+import { EmptyState } from "../components/ui/EmptyState";
 import { Modal } from "../components/Modal";
+import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { PageHeader } from "../components/ui/PageHeader";
+import { TableSkeleton } from "../components/ui/TableSkeleton";
 import type { MediaAsset, Title } from "../types";
+import { assetPrimaryLabel, isImageUri } from "../utils/assetLabel";
+import { formatBytes, truncateMiddle } from "../utils/format";
 
-function formatBytes(n?: number | null) {
-  if (!n) return "—";
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
-  return `${n} B`;
+function AssetThumb({ uri, label }: { uri: string; label: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!isImageUri(uri) || failed) {
+    return (
+      <div className="asset-thumb asset-thumb-fallback" aria-hidden>
+        <Image size={16} />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={uri}
+      alt=""
+      className="asset-thumb"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export function AssetsPage() {
@@ -20,6 +42,7 @@ export function AssetsPage() {
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<MediaAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const titleMap = Object.fromEntries(titles.map((t) => [t.id, t.name]));
 
@@ -27,12 +50,15 @@ export function AssetsPage() {
     const params: Record<string, string> = {};
     if (titleFilter) params.title_id = titleFilter;
     if (statusFilter) params.status = statusFilter;
+    setLoading(true);
     Promise.all([assetsApi.list(params), titlesApi.list()])
       .then(([a, t]) => {
         setAssets(a);
         setTitles(t);
+        setError(null);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   }, [titleFilter, statusFilter]);
 
   useEffect(() => {
@@ -45,7 +71,7 @@ export function AssetsPage() {
   };
 
   const handleDelete = async (a: MediaAsset) => {
-    if (!confirm(`Delete asset "${a.filename}"?`)) return;
+    if (!confirm(`Delete asset "${assetPrimaryLabel(a.filename, a.asset_type)}"?`)) return;
     try {
       await assetsApi.delete(a.id);
       load();
@@ -56,97 +82,151 @@ export function AssetsPage() {
 
   return (
     <>
-      <header className="page-header">
-        <div>
-          <h1>Media assets</h1>
-          <p>
-            Masters, artwork, subtitles, and promos linked to titles with storage URIs and
-            processing status.
-          </p>
-        </div>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setEditing(null);
-            setModal("create");
-          }}
-          disabled={titles.length === 0}
-        >
-          + Register asset
-        </button>
-      </header>
+      <PageHeader
+        title="Media assets"
+        description="Masters, artwork, subtitles, and promos linked to titles with storage URIs and processing status."
+        actions={
+          <Button
+            variant="primary"
+            icon={<Plus size={16} />}
+            disabled={titles.length === 0}
+            onClick={() => {
+              setEditing(null);
+              setModal("create");
+            }}
+          >
+            Register asset
+          </Button>
+        }
+      />
 
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="toolbar">
-        <select value={titleFilter} onChange={(e) => setTitleFilter(e.target.value)}>
-          <option value="">All titles</option>
-          {titles.map((t) => (
-            <option key={t.id} value={String(t.id)}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="uploaded">Uploaded</option>
-          <option value="processing">Processing</option>
-          <option value="ready">Ready</option>
-          <option value="failed">Failed</option>
-          <option value="archived">Archived</option>
-        </select>
-      </div>
-
       <div className="card">
-        {assets.length === 0 ? (
-          <p className="empty">No assets registered.</p>
+        <div className="table-toolbar">
+          <select
+            value={titleFilter}
+            onChange={(e) => setTitleFilter(e.target.value)}
+            aria-label="Filter by title"
+          >
+            <option value="">All titles</option>
+            {titles.map((t) => (
+              <option key={t.id} value={String(t.id)}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Filter by status"
+          >
+            <option value="">All statuses</option>
+            <option value="uploaded">Uploaded</option>
+            <option value="processing">Processing</option>
+            <option value="ready">Ready</option>
+            <option value="failed">Failed</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+
+        {loading ? (
+          <TableSkeleton rows={6} cols={6} />
+        ) : assets.length === 0 ? (
+          <EmptyState
+            icon={HardDrive}
+            title="No assets registered"
+            description={
+              titleFilter || statusFilter
+                ? "No assets match the current filters."
+                : "Register artwork, masters, or subtitles and link them to a title."
+            }
+            action={
+              titles.length > 0 ? (
+                <Button variant="primary" onClick={() => setModal("create")}>
+                  Register asset
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Filename</th>
-                <th>Title</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Storage</th>
-                <th>Size</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((a) => (
-                <tr key={a.id}>
-                  <td className="mono">{a.filename}</td>
-                  <td>{titleMap[a.title_id] ?? a.title_id}</td>
-                  <td>
-                    <Badge value={a.asset_type} kind="asset" />
-                  </td>
-                  <td>
-                    <Badge value={a.status} />
-                  </td>
-                  <td className="mono" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {a.storage_uri}
-                  </td>
-                  <td>{formatBytes(a.size_bytes)}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ marginRight: "0.35rem" }}
-                      onClick={() => {
-                        setEditing(a);
-                        setModal("edit");
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button className="btn btn-danger" onClick={() => handleDelete(a)}>
-                      Delete
-                    </button>
-                  </td>
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Storage</th>
+                  <th className="num">Size</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {assets.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <div className="asset-row-main">
+                        <AssetThumb
+                          uri={a.storage_uri}
+                          label={assetPrimaryLabel(a.filename, a.asset_type)}
+                        />
+                        <div className="asset-row-label">
+                          <strong>{assetPrimaryLabel(a.filename, a.asset_type)}</strong>
+                          <span className="mono" title={a.filename}>
+                            {a.filename}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{titleMap[a.title_id] ?? a.title_id}</td>
+                    <td>
+                      <TypeBadge value={a.asset_type} />
+                    </td>
+                    <td>
+                      <StatusBadge
+                        value={a.status}
+                        pulse={a.status === "processing"}
+                      />
+                    </td>
+                    <td>
+                      <div className="storage-cell">
+                        <span className="storage-uri-text" title={a.storage_uri}>
+                          {truncateMiddle(a.storage_uri, 32)}
+                        </span>
+                        <CopyButton value={a.storage_uri} label="Copy storage URI" />
+                      </div>
+                    </td>
+                    <td className="num text-tertiary">{formatBytes(a.size_bytes)}</td>
+                    <td className="actions-cell">
+                      <div className="row-actions">
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setEditing(a);
+                            setModal("edit");
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <OverflowMenu
+                          label={`Actions for ${a.filename}`}
+                          items={[
+                            {
+                              label: "Delete",
+                              danger: true,
+                              onClick: () => handleDelete(a),
+                            },
+                          ]}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

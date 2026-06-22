@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Stream Catalog API",
+    title="Relay API",
     description="Title management and media asset management for video streaming",
     version="1.0.0",
     lifespan=lifespan,

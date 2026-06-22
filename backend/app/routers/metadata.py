@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -29,12 +30,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/metadata", tags=["metadata"])
 
 
+def _tmdb_missing_message() -> str:
+    if os.environ.get("PORT"):
+        return (
+            "TMDB_API_KEY is not set on Render. Add your v3 key under Environment and redeploy."
+        )
+    return (
+        "TMDB_API_KEY is not set for local dev. Add your v3 key to backend/.env and restart "
+        "the backend (./scripts/dev.sh)."
+    )
+
+
 @router.get("/health")
 async def metadata_health():
     if not settings.tmdb_configured:
         return {
             "ok": False,
-            "message": "TMDB_API_KEY is not set on Render. Add your v3 key under Environment and redeploy.",
+            "message": _tmdb_missing_message(),
             "tmdb_configured": False,
         }
     result = await check_tmdb_connectivity()
