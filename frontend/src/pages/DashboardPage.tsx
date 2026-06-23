@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, Film, HardDrive, Play } from "lucide-react";
+import { CircleX, Film, HardDrive, Package } from "lucide-react";
 import { assetsApi, titlesApi } from "../api/client";
-import type { MediaAsset, Title, TitleTree } from "../types";
+import type { Title, TitleTree } from "../types";
 import { StatusBadge, TypeBadge } from "../components/ui/Badge";
 import { PageHeader } from "../components/ui/PageHeader";
 import { StatCard } from "../components/ui/StatCard";
+import { TitlesByTypeStatCard } from "../components/ui/TitlesByTypeStatCard";
 import { assetPrimaryLabel, isImageUri } from "../utils/assetLabel";
 
 function isHierarchyRoot(node: TitleTree): boolean {
@@ -59,9 +60,19 @@ function TreeNode({
   );
 }
 
+/** Cleared for handoff — scheduled or already published. */
+function isReadyForDelivery(status: Title["status"]): boolean {
+  return status === "scheduled" || status === "published";
+}
+
+/** Terminal non-delivery state — archived titles. */
+function isRejected(status: Title["status"]): boolean {
+  return status === "archived";
+}
+
 export function DashboardPage() {
   const [titles, setTitles] = useState<Title[]>([]);
-  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [assets, setAssets] = useState<Awaited<ReturnType<typeof assetsApi.list>>>([]);
   const [tree, setTree] = useState<TitleTree[]>([]);
   const [treeLoading, setTreeLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
@@ -78,8 +89,14 @@ export function DashboardPage() {
   }, []);
 
   const hierarchyRoots = useMemo(() => tree.filter(isHierarchyRoot), [tree]);
-  const published = titles.filter((t) => t.status === "published").length;
-  const readyAssets = assets.filter((a) => a.status === "ready").length;
+  const readyForDelivery = useMemo(
+    () => titles.filter((t) => isReadyForDelivery(t.status)).length,
+    [titles]
+  );
+  const rejected = useMemo(
+    () => titles.filter((t) => isRejected(t.status)).length,
+    [titles]
+  );
   const recentAssets = assets.slice(0, 5);
 
   const toggleExpanded = (id: number) => {
@@ -99,34 +116,24 @@ export function DashboardPage() {
       />
 
       <div className="stats">
+        <TitlesByTypeStatCard icon={Film} titles={titles} />
         <StatCard
-          icon={Film}
-          value={titles.length}
-          label="Titles"
-          context="Across all types"
-        />
-        <StatCard
-          icon={CheckCircle2}
-          value={published}
-          label="Published"
-          context={published === 0 ? "None live yet" : "Live in catalog"}
-          attention={published === 0}
-        />
-        <StatCard
-          icon={HardDrive}
-          value={assets.length}
-          label="Media assets"
-          context="Linked to titles"
-        />
-        <StatCard
-          icon={Play}
-          value={readyAssets}
-          label="Ready for playback"
+          icon={Package}
+          value={readyForDelivery}
+          label="Titles ready for delivery"
           context={
-            assets.length > 0
-              ? `${readyAssets} of ${assets.length} processed`
-              : "No assets yet"
+            readyForDelivery === 0
+              ? "No scheduled or published titles"
+              : "Scheduled or published"
           }
+          attention={readyForDelivery === 0}
+        />
+        <StatCard
+          icon={CircleX}
+          value={rejected}
+          label="Rejected titles"
+          context={rejected === 0 ? "None archived" : "Archived / rejected"}
+          attention={rejected > 0}
         />
       </div>
 

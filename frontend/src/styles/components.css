@@ -273,14 +273,14 @@
 /* Stat cards */
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-4);
   margin-bottom: var(--space-5);
 }
 
 @media (max-width: 960px) {
   .stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 }
 
@@ -336,6 +336,33 @@
   color: var(--text-tertiary);
   font-size: 0.6875rem;
   margin-top: var(--space-1);
+}
+
+.stat-card-filterable .stat-card-body {
+  min-width: 0;
+}
+
+.stat-card-filter {
+  display: block;
+  margin-top: var(--space-2);
+}
+
+.stat-card-filter select {
+  width: 100%;
+  max-width: 160px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.stat-card-filter select:focus {
+  border-color: var(--accent);
+  outline: none;
 }
 
 /* Dashboard grid */
