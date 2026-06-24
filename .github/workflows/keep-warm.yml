@@ -1,0 +1,22 @@
+# Keep Render (and Neon via /ready) warm on free tier — idle services sleep after ~15 min.
+# Override API_URL in repo Settings → Secrets and variables → Actions → Variables.
+name: Keep API warm
+
+on:
+  schedule:
+    - cron: "*/14 * * * *"
+  workflow_dispatch:
+
+env:
+  API_URL: ${{ vars.API_URL || 'https://stream-catalog.onrender.com' }}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /health
+        run: curl -sfS --max-time 120 "${API_URL}/health"
+
+      - name: Ping /ready (DB wake)
+        run: curl -sfS --max-time 120 "${API_URL}/ready"

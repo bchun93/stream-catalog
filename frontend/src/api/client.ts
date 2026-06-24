@@ -28,9 +28,92 @@ const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const API = `${API_BASE}/api/v1`;
 const IS_PROD = import.meta.env.PROD;
 const REQUEST_TIMEOUT_MS = IS_PROD ? 90000 : 30000;
+/** Per-attempt cap while waking Render — avoids hanging on one 90s timeout. */
+const WAKE_ATTEMPT_TIMEOUT_MS = IS_PROD ? 12000 : 8000;
+const WAKE_POLL_INTERVAL_MS = 2000;
+const WAKE_MAX_ATTEMPTS = IS_PROD ? 25 : 8;
 const INGEST_OPERATOR_TOKEN = (
   import.meta.env.VITE_INGEST_OPERATOR_TOKEN as string | undefined
 )?.trim();
+
+function rootUrl(path: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${normalized}` : normalized;
+}
+
+export type ApiHealth = {
+  status: string;
+  tmdb_configured?: boolean;
+};
+
+export type ApiWakeState = {
+  waking: boolean;
+  ready: boolean;
+  error: boolean;
+  tmdbConfigured?: boolean;
+};
+
+let warmPromise: Promise<ApiHealth> | null = null;
+
+function shouldWarmApi(): boolean {
+  return IS_PROD && Boolean(API_BASE);
+}
+
+async function pingRoot(
+  path: string,
+  attempts = WAKE_MAX_ATTEMPTS,
+  timeoutMs = WAKE_ATTEMPT_TIMEOUT_MS
+): Promise<Response> {
+  const url = rootUrl(path);
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      if (res.ok) return res;
+      last = new Error(`HTTP ${res.status}`);
+      // 502/503 while the container is still booting — keep polling.
+      if (res.status < 500) throw last;
+    } catch (err) {
+      last = err;
+      const msg = err instanceof Error ? err.message : "";
+      const retryable =
+        msg.includes("aborted") ||
+        msg.includes("Failed to fetch") ||
+        msg.includes("Load failed") ||
+        msg.includes("NetworkError") ||
+        msg.includes("HTTP 5");
+      if (!retryable || i === attempts - 1) throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+    await new Promise((r) => setTimeout(r, WAKE_POLL_INTERVAL_MS));
+  }
+  throw last instanceof Error ? last : new Error("Request failed");
+}
+
+/** Lightweight root /health — used for wake-up and sidebar status. */
+export async function pingHealth(
+  attempts = WAKE_MAX_ATTEMPTS
+): Promise<ApiHealth> {
+  const res = await pingRoot("/health", attempts);
+  if (!res.ok) {
+    throw new Error(`Health check failed (${res.status})`);
+  }
+  return res.json() as Promise<ApiHealth>;
+}
+
+/** Single shared warm-up before API v1 requests (Render free tier). */
+export function ensureApiWarm(): Promise<ApiHealth> {
+  if (!shouldWarmApi()) {
+    return Promise.resolve({ status: "ok" });
+  }
+  if (!warmPromise) {
+    warmPromise = pingHealth();
+  }
+  return warmPromise;
+}
 
 function operatorHeaders(): HeadersInit {
   return INGEST_OPERATOR_TOKEN ? { "X-Ingest-Token": INGEST_OPERATOR_TOKEN } : {};
@@ -155,6 +238,13 @@ async function requestWithRetry<T>(
   init?: RequestInit,
   attempts = 4
 ): Promise<T> {
+  if (shouldWarmApi()) {
+    try {
+      await ensureApiWarm();
+    } catch {
+      // Fall through — per-request retries still apply.
+    }
+  }
   let last: unknown;
   for (let i = 0; i < attempts; i++) {
     try {

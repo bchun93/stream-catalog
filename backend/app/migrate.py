@@ -123,6 +123,7 @@ def _upgrade_postgres_enums_to_varchar(conn) -> None:
 
 def _ensure_pg_enum_values(conn) -> None:
     """If enum columns still exist, add missing labels (fallback)."""
+
     def _enum_labels(enum_cls) -> list[str]:
         labels: list[str] = []
         for item in enum_cls:
@@ -143,12 +144,17 @@ def _ensure_pg_enum_values(conn) -> None:
     }
     for type_name, labels in additions.items():
         for label in labels:
+            safe_label = label.replace("'", "''")
             try:
+                conn.execute(text("SAVEPOINT enum_label_add"))
                 conn.execute(
-                    text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{label}'")
+                    text(
+                        f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{safe_label}'"
+                    )
                 )
+                conn.execute(text("RELEASE SAVEPOINT enum_label_add"))
             except Exception:
-                pass
+                conn.execute(text("ROLLBACK TO SAVEPOINT enum_label_add"))
 
 
 def _seed_default_ingest_manifest(conn) -> None:
@@ -427,10 +433,14 @@ def run_migrations() -> None:
                     )
 
     if engine.dialect.name == "postgresql":
+        # Commit enum→VARCHAR first — a later failure must not roll this back.
         with engine.begin() as conn:
             _upgrade_postgres_enums_to_varchar(conn)
-            # Re-inspect; if enums remain, try adding values
+
+        with engine.begin() as conn:
             _ensure_pg_enum_values(conn)
+
+        with engine.begin() as conn:
             _ensure_title_internal_ids(conn)
             _normalize_hierarchy_names(conn)
             _ensure_common_indexes(conn)

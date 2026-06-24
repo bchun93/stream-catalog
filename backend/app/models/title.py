@@ -1,10 +1,11 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.db_enums import str_enum
 
 
 class TitleType(str, enum.Enum):
@@ -31,11 +32,9 @@ class Title(Base):
     )
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
-    title_type: Mapped[TitleType] = mapped_column(
-        Enum(TitleType, native_enum=False)
-    )
+    title_type: Mapped[TitleType] = mapped_column(str_enum(TitleType))
     status: Mapped[TitleStatus] = mapped_column(
-        Enum(TitleStatus, native_enum=False), default=TitleStatus.DRAFT
+        str_enum(TitleStatus), default=TitleStatus.DRAFT
     )
     synopsis: Mapped[str | None] = mapped_column(Text, nullable=True)
     short_description: Mapped[str | None] = mapped_column(String(500), nullable=True)

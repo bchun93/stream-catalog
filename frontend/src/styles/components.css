@@ -5,6 +5,37 @@
   min-height: 100vh;
 }
 
+.app-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.api-wake-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-6);
+  background: color-mix(in srgb, var(--warn) 12%, var(--bg-base));
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.api-wake-banner-error {
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg-base));
+  border-bottom-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.api-wake-banner-icon {
+  flex-shrink: 0;
+  animation: api-wake-spin 1s linear infinite;
+}
+
+@keyframes api-wake-spin {
+  to { transform: rotate(360deg); }
+}
+
 .main {
   padding: var(--space-6);
   max-width: var(--content-max);

@@ -1,47 +1,33 @@
-import { useEffect, useState } from "react";
-import { apiBaseUrl, diagnosticsApi } from "../api/client";
+import { useApiWake } from "../context/ApiWakeContext";
 
 const IS_PROD = import.meta.env.PROD;
 
 export function ApiStatus() {
-  const API_BASE = apiBaseUrl();
-  const [health, setHealth] = useState<"ok" | "error" | "loading" | "unset">(
-    IS_PROD && !API_BASE ? "unset" : "loading"
-  );
-  const [detail, setDetail] = useState<string | null>(null);
+  const { waking, ready, error, tmdbConfigured } = useApiWake();
+  const apiConfigured = IS_PROD ? Boolean(import.meta.env.VITE_API_URL) : true;
 
-  useEffect(() => {
-    if (!API_BASE) return;
+  if (!IS_PROD && !import.meta.env.VITE_API_URL) return null;
 
-    diagnosticsApi
-      .get()
-      .then((d) => {
-        const ok =
-          d.db_ready &&
-          !d.titles_error &&
-          (d.titles_count !== null || d.database_driver === "sqlite");
-        setHealth(ok ? "ok" : "error");
-        const parts: string[] = [];
-        if (d.titles_count !== null) parts.push(`${d.titles_count} titles`);
-        if (!d.tmdb_configured) parts.push("TMDB off");
-        setDetail(parts.join(" · ") || "Connected");
-      })
-      .catch(() => {
-        setHealth("error");
-        setDetail("Unreachable");
-      });
-  }, [API_BASE]);
-
-  if (!IS_PROD && !API_BASE) return null;
+  const health = !apiConfigured
+    ? "unset"
+    : waking
+      ? "loading"
+      : error
+        ? "error"
+        : ready
+          ? "ok"
+          : "loading";
 
   const label =
     health === "loading"
       ? "Connecting…"
       : health === "ok"
-        ? detail ?? "Connected"
+        ? tmdbConfigured === false
+          ? "Connected · TMDB off"
+          : "Connected"
         : health === "unset"
           ? "API not configured"
-          : detail ?? "Connection issue";
+          : "Unreachable";
 
   return (
     <div className={`api-status api-status-${health}`}>

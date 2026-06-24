@@ -1,10 +1,11 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.db_enums import str_enum
 
 
 class AssetType(str, enum.Enum):
@@ -35,11 +36,9 @@ class MediaAsset(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title_id: Mapped[int] = mapped_column(ForeignKey("titles.id"), index=True)
-    asset_type: Mapped[AssetType] = mapped_column(
-        Enum(AssetType, native_enum=False)
-    )
+    asset_type: Mapped[AssetType] = mapped_column(str_enum(AssetType))
     status: Mapped[AssetStatus] = mapped_column(
-        Enum(AssetStatus, native_enum=False), default=AssetStatus.UPLOADED
+        str_enum(AssetStatus), default=AssetStatus.UPLOADED
     )
     filename: Mapped[str] = mapped_column(String(255))
     mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)

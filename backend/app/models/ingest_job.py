@@ -1,10 +1,11 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.db_enums import str_enum
 from app.models.media_asset import AssetType
 
 
@@ -32,7 +33,7 @@ class IngestJob(Base):
     )
     source_prefix: Mapped[str] = mapped_column(String(512))
     status: Mapped[IngestJobStatus] = mapped_column(
-        Enum(IngestJobStatus, native_enum=False), default=IngestJobStatus.PENDING, index=True
+        str_enum(IngestJobStatus), default=IngestJobStatus.PENDING, index=True
     )
     dry_run: Mapped[bool] = mapped_column(default=False)
     created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -65,10 +66,10 @@ class IngestItem(Base):
     s3_key: Mapped[str] = mapped_column(String(1024), index=True)
     filename: Mapped[str] = mapped_column(String(255))
     inferred_asset_type: Mapped[AssetType | None] = mapped_column(
-        Enum(AssetType, native_enum=False), nullable=True
+        str_enum(AssetType), nullable=True
     )
     status: Mapped[IngestItemStatus] = mapped_column(
-        Enum(IngestItemStatus, native_enum=False),
+        str_enum(IngestItemStatus),
         default=IngestItemStatus.DISCOVERED,
         index=True,
     )
