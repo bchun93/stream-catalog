@@ -229,6 +229,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 function formatApiError(path: string, status: number, detail: string): string {
   const lower = detail.toLowerCase();
   const generic500 = detail === "Internal Server Error" || lower.includes("<!doctype");
+  const localDev = import.meta.env.DEV && !API_BASE;
   const waking =
     status === 502 ||
     status === 503 ||
@@ -237,11 +238,17 @@ function formatApiError(path: string, status: number, detail: string): string {
     lower.includes("service unavailable") ||
     lower.includes("bad gateway");
 
-  if (waking) {
+  if (localDev && (status === 502 || lower.includes("econnrefused") || lower.includes("proxy error"))) {
     return (
-      `API is waking up (free Render hosting can take ~30s). ` +
-      `Wait a moment and click Retry.`
+      "Local API is not running. Start it with ./scripts/start-backend.sh " +
+      "(or ./scripts/dev.sh) in the stream-catalog project."
     );
+  }
+
+  if (waking) {
+    return API_BASE
+      ? "API is waking up (free Render hosting can take ~30s). Wait a moment and click Retry."
+      : "API is unavailable. If developing locally, run ./scripts/start-backend.sh.";
   }
 
   if (
