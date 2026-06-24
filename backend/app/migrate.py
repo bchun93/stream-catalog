@@ -159,6 +159,14 @@ def _normalize_legacy_enum_strings(conn) -> None:
             )
 
 
+def repair_legacy_enum_strings() -> None:
+    """Public entry point for startup and on-demand enum string repair."""
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as conn:
+        _normalize_legacy_enum_strings(conn)
+
+
 def _ensure_pg_enum_values(conn) -> None:
     """If enum columns still exist, add missing labels (fallback)."""
 
@@ -475,8 +483,7 @@ def run_migrations() -> None:
         with engine.begin() as conn:
             _upgrade_postgres_enums_to_varchar(conn)
 
-        with engine.begin() as conn:
-            _normalize_legacy_enum_strings(conn)
+        repair_legacy_enum_strings()
 
         with engine.begin() as conn:
             _ensure_pg_enum_values(conn)

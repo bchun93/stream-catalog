@@ -220,16 +220,43 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         "API route not found. Redeploy Render from latest main and verify /api/v1 is live."
       );
     }
-    if (detail === "Internal Server Error" && res.status >= 500) {
-      const hint = path.includes("/metadata")
-        ? `Check TMDB_API_KEY on Render and open ${API}/metadata/health`
-        : `Redeploy Render from latest main and open ${API}/diagnostics`;
-      throw new Error(`API error (${res.status}). ${hint}`);
-    }
-    throw new Error(detail);
+    throw new Error(formatApiError(path, res.status, detail));
   }
   if (res.status === 204) return undefined as T;
   return res.json();
+}
+
+function formatApiError(path: string, status: number, detail: string): string {
+  const lower = detail.toLowerCase();
+  const generic500 = detail === "Internal Server Error" || lower.includes("<!doctype");
+  const waking =
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    generic500 ||
+    lower.includes("service unavailable") ||
+    lower.includes("bad gateway");
+
+  if (waking) {
+    return (
+      `API is waking up (free Render hosting can take ~30s). ` +
+      `Wait a moment and click Retry.`
+    );
+  }
+
+  if (
+    status >= 500 &&
+    path.includes("/metadata") &&
+    (lower.includes("tmdb") || lower.includes("metadata search failed"))
+  ) {
+    return `${detail} Open ${API}/metadata/health to verify TMDB on Render.`;
+  }
+
+  if (generic500 && status >= 500) {
+    return `API error (${status}). Retry shortly or check ${API}/diagnostics.`;
+  }
+
+  return detail;
 }
 
 /** Retry cold-start / transient failures (Render free tier). */
@@ -258,10 +285,14 @@ async function requestWithRetry<T>(
         msg.includes("Load failed") ||
         msg.includes("timed out") ||
         msg.includes("aborted") ||
+        msg.includes("waking up") ||
         msg.includes("503") ||
+        msg.includes("502") ||
+        msg.includes("504") ||
         msg.includes("Database not") ||
         msg.includes("Database error") ||
-        msg.includes("db not ready");
+        msg.includes("db not ready") ||
+        msg.includes("defined enum values");
       if (!retryable || i === attempts - 1) throw e;
       await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
     }
@@ -274,7 +305,7 @@ export const titlesApi = {
     const q = new URLSearchParams(params).toString();
     return requestWithRetry<Title[]>(`/titles${q ? `?${q}` : ""}`);
   },
-  tree: () => requestWithRetry<TitleTree[]>("/titles/tree"),
+  tree: () => requestWithRetry<TitleTree[]>("/titles/tree", undefined, 8),
   get: (id: number) => requestWithRetry<Title>(`/titles/${id}`),
   create: (body: Partial<Title>) =>
     request<Title>("/titles", { method: "POST", body: JSON.stringify(body) }),
@@ -421,7 +452,11 @@ export const metadataApi = {
   search: (q: string, titleType?: TitleType) => {
     const params = new URLSearchParams({ q });
     if (titleType) params.set("title_type", titleType);
-    return requestWithRetry<MetadataSearchResult[]>(`/metadata/search?${params}`);
+    return requestWithRetry<MetadataSearchResult[]>(
+      `/metadata/search?${params}`,
+      undefined,
+      8
+    );
   },
   import: (externalId: string) =>
     requestWithRetry<TitleMetadataImport>(

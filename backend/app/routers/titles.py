@@ -7,6 +7,7 @@ import httpx
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.db_repair import retry_after_enum_repair
 from app.database import get_db
 from app.deps import require_db
 from app.models.media_asset import MediaAsset
@@ -48,8 +49,11 @@ def list_titles(
     _: None = Depends(require_db),
 ):
     try:
-        return title_service.list_titles_read(
-            db, q=q, title_type=title_type, parent_id=parent_id, skip=skip, limit=limit
+        return retry_after_enum_repair(
+            db,
+            lambda: title_service.list_titles_read(
+                db, q=q, title_type=title_type, parent_id=parent_id, skip=skip, limit=limit
+            ),
         )
     except SQLAlchemyError as exc:
         logger.exception("list_titles failed")
@@ -74,7 +78,7 @@ def get_title_tree(
     _: None = Depends(require_db),
 ):
     try:
-        roots = title_service.build_title_tree(db)
+        roots = retry_after_enum_repair(db, lambda: title_service.build_title_tree(db))
         return [_title_to_tree(r) for r in roots]
     except SQLAlchemyError as exc:
         logger.exception("get_title_tree failed")
