@@ -61,6 +61,15 @@ _PG_ENUM_COLUMNS: tuple[tuple[str, str, int], ...] = (
     ("artwork_classifications", "predicted_role", 64),
 )
 
+# String enum columns that may still contain legacy uppercase PG enum labels.
+_LEGACY_ENUM_STRING_COLUMNS: tuple[tuple[str, str], ...] = tuple(
+    (table, column) for table, column, _ in _PG_ENUM_COLUMNS
+) + (
+    ("artwork_training_examples", "assigned_role"),
+    ("artwork_training_examples", "decision"),
+    ("artwork_classifications", "predicted_role"),
+)
+
 
 def _quote_ident(name: str) -> str:
     return f'"{name.replace(chr(34), chr(34) * 2)}"'
@@ -119,6 +128,35 @@ def _upgrade_postgres_enums_to_varchar(conn) -> None:
 
     # Leave legacy enum types in place after column migration. Dropping enum types can
     # abort the whole startup migration if any old dependency remains on Neon.
+
+
+def _normalize_legacy_enum_strings(conn) -> None:
+    """Lowercase any legacy EPISODE/MOVIE-style values left in string enum columns."""
+    inspector = inspect(conn)
+    tables = set(inspector.get_table_names())
+    for table, column in _LEGACY_ENUM_STRING_COLUMNS:
+        if table not in tables:
+            continue
+        cols = {c["name"] for c in inspector.get_columns(table)}
+        if column not in cols:
+            continue
+        table_ident = _quote_ident(table)
+        col_ident = _quote_ident(column)
+        result = conn.execute(
+            text(
+                f"UPDATE {table_ident} "
+                f"SET {col_ident} = LOWER({col_ident}::text) "
+                f"WHERE {col_ident}::text <> LOWER({col_ident}::text)"
+            )
+        )
+        updated = result.rowcount or 0
+        if updated:
+            logger.info(
+                "Normalized %s legacy uppercase value(s) in %s.%s",
+                updated,
+                table,
+                column,
+            )
 
 
 def _ensure_pg_enum_values(conn) -> None:
@@ -436,6 +474,9 @@ def run_migrations() -> None:
         # Commit enum→VARCHAR first — a later failure must not roll this back.
         with engine.begin() as conn:
             _upgrade_postgres_enums_to_varchar(conn)
+
+        with engine.begin() as conn:
+            _normalize_legacy_enum_strings(conn)
 
         with engine.begin() as conn:
             _ensure_pg_enum_values(conn)

@@ -39,7 +39,9 @@ class ArtworkTrainingExample(Base):
     source_asset_type: Mapped[AssetType | None] = mapped_column(
         str_enum(AssetType), nullable=True
     )
-    assigned_role: Mapped[ArtworkRole] = mapped_column(str_enum(ArtworkRole), index=True)
+    assigned_role: Mapped[ArtworkRole] = mapped_column(
+        str_enum(ArtworkRole, length=64), index=True
+    )
     decision: Mapped[ArtworkTrainingDecision] = mapped_column(
         str_enum(ArtworkTrainingDecision),
         default=ArtworkTrainingDecision.APPROVED,
@@ -63,7 +65,9 @@ class ArtworkClassification(Base):
     source_asset_type: Mapped[AssetType | None] = mapped_column(
         str_enum(AssetType), nullable=True
     )
-    predicted_role: Mapped[ArtworkRole] = mapped_column(str_enum(ArtworkRole), index=True)
+    predicted_role: Mapped[ArtworkRole] = mapped_column(
+        str_enum(ArtworkRole, length=64), index=True
+    )
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     model_version: Mapped[str] = mapped_column(String(64), default="baseline-v1")
     auto_applied: Mapped[bool] = mapped_column(Boolean, default=False)
