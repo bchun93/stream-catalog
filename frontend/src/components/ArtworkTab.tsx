@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { artworkAiApi, metadataApi, titlesApi } from "../api/client";
+import { metadataApi, titlesApi } from "../api/client";
 import { specLinesForItem } from "../utils/artworkSpecs";
 import { filterArtworkAssets } from "../utils/artworkTypes";
 import {
   ARTWORK_LABELS,
   ARTWORK_TYPES,
   type ArtworkItem,
-  type ArtworkPrediction,
-  type ArtworkRole,
   type ArtworkType,
   type MediaAsset,
 } from "../types";
@@ -18,6 +16,8 @@ interface ArtworkTabProps {
   metadataJson?: string | null;
   /** When false, panel is hidden but stays mounted so catalog state persists. */
   visible?: boolean;
+  /** Saves the title when needed and returns its id. */
+  onEnsureTitleSaved?: () => Promise<number>;
   onSaved?: () => void;
 }
 
@@ -33,18 +33,6 @@ const ARTWORK_HINTS: Record<ArtworkType, string> = {
 function artworkKey(item: { storage_uri: string }): string {
   return item.storage_uri;
 }
-
-const ARTWORK_ROLE_LABELS: Record<ArtworkRole, string> = {
-  vertical_poster: "Vertical poster",
-  box_art: "Box art",
-  hero_image: "Hero image",
-  horizontal_poster: "Horizontal poster",
-  still_frame: "Still frame",
-  logo: "Logo",
-  season_poster: "Season poster",
-  cast_photo: "Cast photo",
-  unknown: "Unknown",
-};
 
 function preferredArtworkLabel(item: ArtworkItem, labels: string[]): string {
   const aspect = item.specs?.aspect_ratio ?? null;
@@ -111,7 +99,6 @@ function ArtworkStrip({
   savedUris,
   selected,
   onToggle,
-  predictions,
   downloadUrlFor,
 }: {
   items: DisplayItem[];
@@ -119,7 +106,6 @@ function ArtworkStrip({
   savedUris: Set<string>;
   selected: Set<string>;
   onToggle?: (uri: string) => void;
-  predictions?: Map<string, ArtworkPrediction>;
   downloadUrlFor?: (catalogId: number) => string;
 }) {
   if (items.length === 0) return null;
@@ -154,7 +140,6 @@ function ArtworkStrip({
                 const inCatalog = savedUris.has(key);
                 const isSelected = selected.has(key);
                 const selectable = mode === "browse" && onToggle && !inCatalog;
-                const prediction = predictions?.get(key);
 
                 return (
                   <figure
@@ -197,12 +182,6 @@ function ArtworkStrip({
                     {inCatalog && (
                       <span className="artwork-tile-badge">In catalog</span>
                     )}
-                    {prediction && (
-                      <div className="artwork-ai-badge">
-                        AI: {ARTWORK_ROLE_LABELS[prediction.predicted_role]} ·{" "}
-                        {Math.round(prediction.confidence * 100)}%
-                      </div>
-                    )}
                     <figcaption className="artwork-tile-specs">
                       <ul>
                         {specLinesForItem(item).map((line) => (
@@ -236,6 +215,7 @@ export function ArtworkTab({
   titleId,
   externalId,
   visible = true,
+  onEnsureTitleSaved,
   onSaved,
 }: ArtworkTabProps) {
   const [saved, setSaved] = useState<MediaAsset[]>([]);
@@ -243,15 +223,10 @@ export function ArtworkTab({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [classifying, setClassifying] = useState(false);
-  const [autoAssigning, setAutoAssigning] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [predictions, setPredictions] = useState<Map<string, ArtworkPrediction>>(
-    () => new Map()
-  );
 
   const canFetch = Boolean(externalId?.startsWith("tmdb:"));
 
@@ -280,25 +255,21 @@ export function ArtworkTab({
     [selected, savedUris]
   );
 
-  const highConfidenceCount = useMemo(
-    () => [...predictions.values()].filter((prediction) => prediction.auto_apply).length,
-    [predictions]
-  );
-
-  const loadSaved = useCallback(async () => {
-    if (!titleId) {
+  const loadSaved = useCallback(async (overrideId?: number) => {
+    const targetId = overrideId ?? titleId;
+    if (!targetId) {
       setSaved([]);
       return [];
     }
-    const cached = SAVED_ARTWORK_CACHE.get(titleId);
+    const cached = SAVED_ARTWORK_CACHE.get(targetId);
     if (cached) {
       setSaved(cached);
     }
     setCatalogLoading(!cached);
     setError(null);
     try {
-      const list = await titlesApi.listArtwork(titleId);
-      SAVED_ARTWORK_CACHE.set(titleId, list);
+      const list = await titlesApi.listArtwork(targetId);
+      SAVED_ARTWORK_CACHE.set(targetId, list);
       setSaved(list);
       return list;
     } catch (e) {
@@ -325,7 +296,7 @@ export function ArtworkTab({
 
   const handleSyncFromMetadata = async () => {
     if (!titleId) {
-      setError("Save the title on the Details tab before syncing artwork.");
+      setError("Save the title on the Metadata tab before syncing artwork.");
       return;
     }
     setSyncing(true);
@@ -350,7 +321,7 @@ export function ArtworkTab({
 
   const handleFetch = async () => {
     if (!canFetch || !externalId) {
-      setError("Import TMDB metadata on the Details tab first.");
+      setError("Import TMDB metadata on the Metadata tab first.");
       return;
     }
     setFetching(true);
@@ -360,68 +331,10 @@ export function ArtworkTab({
       const items = await metadataApi.importArtwork(externalId);
       setCandidates(normalizeFetchedArtwork(items));
       setSelected(new Set());
-      setPredictions(new Map());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch artwork");
     } finally {
       setFetching(false);
-    }
-  };
-
-  const applyPredictions = (items: ArtworkPrediction[]) => {
-    setPredictions(new Map(items.map((prediction) => [artworkKey(prediction.item), prediction])));
-    setCandidates(items.map((prediction) => prediction.item));
-    setSelected(new Set());
-  };
-
-  const handleClassify = async () => {
-    if (!titleId) {
-      setError("Save the title on the Details tab before running AI classification.");
-      return;
-    }
-    setClassifying(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const response = await artworkAiApi.classify(titleId);
-      applyPredictions(response.predictions);
-      setSuccess(
-        `AI classified ${response.predictions.length} artwork candidate${
-          response.predictions.length === 1 ? "" : "s"
-        }. ${response.predictions.filter((p) => p.auto_apply).length} are high-confidence.`
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to classify artwork");
-    } finally {
-      setClassifying(false);
-    }
-  };
-
-  const handleAutoAssign = async () => {
-    if (!titleId) {
-      setError("Save the title on the Details tab before auto-assigning artwork.");
-      return;
-    }
-    setAutoAssigning(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const response = await artworkAiApi.autoAssign(titleId);
-      applyPredictions(response.predictions);
-      const artworkOnly = filterArtworkAssets(response.assets);
-      SAVED_ARTWORK_CACHE.set(titleId, artworkOnly);
-      setSaved(artworkOnly);
-      setSuccess(
-        `AI auto-assigned ${response.saved_count} high-confidence artwork asset${
-          response.saved_count === 1 ? "" : "s"
-        }. ${response.review_count} remain for review.`
-      );
-      onSaved?.();
-      await loadSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to auto-assign artwork");
-    } finally {
-      setAutoAssigning(false);
     }
   };
 
@@ -442,31 +355,35 @@ export function ArtworkTab({
   const clearSelection = () => setSelected(new Set());
 
   const handleSaveSelected = async () => {
-    if (!titleId) {
-      setError("Save the title on the Details tab before storing artwork.");
-      return;
-    }
     const items = candidates.filter(
       (c) => selected.has(artworkKey(c)) && !savedUris.has(artworkKey(c))
     );
     if (items.length === 0) {
-      setError("Select at least one new image to add to the catalog.");
+      setError("Select at least one image to save to the title.");
       return;
     }
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const stored = await titlesApi.saveArtwork(titleId, items);
+      let activeTitleId = titleId;
+      if (!activeTitleId) {
+        if (!onEnsureTitleSaved) {
+          setError("Save the title on the Metadata tab before storing artwork.");
+          return;
+        }
+        activeTitleId = await onEnsureTitleSaved();
+      }
+      const stored = await titlesApi.saveArtwork(activeTitleId, items);
       const artworkOnly = filterArtworkAssets(stored);
-      SAVED_ARTWORK_CACHE.set(titleId, artworkOnly);
+      SAVED_ARTWORK_CACHE.set(activeTitleId, artworkOnly);
       setSaved(artworkOnly);
       setSelected(new Set());
       setSuccess(
-        `Added ${items.length} artwork asset${items.length === 1 ? "" : "s"} to the catalog.`
+        `Saved ${items.length} artwork image${items.length === 1 ? "" : "s"} to the title.`
       );
       onSaved?.();
-      await loadSaved();
+      await loadSaved(activeTitleId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save artwork");
     } finally {
@@ -479,120 +396,104 @@ export function ArtworkTab({
       className={`artwork-panel${visible ? "" : " artwork-panel-hidden"}`}
       hidden={!visible}
     >
-      <header className="artwork-header">
-        <div className="artwork-header-text">
+      {!titleId ? null : (
+        <header className="artwork-header">
           <h3 className="artwork-title">Artwork library</h3>
-          <p className="artwork-subtitle">
-            Saved artwork loads from this title when the modal opens. Use Browse TMDB
-            to fetch candidates and apply the tool-level AI classifier.
-          </p>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <div className="artwork-meta-row">
-        {titleId && savedItems.length > 0 && (
-          <span className="artwork-pill artwork-pill-saved">
-            {savedItems.length} in catalog
-          </span>
-        )}
-        {candidates.length > 0 && (
-          <span className="artwork-pill">
-            {candidates.length} from TMDB · {newCandidates.length} new
-          </span>
-        )}
-        {selectedNewCount > 0 && (
-          <span className="artwork-pill artwork-pill-preview">
-            {selectedNewCount} selected to add
-          </span>
-        )}
-      </div>
+      {(titleId && savedItems.length > 0) ||
+      candidates.length > 0 ||
+      selectedNewCount > 0 ? (
+        <div className="artwork-meta-row">
+          {titleId && savedItems.length > 0 && (
+            <span className="artwork-pill artwork-pill-saved">
+              {savedItems.length} in catalog
+            </span>
+          )}
+          {candidates.length > 0 && (
+            <span className="artwork-pill">
+              {candidates.length} from TMDB · {newCandidates.length} new
+            </span>
+          )}
+          {selectedNewCount > 0 && (
+            <span className="artwork-pill artwork-pill-preview">
+              {selectedNewCount} selected to add
+            </span>
+          )}
+        </div>
+      ) : null}
 
       {error && <div className="error-banner artwork-error">{error}</div>}
       {success && !error && (
         <div className="metadata-applied-banner artwork-success">{success}</div>
       )}
 
-      <div className="artwork-view-section">
-        <div className="artwork-browse-header">
-          <h3 className="artwork-view-heading">In your catalog</h3>
-          {titleId && canFetch && (
-            <button
-              type="button"
-              className="btn btn-ghost artwork-fetch-btn"
-              disabled={syncing || fetching || saving || classifying || autoAssigning}
-              onClick={handleSyncFromMetadata}
-            >
-              {syncing ? "Syncing…" : "Sync from metadata"}
-            </button>
+      {titleId && (
+        <div className="artwork-view-section">
+          <div className="artwork-toolbar artwork-toolbar-compact">
+            <h3 className="form-section-title">In your catalog</h3>
+            {canFetch && (
+              <button
+                type="button"
+                className="btn btn-ghost artwork-toolbar-action"
+                disabled={syncing || fetching || saving}
+                onClick={handleSyncFromMetadata}
+              >
+                {syncing ? "Syncing…" : "Sync from metadata"}
+              </button>
+            )}
+          </div>
+          {catalogLoading ? (
+            <div className="artwork-state">
+              <div className="artwork-spinner" aria-hidden />
+              <p>Loading catalog artwork…</p>
+            </div>
+          ) : savedItems.length === 0 ? (
+            <p className="artwork-view-empty">
+              No artwork saved yet. Sync from metadata or fetch from TMDB below.
+            </p>
+          ) : (
+            <ArtworkStrip
+              items={savedItems}
+              mode="catalog"
+              savedUris={savedUris}
+              selected={selected}
+              downloadUrlFor={(assetId) =>
+                titlesApi.artworkDownloadUrl(titleId, assetId)
+              }
+            />
           )}
         </div>
-        {!titleId ? (
-          <p className="artwork-view-empty">
-            Save the title on the Details tab first, then return here to store artwork.
-          </p>
-        ) : catalogLoading ? (
-          <div className="artwork-state">
-            <div className="artwork-spinner" aria-hidden />
-            <p>Loading catalog artwork…</p>
-          </div>
-        ) : savedItems.length === 0 ? (
-          <p className="artwork-view-empty">
-            No artwork saved yet. Sync from metadata or fetch from TMDB below.
-          </p>
-        ) : (
-          <ArtworkStrip
-            items={savedItems}
-            mode="catalog"
-            savedUris={savedUris}
-            selected={selected}
-            downloadUrlFor={(assetId) =>
-              titleId ? titlesApi.artworkDownloadUrl(titleId, assetId) : "#"
-            }
-          />
-        )}
-      </div>
+      )}
 
       <div className="artwork-view-section artwork-view-section-browse">
-        <div className="artwork-browse-header">
-          <div>
-            <h3 className="artwork-view-heading">Browse TMDB</h3>
-            <p className="artwork-view-empty artwork-view-empty-inline">
-              Fetch all available posters, hero images, stills, logos, and box art from TMDB.
-              Fetching does not change saved catalog artwork.
+        <div className="artwork-toolbar">
+          <div className="artwork-toolbar-text">
+            <h3 className="form-section-title">Browse TMDB</h3>
+            <p className="form-section-desc">
+              {canFetch
+                ? "Click Fetch artwork to browse all TMDB posters, backdrops, still frames, logos, and more. Fetching does not save anything to your catalog until you save the selected images."
+                : "Import metadata on the Metadata tab to enable TMDB artwork."}
             </p>
           </div>
           {canFetch && (
             <button
               type="button"
-              className="btn btn-primary artwork-fetch-btn"
-            disabled={fetching || saving || classifying || autoAssigning}
+              className="btn btn-primary artwork-toolbar-action"
+              disabled={fetching || saving}
               onClick={handleFetch}
             >
               {fetching ? "Fetching…" : "Fetch artwork"}
             </button>
           )}
         </div>
-        {!canFetch ? (
-          <p className="artwork-view-empty">
-            Import metadata on the Details tab to enable TMDB artwork.
-          </p>
-        ) : fetching || classifying || autoAssigning ? (
+        {canFetch && fetching ? (
           <div className="artwork-state">
             <div className="artwork-spinner" aria-hidden />
-            <p>
-              {fetching
-                ? "Loading artwork from TMDB…"
-                : classifying
-                  ? "Classifying artwork with AI…"
-                  : "Auto-assigning high-confidence artwork…"}
-            </p>
+            <p>Loading artwork from TMDB…</p>
           </div>
-        ) : candidates.length === 0 ? (
-          <p className="artwork-view-empty">
-            Click Fetch artwork to browse all TMDB posters, backdrops, logos, and more.
-            Fetching does not save anything until you add selected images.
-          </p>
-        ) : (
+        ) : canFetch && candidates.length > 0 ? (
           <>
             <div className="artwork-select-bar">
               <button type="button" className="btn btn-ghost" onClick={selectAllNew}>
@@ -603,33 +504,13 @@ export function ArtworkTab({
               </button>
               <button
                 type="button"
-                className="btn btn-ghost"
-                disabled={!titleId || classifying || autoAssigning}
-                onClick={handleClassify}
-              >
-                {classifying ? "Classifying…" : "AI Classify"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={!titleId || autoAssigning || highConfidenceCount === 0}
-                onClick={handleAutoAssign}
-              >
-                {autoAssigning
-                  ? "Auto-assigning…"
-                  : `Auto-assign high confidence (${highConfidenceCount})`}
-              </button>
-              <button
-                type="button"
                 className="btn btn-primary"
-                disabled={selectedNewCount === 0 || saving || !titleId}
+                disabled={selectedNewCount === 0 || saving}
                 onClick={handleSaveSelected}
               >
                 {saving
                   ? "Saving…"
-                  : titleId
-                    ? `Add selected to catalog (${selectedNewCount})`
-                    : "Save title first"}
+                  : `Save selected artwork (${selectedNewCount})`}
               </button>
             </div>
             <ArtworkStrip
@@ -638,10 +519,9 @@ export function ArtworkTab({
               savedUris={savedUris}
               selected={selected}
               onToggle={toggle}
-              predictions={predictions}
             />
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

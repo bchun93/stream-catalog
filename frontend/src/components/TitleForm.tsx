@@ -24,10 +24,12 @@ interface TitleFormProps {
   formId?: string;
   hideActions?: boolean;
   onSavingChange?: (saving: boolean) => void;
-  onSubmit: (data: Partial<Title>) => Promise<Title | void>;
+  onSubmit: (data: Partial<Title>, existingId?: number) => Promise<Title | void>;
   onCancel: () => void;
   /** Called after title details save succeeds (e.g. refresh list). */
   onSaved?: () => void;
+  /** Called when a new title gets an id without closing the sheet (e.g. artwork save). */
+  onTitlePersisted?: (title: Title) => void;
   onArtworkSaved?: () => void;
 }
 
@@ -137,6 +139,7 @@ export function TitleForm({
   onSubmit,
   onCancel,
   onSaved,
+  onTitlePersisted,
   onArtworkSaved,
 }: TitleFormProps) {
   const [tab, setTab] = useState<"details" | "artwork">(initialTab);
@@ -223,92 +226,135 @@ export function TitleForm({
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const buildPayload = (): Partial<Title> => ({
+    slug: form.slug,
+    name: form.name,
+    title_type: form.title_type as TitleType,
+    status: form.status as TitleStatus,
+    synopsis: (form.core_metadata["synopsis"] || form.synopsis) || null,
+    short_description:
+      (form.core_metadata["short_synopsis"] || form.short_description) || null,
+    genres: (form.core_metadata["genre"] || form.genres) || null,
+    rating: (form.core_metadata["rating"] || form.rating) || null,
+    release_date: form.core_metadata["release_date"]
+      ? toIsoDate(form.core_metadata["release_date"])
+      : form.release_date || null,
+    release_year: form.release_year
+      ? Number(form.release_year)
+      : form.core_metadata["latest_release_year"]
+        ? Number(form.core_metadata["latest_release_year"])
+        : null,
+    licensor: form.licensor || null,
+    studio: (form.core_metadata["studio"] || form.studio) || null,
+    cast: (form.core_metadata["actors"] || form.cast) || null,
+    crew:
+      [
+        form.core_metadata["directors"],
+        form.core_metadata["writers"],
+        form.core_metadata["producers"],
+        form.crew,
+      ]
+        .filter(Boolean)
+        .join("\n") || null,
+    eidr: form.eidr || null,
+    external_id: form.external_id || null,
+    metadata_source: form.metadata_source || null,
+    poster_url: form.poster_url || null,
+    parent_id: form.parent_id ? Number(form.parent_id) : null,
+    season_number: form.season_number ? Number(form.season_number) : null,
+    episode_number: form.episode_number ? Number(form.episode_number) : null,
+    runtime_minutes: form.runtime_minutes
+      ? Number(form.runtime_minutes)
+      : form.core_metadata["runtime"]
+        ? Number(form.core_metadata["runtime"])
+        : null,
+    metadata_json: stringifyCoreMetadata(form.core_metadata),
+  });
+
+  const persistTitle = async (): Promise<Title> => {
     if (!form.name.trim()) {
-      setError("Name is required — switch to the Details tab to fill it in.");
+      setError("Name is required — switch to the Metadata tab to fill it in.");
       setTab("details");
-      return;
+      throw new Error("Name is required");
     }
     if (!form.slug.trim()) {
-      setError("Slug is required — switch to the Details tab to fill it in.");
+      setError("Slug is required — switch to the Metadata tab to fill it in.");
       setTab("details");
-      return;
+      throw new Error("Slug is required");
     }
     setSaving(true);
     onSavingChange?.(true);
     setError(null);
     try {
-      const payload: Partial<Title> = {
-        slug: form.slug,
-        name: form.name,
-        title_type: form.title_type as TitleType,
-        status: form.status as TitleStatus,
-        synopsis: (form.core_metadata["synopsis"] || form.synopsis) || null,
-        short_description:
-          (form.core_metadata["short_synopsis"] || form.short_description) || null,
-        genres: (form.core_metadata["genre"] || form.genres) || null,
-        rating: (form.core_metadata["rating"] || form.rating) || null,
-        release_date: form.core_metadata["release_date"]
-          ? toIsoDate(form.core_metadata["release_date"])
-          : form.release_date || null,
-        release_year: form.release_year
-          ? Number(form.release_year)
-          : form.core_metadata["latest_release_year"]
-            ? Number(form.core_metadata["latest_release_year"])
-            : null,
-        licensor: form.licensor || null,
-        studio: (form.core_metadata["studio"] || form.studio) || null,
-        cast: (form.core_metadata["actors"] || form.cast) || null,
-        crew:
-          [
-            form.core_metadata["directors"],
-            form.core_metadata["writers"],
-            form.core_metadata["producers"],
-            form.crew,
-          ]
-            .filter(Boolean)
-            .join("\n") || null,
-        eidr: form.eidr || null,
-        external_id: form.external_id || null,
-        metadata_source: form.metadata_source || null,
-        poster_url: form.poster_url || null,
-        parent_id: form.parent_id ? Number(form.parent_id) : null,
-        season_number: form.season_number ? Number(form.season_number) : null,
-        episode_number: form.episode_number ? Number(form.episode_number) : null,
-        runtime_minutes: form.runtime_minutes
-          ? Number(form.runtime_minutes)
-          : form.core_metadata["runtime"]
-            ? Number(form.core_metadata["runtime"])
-            : null,
-        metadata_json: stringifyCoreMetadata(form.core_metadata),
-      };
-      const result = await onSubmit(payload);
-      if (result?.id) {
-        setSavedTitleId(result.id);
+      const existingId = savedTitleId ?? titleId;
+      const result = await onSubmit(buildPayload(), existingId);
+      if (!result?.id) {
+        throw new Error("Title could not be saved.");
       }
+      const wasNew = !existingId;
+      setSavedTitleId(result.id);
       onSaved?.();
-      onCancel();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      if (wasNew) {
+        onTitlePersisted?.(result);
+      }
+      return result;
     } finally {
       setSaving(false);
       onSavingChange?.(false);
     }
   };
 
+  const ensureTitleSaved = async (): Promise<number> => {
+    const existingId = savedTitleId ?? titleId;
+    if (existingId) return existingId;
+    const title = await persistTitle();
+    return title.id;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await persistTitle();
+      onCancel();
+    } catch (err) {
+      if (err instanceof Error && err.message !== "Name is required" && err.message !== "Slug is required") {
+        setError(err.message || "Save failed");
+      }
+    }
+  };
+
   const activeTitleId = savedTitleId ?? titleId;
+  const showMetadataLookup = isCreate || !form.external_id?.startsWith("tmdb:");
 
   return (
     <form id={formId} onSubmit={handleSubmit} noValidate>
       {error && <div className="error-banner">{error}</div>}
+
+      {showMetadataLookup && (
+        <section className="title-form-import" aria-label="Import metadata">
+          <MetadataLookup
+            onApply={applyMetadata}
+            onHierarchyApplied={() => {
+              onSaved?.();
+              onCancel();
+            }}
+          />
+        </section>
+      )}
+
+      {metadataApplied && (
+        <div className="metadata-applied-banner">
+          Metadata imported — review the fields below and save.
+        </div>
+      )}
+
       <div className="title-tabs">
         <button
           type="button"
           className={`title-tab ${tab === "details" ? "active" : ""}`}
           onClick={() => setTab("details")}
         >
-          Details
+          Metadata
         </button>
         <button
           type="button"
@@ -321,26 +367,6 @@ export function TitleForm({
 
       {tab === "details" && (
         <>
-          {(isCreate || !form.external_id?.startsWith("tmdb:")) && (
-            <section className="form-section form-section-hero">
-              <h3 className="form-section-title">Import metadata</h3>
-              <p className="form-section-desc">
-                Search TMDB to pre-fill fields and sync artwork into the title library.
-              </p>
-              <MetadataLookup
-                onApply={applyMetadata}
-                onHierarchyApplied={() => {
-                  onSaved?.();
-                  onCancel();
-                }}
-              />
-            </section>
-          )}
-          {metadataApplied && (
-            <div className="metadata-applied-banner">
-              Metadata imported — review the fields below and save.
-            </div>
-          )}
           <section className="form-section">
             <h3 className="form-section-title">Identification</h3>
             <p className="form-section-desc">
@@ -462,25 +488,15 @@ export function TitleForm({
         </>
       )}
 
-      {activeTitleId ? (
+      {tab === "artwork" && (
         <ArtworkTab
-          key={activeTitleId}
           titleId={activeTitleId}
           externalId={form.external_id || null}
           metadataJson={stringifyCoreMetadata(form.core_metadata)}
-          visible={tab === "artwork"}
+          visible
+          onEnsureTitleSaved={ensureTitleSaved}
           onSaved={onArtworkSaved}
         />
-      ) : (
-        tab === "artwork" && (
-          <ArtworkTab
-            key="new"
-            externalId={form.external_id || null}
-            metadataJson={stringifyCoreMetadata(form.core_metadata)}
-            visible
-            onSaved={onArtworkSaved}
-          />
-        )
       )}
 
       {!hideActions && (

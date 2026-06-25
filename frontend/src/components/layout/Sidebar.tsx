@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Film, HardDrive, LayoutDashboard } from "lucide-react";
+import { Film, HardDrive, LayoutDashboard, X } from "lucide-react";
 import { RelayMark } from "../brand/RelayMark";
 import { VISIBLE_NAV_ITEMS } from "../../navConfig";
 import { ApiStatus } from "../ApiStatus";
@@ -10,14 +10,29 @@ const NAV_ICONS: Record<string, typeof LayoutDashboard> = {
   "/assets": HardDrive,
 };
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+  onClose?: () => void;
+}
+
+export function Sidebar({ onNavigate, onClose }: SidebarProps) {
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand">
-        <div className="sidebar-mark" aria-hidden>
-          <RelayMark />
+      <div className="sidebar-top">
+        <div className="sidebar-brand">
+          <div className="sidebar-mark" aria-hidden>
+            <RelayMark />
+          </div>
+          <div className="sidebar-wordmark">Relay</div>
         </div>
-        <div className="sidebar-wordmark">Relay</div>
+        <button
+          type="button"
+          className="sidebar-close"
+          aria-label="Close menu"
+          onClick={onClose}
+        >
+          <X size={20} strokeWidth={2} aria-hidden />
+        </button>
       </div>
 
       <nav className="sidebar-nav" aria-label="Main">
@@ -31,6 +46,7 @@ export function Sidebar() {
               className={({ isActive }) =>
                 `sidebar-nav-item${isActive ? " active" : ""}`
               }
+              onClick={() => onNavigate?.()}
             >
               <Icon size={18} strokeWidth={1.75} aria-hidden />
               <span>{item.label}</span>

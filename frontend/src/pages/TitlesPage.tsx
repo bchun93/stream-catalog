@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Film, Plus, Search } from "lucide-react";
+import { ChevronRight, Film, Plus, Search } from "lucide-react";
 import { apiBaseUrl, titlesApi } from "../api/client";
 import { StatusBadge, TypeBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
-import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Sheet } from "../components/ui/Sheet";
 import { TableSkeleton } from "../components/ui/TableSkeleton";
@@ -114,7 +113,7 @@ function displayHierarchyName(
   return title.name;
 }
 
-function TitleTableRow({
+function TitleMobileRow({
   node,
   depth = 0,
   seriesName,
@@ -124,7 +123,6 @@ function TitleTableRow({
   forceExpanded,
   onToggle,
   onEdit,
-  onDelete,
 }: {
   node: TitleTree;
   depth?: number;
@@ -135,7 +133,98 @@ function TitleTableRow({
   forceExpanded: boolean;
   onToggle: (id: number) => void;
   onEdit: (title: Title, tab?: "details" | "artwork") => void;
-  onDelete: (title: Title) => void;
+}) {
+  const hasChildren = node.children.length > 0;
+  const expanded = hasChildren && (forceExpanded || expandedIds.has(node.id));
+  const displayName = displayHierarchyName(node, seriesName, seasonNumber);
+  const childSeriesName = node.title_type === "series" ? node.name : seriesName;
+  const childSeasonNumber = node.title_type === "season" ? node.season_number : seasonNumber;
+
+  return (
+    <>
+      <div
+        className="title-mobile-card-wrap"
+        style={{ paddingLeft: `${depth * 12}px` }}
+      >
+        <div className="title-mobile-card-main">
+          {hasChildren ? (
+            <button
+              type="button"
+              className={`title-expand-toggle ${expanded ? "expanded" : ""}`}
+              onClick={() => onToggle(node.id)}
+              aria-label={expanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
+              aria-expanded={expanded}
+            >
+              <ChevronRight size={18} strokeWidth={2.25} aria-hidden />
+            </button>
+          ) : (
+            <span className="title-expand-toggle-spacer" aria-hidden />
+          )}
+          <button
+            type="button"
+            className="title-mobile-card"
+            disabled={opening}
+            onClick={() => onEdit(node, "details")}
+            aria-label={`Open ${displayName}`}
+          >
+            {node.poster_url ? (
+              <TitleRowPoster url={node.poster_url} />
+            ) : (
+              <div className="title-row-poster title-row-poster-fallback" aria-hidden>
+                {node.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="title-mobile-card-body">
+              <strong title={displayName}>{displayName}</strong>
+              <div className="title-mobile-card-meta">
+                <TypeBadge value={node.title_type} />
+                <StatusBadge value={node.status} />
+                {node.release_year != null && <span>{node.release_year}</span>}
+                <span className="title-mobile-card-id">{displayInternalId(node)}</span>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+      {expanded &&
+        node.children.map((child) => (
+          <TitleMobileRow
+            key={child.id}
+            node={child}
+            depth={depth + 1}
+            seriesName={childSeriesName}
+            seasonNumber={childSeasonNumber}
+            opening={opening}
+            expandedIds={expandedIds}
+            forceExpanded={forceExpanded}
+            onToggle={onToggle}
+            onEdit={onEdit}
+          />
+        ))}
+    </>
+  );
+}
+
+function TitleTableRow({
+  node,
+  depth = 0,
+  seriesName,
+  seasonNumber,
+  opening,
+  expandedIds,
+  forceExpanded,
+  onToggle,
+  onEdit,
+}: {
+  node: TitleTree;
+  depth?: number;
+  seriesName?: string;
+  seasonNumber?: number | null;
+  opening: boolean;
+  expandedIds: Set<number>;
+  forceExpanded: boolean;
+  onToggle: (id: number) => void;
+  onEdit: (title: Title, tab?: "details" | "artwork") => void;
 }) {
   const hasChildren = node.children.length > 0;
   const expanded = hasChildren && (forceExpanded || expandedIds.has(node.id));
@@ -146,18 +235,38 @@ function TitleTableRow({
 
   return (
     <>
-      <tr className={`title-table-row title-depth-${Math.min(depth, 3)}`}>
+      <tr
+        className={`title-table-row title-table-row-clickable title-depth-${Math.min(depth, 3)}`}
+        onClick={() => {
+          if (!opening) onEdit(node, "details");
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (!opening) onEdit(node, "details");
+          }
+        }}
+        tabIndex={0}
+        aria-label={`Open ${displayName}`}
+      >
         <td>
           <div className="title-row-main" style={{ paddingLeft: `${depth * 16}px` }}>
-            <button
-              type="button"
-              className={`title-expand-toggle ${expanded ? "expanded" : ""}`}
-              disabled={!hasChildren}
-              onClick={() => onToggle(node.id)}
-              aria-label={expanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
-            >
-              {hasChildren ? "›" : ""}
-            </button>
+            {hasChildren ? (
+              <button
+                type="button"
+                className={`title-expand-toggle ${expanded ? "expanded" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(node.id);
+                }}
+                aria-label={expanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
+                aria-expanded={expanded}
+              >
+                <ChevronRight size={18} strokeWidth={2.25} aria-hidden />
+              </button>
+            ) : (
+              <span className="title-expand-toggle-spacer" aria-hidden />
+            )}
             {node.poster_url ? (
               <TitleRowPoster url={node.poster_url} />
             ) : (
@@ -188,32 +297,6 @@ function TitleTableRow({
             {node.studio ?? "—"}
           </span>
         </td>
-        <td className="actions-cell">
-          <div className="row-actions">
-            <Button
-              variant="ghost"
-              disabled={opening}
-              onClick={() => onEdit(node, "details")}
-            >
-              Edit
-            </Button>
-            <OverflowMenu
-              label={`Actions for ${node.name}`}
-              items={[
-                {
-                  label: "Artwork",
-                  onClick: () => onEdit(node, "artwork"),
-                  disabled: opening,
-                },
-                {
-                  label: "Delete",
-                  danger: true,
-                  onClick: () => onDelete(node),
-                },
-              ]}
-            />
-          </div>
-        </td>
       </tr>
       {expanded &&
         node.children.map((child) => (
@@ -228,7 +311,6 @@ function TitleTableRow({
             forceExpanded={forceExpanded}
             onToggle={onToggle}
             onEdit={onEdit}
-            onDelete={onDelete}
           />
         ))}
     </>
@@ -248,6 +330,7 @@ export function TitlesPage() {
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [formSessionKey, setFormSessionKey] = useState(0);
   const requestSeq = useRef(0);
 
   useEffect(() => {
@@ -293,6 +376,7 @@ export function TitlesPage() {
     setError(null);
     try {
       const full = await titlesApi.get(t.id);
+      setFormSessionKey((key) => key + 1);
       setEditing(full);
       setFormTab(tab);
       setSheet("edit");
@@ -300,16 +384,6 @@ export function TitlesPage() {
       setError(e instanceof Error ? e.message : "Could not load title");
     } finally {
       setOpening(false);
-    }
-  };
-
-  const handleDelete = async (t: Title) => {
-    if (!confirm(`Delete "${t.name}" and its linked assets?`)) return;
-    try {
-      await titlesApi.delete(t.id);
-      load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
     }
   };
 
@@ -337,6 +411,7 @@ export function TitlesPage() {
             icon={<Plus size={16} />}
             onClick={() => {
               setError(null);
+              setFormSessionKey((key) => key + 1);
               setEditing(null);
               setFormTab("details");
               setSheet("create");
@@ -381,7 +456,7 @@ export function TitlesPage() {
         </div>
 
         {loading ? (
-          <TableSkeleton rows={10} cols={7} />
+          <TableSkeleton rows={10} cols={6} />
         ) : filteredTree.length === 0 ? (
           <EmptyState
             icon={Film}
@@ -396,7 +471,9 @@ export function TitlesPage() {
                 <Button
                   variant="primary"
                   onClick={() => {
+                    setFormSessionKey((key) => key + 1);
                     setEditing(null);
+                    setFormTab("details");
                     setSheet("create");
                   }}
                 >
@@ -406,35 +483,48 @@ export function TitlesPage() {
             }
           />
         ) : (
-          <div className="data-table-wrap titles-table-scroll">
-            <table className="data-table titles-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Internal ID</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th className="num">Year</th>
-                  <th>Studio</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTree.map((node) => (
-                  <TitleTableRow
-                    key={node.id}
-                    node={node}
-                    opening={opening}
-                    expandedIds={expandedIds}
-                    forceExpanded={forceExpanded}
-                    onToggle={toggleExpanded}
-                    onEdit={openEdit}
-                    onDelete={handleDelete}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="titles-mobile-list mobile-only">
+              {filteredTree.map((node) => (
+                <TitleMobileRow
+                  key={node.id}
+                  node={node}
+                  opening={opening}
+                  expandedIds={expandedIds}
+                  forceExpanded={forceExpanded}
+                  onToggle={toggleExpanded}
+                  onEdit={openEdit}
+                />
+              ))}
+            </div>
+            <div className="data-table-wrap titles-table-scroll desktop-only">
+              <table className="data-table titles-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Internal ID</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th className="num">Year</th>
+                    <th>Studio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTree.map((node) => (
+                    <TitleTableRow
+                      key={node.id}
+                      node={node}
+                      opening={opening}
+                      expandedIds={expandedIds}
+                      forceExpanded={forceExpanded}
+                      onToggle={toggleExpanded}
+                      onEdit={openEdit}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -442,11 +532,6 @@ export function TitlesPage() {
         <Sheet
           wide
           title={sheet === "create" ? "Create title" : "Edit title"}
-          subtitle={
-            sheet === "create"
-              ? "Import from TMDB or enter metadata manually."
-              : undefined
-          }
           onClose={closeSheet}
           footer={
             <>
@@ -466,7 +551,7 @@ export function TitlesPage() {
         >
           {sheet === "edit" && editing && <TitleSheetSummary title={editing} />}
           <TitleForm
-            key={editing?.id ?? "new"}
+            key={formSessionKey}
             formId={TITLE_FORM_ID}
             hideActions
             onSavingChange={setSaving}
@@ -477,18 +562,22 @@ export function TitlesPage() {
             parents={parentOptions.filter((t) => t.id !== editing?.id)}
             onCancel={closeSheet}
             onSaved={load}
+            onTitlePersisted={(title) => {
+              setEditing(title);
+              setSheet("edit");
+            }}
             onArtworkSaved={load}
-            onSubmit={async (data) => {
+            onSubmit={async (data, existingId) => {
+              const id = existingId ?? editing?.id;
+              if (id != null) {
+                return await titlesApi.update(id, data);
+              }
               if (sheet === "create") {
                 return await titlesApi.create(data);
               }
-              const id = editing?.id;
-              if (id == null) {
-                throw new Error(
-                  "Could not save — close the panel, reopen the title, and try again."
-                );
-              }
-              return await titlesApi.update(id, data);
+              throw new Error(
+                "Could not save — close the panel, reopen the title, and try again."
+              );
             }}
           />
         </Sheet>

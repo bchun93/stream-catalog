@@ -150,83 +150,119 @@ export function AssetsPage() {
             }
           />
         ) : (
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Asset</th>
-                  <th>Title</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Storage</th>
-                  <th className="num">Size</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {assets.map((a) => (
-                  <tr key={a.id}>
-                    <td>
-                      <div className="asset-row-main">
-                        <AssetThumb
-                          uri={a.storage_uri}
-                          label={assetPrimaryLabel(a.filename, a.asset_type)}
-                        />
-                        <div className="asset-row-label">
-                          <strong>{assetPrimaryLabel(a.filename, a.asset_type)}</strong>
-                          <span className="mono" title={a.filename}>
-                            {a.filename}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{titleMap[a.title_id] ?? a.title_id}</td>
-                    <td>
+          <>
+            <div className="assets-mobile-list mobile-only">
+              {assets.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className="asset-mobile-card"
+                  onClick={() => {
+                    setEditing(a);
+                    setModal("edit");
+                  }}
+                >
+                  <AssetThumb
+                    uri={a.storage_uri}
+                    label={assetPrimaryLabel(a.filename, a.asset_type)}
+                  />
+                  <div className="asset-mobile-card-body">
+                    <strong>{assetPrimaryLabel(a.filename, a.asset_type)}</strong>
+                    <span className="asset-mobile-card-title">
+                      {titleMap[a.title_id] ?? `Title #${a.title_id}`}
+                    </span>
+                    <div className="asset-mobile-card-badges">
                       <TypeBadge value={a.asset_type} />
-                    </td>
-                    <td>
                       <StatusBadge
                         value={a.status}
                         pulse={a.status === "processing"}
                       />
-                    </td>
-                    <td>
-                      <div className="storage-cell">
-                        <span className="storage-uri-text" title={a.storage_uri}>
-                          {truncateMiddle(a.storage_uri, 32)}
-                        </span>
-                        <CopyButton value={a.storage_uri} label="Copy storage URI" />
-                      </div>
-                    </td>
-                    <td className="num text-tertiary">{formatBytes(a.size_bytes)}</td>
-                    <td className="actions-cell">
-                      <div className="row-actions">
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            setEditing(a);
-                            setModal("edit");
-                          }}
-                        >
-                          Edit
-                        </Button>
-                        <OverflowMenu
-                          label={`Actions for ${a.filename}`}
-                          items={[
-                            {
-                              label: "Delete",
-                              danger: true,
-                              onClick: () => handleDelete(a),
-                            },
-                          ]}
-                        />
-                      </div>
-                    </td>
+                    </div>
+                    <span className="asset-mobile-card-meta">
+                      {formatBytes(a.size_bytes)} · {truncateMiddle(a.storage_uri, 28)}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="data-table-wrap desktop-only">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Storage</th>
+                    <th className="num">Size</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {assets.map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        <div className="asset-row-main">
+                          <AssetThumb
+                            uri={a.storage_uri}
+                            label={assetPrimaryLabel(a.filename, a.asset_type)}
+                          />
+                          <div className="asset-row-label">
+                            <strong>{assetPrimaryLabel(a.filename, a.asset_type)}</strong>
+                            <span className="mono" title={a.filename}>
+                              {a.filename}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{titleMap[a.title_id] ?? a.title_id}</td>
+                      <td>
+                        <TypeBadge value={a.asset_type} />
+                      </td>
+                      <td>
+                        <StatusBadge
+                          value={a.status}
+                          pulse={a.status === "processing"}
+                        />
+                      </td>
+                      <td>
+                        <div className="storage-cell">
+                          <span className="storage-uri-text" title={a.storage_uri}>
+                            {truncateMiddle(a.storage_uri, 32)}
+                          </span>
+                          <CopyButton value={a.storage_uri} label="Copy storage URI" />
+                        </div>
+                      </td>
+                      <td className="num text-tertiary">{formatBytes(a.size_bytes)}</td>
+                      <td className="actions-cell">
+                        <div className="row-actions">
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              setEditing(a);
+                              setModal("edit");
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <OverflowMenu
+                            label={`Actions for ${a.filename}`}
+                            items={[
+                              {
+                                label: "Delete",
+                                danger: true,
+                                onClick: () => handleDelete(a),
+                              },
+                            ]}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

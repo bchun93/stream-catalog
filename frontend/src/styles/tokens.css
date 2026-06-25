@@ -50,6 +50,11 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
+  /* Breakpoints */
+  --bp-sm: 520px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+
   /* Layout */
   --sidebar-width: 248px;
   --content-max: 1280px;
