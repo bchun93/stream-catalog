@@ -100,6 +100,9 @@ function ArtworkStrip({
   selected,
   onToggle,
   downloadUrlFor,
+  onDelete,
+  deletingId,
+  clearingAll = false,
 }: {
   items: DisplayItem[];
   mode: "catalog" | "browse";
@@ -107,6 +110,9 @@ function ArtworkStrip({
   selected: Set<string>;
   onToggle?: (uri: string) => void;
   downloadUrlFor?: (catalogId: number) => string;
+  onDelete?: (catalogId: number, label: string) => void;
+  deletingId?: number | null;
+  clearingAll?: boolean;
 }) {
   if (items.length === 0) return null;
 
@@ -140,6 +146,8 @@ function ArtworkStrip({
                 const inCatalog = savedUris.has(key);
                 const isSelected = selected.has(key);
                 const selectable = mode === "browse" && onToggle && !inCatalog;
+                const specLabel = specLinesForItem(item)[0]?.value ?? "Artwork";
+                const isDeleting = item.catalogId != null && deletingId === item.catalogId;
 
                 return (
                   <figure
@@ -165,7 +173,7 @@ function ArtworkStrip({
                         <div className="artwork-tile-img-wrap">
                           <img
                             src={item.storage_uri}
-                            alt={specLinesForItem(item)[0]?.value ?? "Artwork"}
+                            alt={specLabel}
                             loading="lazy"
                           />
                         </div>
@@ -174,7 +182,7 @@ function ArtworkStrip({
                       <div className="artwork-tile-img-wrap artwork-tile-img-static">
                         <img
                           src={item.storage_uri}
-                          alt={specLinesForItem(item)[0]?.value ?? "Artwork"}
+                          alt={specLabel}
                           loading="lazy"
                         />
                       </div>
@@ -191,13 +199,27 @@ function ArtworkStrip({
                           </li>
                         ))}
                       </ul>
-                      {mode === "catalog" && item.catalogId && downloadUrlFor && (
-                        <a
-                          className="btn btn-ghost artwork-download-btn"
-                          href={downloadUrlFor(item.catalogId)}
-                        >
-                          Download
-                        </a>
+                      {mode === "catalog" && item.catalogId && (
+                        <div className="artwork-catalog-actions">
+                          {downloadUrlFor && (
+                            <a
+                              className="btn btn-ghost artwork-download-btn"
+                              href={downloadUrlFor(item.catalogId)}
+                            >
+                              Download
+                            </a>
+                          )}
+                          {onDelete && (
+                            <button
+                              type="button"
+                              className="btn btn-danger artwork-delete-btn"
+                              disabled={isDeleting || clearingAll}
+                              onClick={() => onDelete(item.catalogId!, specLabel)}
+                            >
+                              {isDeleting ? "Removing…" : "Remove"}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </figcaption>
                   </figure>
@@ -223,12 +245,14 @@ export function ArtworkTab({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const canFetch = Boolean(externalId?.startsWith("tmdb:"));
+  const browseIdle = canFetch && !fetching && candidates.length === 0;
 
   const savedArtworkItems: DisplayItem[] = useMemo(
     () => saved.map((a) => ({ ...assetToArtworkItem(a), catalogId: a.id })),
@@ -293,31 +317,6 @@ export function ArtworkTab({
       void loadSaved();
     }
   }, [visible, titleId, loadSaved]);
-
-  const handleSyncFromMetadata = async () => {
-    if (!titleId) {
-      setError("Save the title on the Metadata tab before syncing artwork.");
-      return;
-    }
-    setSyncing(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const assets = await titlesApi.syncArtwork(titleId);
-      SAVED_ARTWORK_CACHE.set(titleId, assets);
-      setSaved(assets);
-      setSuccess(
-        assets.length > 0
-          ? `Synced ${assets.length} artwork image${assets.length === 1 ? "" : "s"} from core metadata.`
-          : "No artwork matched core metadata filenames for this title."
-      );
-      onSaved?.();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to sync artwork from metadata");
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const handleFetch = async () => {
     if (!canFetch || !externalId) {
@@ -391,9 +390,65 @@ export function ArtworkTab({
     }
   };
 
+  const handleDelete = async (assetId: number, label: string) => {
+    if (!titleId) return;
+    if (
+      !confirm(
+        `Remove "${label}" from this title's catalog? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(assetId);
+    setError(null);
+    setSuccess(null);
+    try {
+      await titlesApi.deleteArtwork(titleId, assetId);
+      SAVED_ARTWORK_CACHE.delete(titleId);
+      await loadSaved(titleId);
+      setSuccess("Removed artwork from catalog.");
+      onSaved?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove artwork");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!titleId || savedItems.length === 0) return;
+    const count = savedItems.length;
+    if (
+      !confirm(
+        `Remove all ${count} artwork image${count === 1 ? "" : "s"} from this title's catalog? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setClearingAll(true);
+    setDeletingId(null);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { removed } = await titlesApi.clearAllArtwork(titleId);
+      SAVED_ARTWORK_CACHE.delete(titleId);
+      await loadSaved(titleId);
+      setSuccess(
+        `Removed ${removed} artwork image${removed === 1 ? "" : "s"} from catalog.`
+      );
+      onSaved?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to clear catalog artwork");
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
   return (
     <div
-      className={`artwork-panel${visible ? "" : " artwork-panel-hidden"}`}
+      className={`artwork-panel${visible ? "" : " artwork-panel-hidden"}${
+        browseIdle ? " artwork-panel-idle" : ""
+      }`}
       hidden={!visible}
     >
       {!titleId ? null : (
@@ -433,14 +488,14 @@ export function ArtworkTab({
         <div className="artwork-view-section">
           <div className="artwork-toolbar artwork-toolbar-compact">
             <h3 className="form-section-title">In your catalog</h3>
-            {canFetch && (
+            {savedItems.length > 0 && (
               <button
                 type="button"
-                className="btn btn-ghost artwork-toolbar-action"
-                disabled={syncing || fetching || saving}
-                onClick={handleSyncFromMetadata}
+                className="btn btn-danger artwork-toolbar-action"
+                disabled={clearingAll || deletingId != null || catalogLoading}
+                onClick={handleClearAll}
               >
-                {syncing ? "Syncing…" : "Sync from metadata"}
+                {clearingAll ? "Clearing…" : "Clear all"}
               </button>
             )}
           </div>
@@ -451,7 +506,7 @@ export function ArtworkTab({
             </div>
           ) : savedItems.length === 0 ? (
             <p className="artwork-view-empty">
-              No artwork saved yet. Sync from metadata or fetch from TMDB below.
+              No artwork saved yet. Fetch from TMDB below and save your selections.
             </p>
           ) : (
             <ArtworkStrip
@@ -462,18 +517,27 @@ export function ArtworkTab({
               downloadUrlFor={(assetId) =>
                 titlesApi.artworkDownloadUrl(titleId, assetId)
               }
+              onDelete={handleDelete}
+              deletingId={deletingId}
+              clearingAll={clearingAll}
             />
           )}
         </div>
       )}
 
-      <div className="artwork-view-section artwork-view-section-browse">
-        <div className="artwork-toolbar">
+      <div
+        className={`artwork-view-section artwork-view-section-browse${
+          browseIdle ? " artwork-browse-idle" : ""
+        }`}
+      >
+        <div className={`artwork-toolbar${browseIdle ? " artwork-toolbar-idle" : ""}`}>
           <div className="artwork-toolbar-text">
             <h3 className="form-section-title">Browse TMDB</h3>
             <p className="form-section-desc">
               {canFetch
-                ? "Click Fetch artwork to browse all TMDB posters, backdrops, still frames, logos, and more. Fetching does not save anything to your catalog until you save the selected images."
+                ? browseIdle
+                  ? "Posters, backdrops, stills, and logos from TMDB. Nothing is saved until you add images."
+                  : "Click Fetch artwork to browse all TMDB posters, backdrops, still frames, logos, and more. Fetching does not save anything to your catalog until you save the selected images."
                 : "Import metadata on the Metadata tab to enable TMDB artwork."}
             </p>
           </div>

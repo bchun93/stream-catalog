@@ -6,6 +6,10 @@ backend/app/**/__pycache__/
 *.pyc
 backend/.env
 data/*.db
+data/*.db.*
+data/*.bak
+data/*.json
+data/cloud-*
 data/minio/
 .venv*/
 frontend/node_modules/

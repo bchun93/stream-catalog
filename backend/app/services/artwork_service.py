@@ -9,7 +9,7 @@ from app.models.media_asset import AssetStatus, AssetType, MediaAsset
 from app.models.title import Title, TitleType
 from app.schemas.artwork import ArtworkItem, ArtworkSpecs
 from app.services.artwork_metadata import artwork_item_metadata_json
-from app.services.poster_resolver import is_usable_poster_url
+from app.services.poster_resolver import is_allowed_tmdb_artwork_uri, is_usable_poster_url
 from app.services.title_service import sync_title_poster_cache
 from app.services.tmdb_service import (
     TMDB_SOURCE_NOTE,
@@ -138,7 +138,7 @@ def _filter_to_metadata_artwork(
 ) -> list[ArtworkItem]:
     labels_by_filename = _metadata_artwork_labels(metadata_json)
     if not labels_by_filename:
-        return items
+        return []
 
     selected: dict[str, ArtworkItem] = {}
     for item in items:
@@ -205,6 +205,8 @@ def _clear_tmdb_artwork(db: Session, title_id: int) -> None:
 def _replace_tmdb_artwork(
     db: Session, title_id: int, items: list[ArtworkItem]
 ) -> list[MediaAsset]:
+    if not items:
+        return list_artwork_assets(db, title_id)
     _clear_tmdb_artwork(db, title_id)
     created = _persist_artwork(db, title_id, items)
     db.commit()
@@ -215,6 +217,8 @@ def _replace_tmdb_artwork(
 def _persist_artwork(db: Session, title_id: int, items: list[ArtworkItem]) -> list[MediaAsset]:
     created: list[MediaAsset] = []
     for item in items:
+        if not is_allowed_tmdb_artwork_uri(item.storage_uri):
+            continue
         if item.asset_type == AssetType.POSTER and not is_usable_poster_url(
             item.storage_uri
         ):
@@ -222,9 +226,7 @@ def _persist_artwork(db: Session, title_id: int, items: list[ArtworkItem]) -> li
         specs = item.specs
         asset = MediaAsset(
             title_id=title_id,
-            # Store TMDB image artwork with the most broadly supported DB enum value.
-            # The actual role (hero, still, logo, etc.) remains in notes/specs.
-            asset_type=AssetType.POSTER,
+            asset_type=item.asset_type,
             status=AssetStatus.READY,
             filename=item.filename,
             mime_type=item.mime_type,
@@ -281,6 +283,55 @@ def save_artwork_selection(
         db.commit()
 
     return list_artwork_assets(db, title_id)
+
+
+def delete_artwork_asset(db: Session, title_id: int, asset_id: int) -> None:
+    """Remove a saved artwork asset from a title's catalog."""
+    asset = (
+        db.query(MediaAsset)
+        .filter(MediaAsset.id == asset_id, MediaAsset.title_id == title_id)
+        .first()
+    )
+    if not asset:
+        raise ValueError("Artwork asset not found")
+    if asset.asset_type not in _ARTWORK_TYPES:
+        raise ValueError("Asset is not catalog artwork")
+
+    deleted_uri = asset.storage_uri
+    title = db.query(Title).filter(Title.id == title_id).first()
+    was_title_poster = bool(title and title.poster_url == deleted_uri)
+
+    db.delete(asset)
+    db.commit()
+    sync_title_poster_cache(db, title_id)
+    if was_title_poster:
+        title = db.query(Title).filter(Title.id == title_id).first()
+        if title and title.poster_url == deleted_uri:
+            title.poster_url = None
+            db.commit()
+
+
+def clear_all_artwork_assets(db: Session, title_id: int) -> int:
+    """Remove every saved artwork asset from a title's catalog."""
+    assets = list_artwork_assets(db, title_id)
+    if not assets:
+        return 0
+
+    deleted_uris = {asset.storage_uri for asset in assets}
+    title = db.query(Title).filter(Title.id == title_id).first()
+    poster_uri = title.poster_url if title else None
+
+    for asset in assets:
+        db.delete(asset)
+    db.commit()
+    sync_title_poster_cache(db, title_id)
+    if title and poster_uri and poster_uri in deleted_uris:
+        db.refresh(title)
+        if title.poster_url in deleted_uris:
+            title.poster_url = None
+            db.commit()
+
+    return len(assets)
 
 
 async def sync_artwork_for_title(db: Session, title: Title) -> list[MediaAsset]:

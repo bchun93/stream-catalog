@@ -3,13 +3,13 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-import httpx
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db_repair import retry_after_enum_repair
 from app.database import get_db
-from app.deps import require_db
+from app.deps import require_admin_token, require_db
+from app.services.artwork_fetch import fetch_tmdb_artwork
 from app.models.media_asset import MediaAsset
 from app.models.title import Title, TitleType
 from app.schemas.artwork import SaveArtworkRequest
@@ -18,7 +18,8 @@ from app.schemas.title import TitleCreate, TitleRead, TitleTree, TitleUpdate
 from app.services import title_service
 from app.services.artwork_metadata import enrich_asset_read
 from app.services.artwork_service import (
-    auto_sync_artwork_for_title,
+    clear_all_artwork_assets,
+    delete_artwork_asset,
     list_artwork_assets,
     save_artwork_selection,
 )
@@ -86,18 +87,17 @@ def get_title_tree(
 
 
 @router.post("", response_model=TitleRead, status_code=201)
-async def create_title(
+def create_title(
     payload: TitleCreate,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     try:
         existing = db.query(Title).filter(Title.slug == payload.slug).first()
         if existing:
             raise HTTPException(status_code=409, detail="Slug already exists")
         title = title_service.create_title(db, payload)
-        if title.external_id and title.external_id.startswith("tmdb:"):
-            await auto_sync_artwork_for_title(db, title)
         read = title_service.get_title_read(db, title.id)
         return read or TitleRead.model_validate(title)
     except HTTPException:
@@ -122,6 +122,38 @@ def list_title_artwork(
     return [enrich_asset_read(a) for a in assets]
 
 
+@router.delete("/{title_id}/artwork", status_code=200)
+def clear_title_artwork(
+    title_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
+):
+    title = title_service.get_title(db, title_id)
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    removed = clear_all_artwork_assets(db, title_id)
+    return {"removed": removed}
+
+
+@router.delete("/{title_id}/artwork/{asset_id}", status_code=204)
+def delete_title_artwork(
+    title_id: int,
+    asset_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
+):
+    title = title_service.get_title(db, title_id)
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    try:
+        delete_artwork_asset(db, title_id, asset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return None
+
+
 @router.get("/{title_id}/artwork/{asset_id}/download")
 def download_title_artwork(
     title_id: int,
@@ -140,19 +172,17 @@ def download_title_artwork(
     if not asset:
         raise HTTPException(status_code=404, detail="Artwork asset not found")
     try:
-        with httpx.Client(timeout=30.0, follow_redirects=True, trust_env=False) as client:
-            resp = client.get(asset.storage_uri)
-            resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not download artwork source: {exc}",
-        ) from exc
+        content, fetched_type = fetch_tmdb_artwork(asset.storage_uri)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Artwork URI is not allowed") from None
+    except Exception:
+        logger.exception("Artwork download failed for asset %s", asset_id)
+        raise HTTPException(status_code=502, detail="Could not download artwork") from None
 
     filename = _download_filename(asset.filename, f"artwork-{asset.id}.jpg")
-    media_type = asset.mime_type or resp.headers.get("content-type") or "application/octet-stream"
+    media_type = asset.mime_type or fetched_type or "application/octet-stream"
     return Response(
-        content=resp.content,
+        content=content,
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -164,6 +194,7 @@ def save_title_artwork(
     payload: SaveArtworkRequest,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     title = title_service.get_title(db, title_id)
     if not title:
@@ -172,24 +203,6 @@ def save_title_artwork(
         assets = save_artwork_selection(db, title_id, payload.items)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return [enrich_asset_read(a) for a in assets]
-
-
-@router.post("/{title_id}/artwork/sync", response_model=list[MediaAssetRead])
-async def sync_title_artwork(
-    title_id: int,
-    db: Session = Depends(get_db),
-    _: None = Depends(require_db),
-):
-    title = title_service.get_title(db, title_id)
-    if not title:
-        raise HTTPException(status_code=404, detail="Title not found")
-    if not title.external_id or not title.external_id.startswith("tmdb:"):
-        raise HTTPException(
-            status_code=400,
-            detail="Title has no TMDB external_id — import metadata first",
-        )
-    assets = await auto_sync_artwork_for_title(db, title)
     return [enrich_asset_read(a) for a in assets]
 
 
@@ -206,24 +219,18 @@ def get_title(
 
 
 @router.patch("/{title_id}", response_model=TitleRead)
-async def update_title(
+def update_title(
     title_id: int,
     payload: TitleUpdate,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     title = title_service.get_title(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
     try:
-        updates = payload.model_dump(exclude_unset=True)
         title_service.update_title(db, title, payload)
-        if title.external_id and title.external_id.startswith("tmdb:") and (
-            "metadata_json" in updates
-            or "external_id" in updates
-            or "poster_url" in updates
-        ):
-            await auto_sync_artwork_for_title(db, title)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     read = title_service.get_title_read(db, title_id)
@@ -235,6 +242,7 @@ def delete_title(
     title_id: int,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     title = title_service.get_title(db, title_id)
     if not title:

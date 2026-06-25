@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { metadataConfigApi } from "../api/client";
 import { ArtworkTab } from "./ArtworkTab";
 import { MetadataLookup } from "./MetadataLookup";
+import { TitleImportPreview } from "./TitleImportPreview";
 import type {
   MetadataDisplaySettings,
   Title,
@@ -149,6 +150,7 @@ export function TitleForm({
   const [metadataApplied, setMetadataApplied] = useState(false);
   const [metadataSettings, setMetadataSettings] = useState<MetadataDisplaySettings | null>(null);
   const [savedTitleId, setSavedTitleId] = useState<number | undefined>(titleId);
+  const previewRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setTab(initialTab);
@@ -224,6 +226,9 @@ export function TitleForm({
     }));
     setMetadataApplied(true);
     setError(null);
+    requestAnimationFrame(() => {
+      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   };
 
   const buildPayload = (): Partial<Title> => ({
@@ -325,10 +330,42 @@ export function TitleForm({
 
   const activeTitleId = savedTitleId ?? titleId;
   const showMetadataLookup = isCreate || !form.external_id?.startsWith("tmdb:");
+  const isEditingExisting = Boolean(activeTitleId && !isCreate);
+  const showTitlePreview = Boolean(
+    form.name.trim() && (metadataApplied || isEditingExisting)
+  );
+  const previewName =
+    form.title_type === "episode"
+      ? stripEpisodeHierarchyPrefix(form.name)
+      : form.name;
 
   return (
     <form id={formId} onSubmit={handleSubmit} noValidate>
       {error && <div className="error-banner">{error}</div>}
+
+      {showTitlePreview && (
+        <section
+          ref={previewRef}
+          className="title-form-preview"
+          aria-label={isEditingExisting ? "Title summary" : "Imported title preview"}
+        >
+          <TitleImportPreview
+            name={previewName}
+            titleType={form.title_type}
+            posterUrl={form.poster_url}
+            releaseYear={form.release_year || form.core_metadata["latest_release_year"]}
+            rating={form.core_metadata["rating"] || form.rating}
+            runtimeMinutes={form.runtime_minutes || form.core_metadata["runtime"]}
+            status={form.status}
+            metadataSource={form.metadata_source}
+            kicker={isEditingExisting ? "Editing title" : undefined}
+            internalId={
+              isEditingExisting ? form.internal_id || "Pending" : undefined
+            }
+            eidr={isEditingExisting ? form.eidr || undefined : undefined}
+          />
+        </section>
+      )}
 
       {showMetadataLookup && (
         <section className="title-form-import" aria-label="Import metadata">
@@ -340,12 +377,6 @@ export function TitleForm({
             }}
           />
         </section>
-      )}
-
-      {metadataApplied && (
-        <div className="metadata-applied-banner">
-          Metadata imported — review the fields below and save.
-        </div>
       )}
 
       <div className="title-tabs">

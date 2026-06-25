@@ -35,6 +35,9 @@ const WAKE_MAX_ATTEMPTS = IS_PROD ? 25 : 8;
 const INGEST_OPERATOR_TOKEN = (
   import.meta.env.VITE_INGEST_OPERATOR_TOKEN as string | undefined
 )?.trim();
+const ADMIN_API_KEY = (
+  import.meta.env.VITE_ADMIN_API_KEY as string | undefined
+)?.trim();
 
 function rootUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
@@ -157,6 +160,9 @@ function buildHeaders(init?: RequestInit): HeadersInit {
   if (hasBody && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  if (ADMIN_API_KEY && method !== "GET" && method !== "HEAD") {
+    headers.set("X-Admin-Token", ADMIN_API_KEY);
+  }
   return headers;
 }
 
@@ -251,6 +257,13 @@ function formatApiError(path: string, status: number, detail: string): string {
       : "API is unavailable. If developing locally, run ./scripts/start-backend.sh.";
   }
 
+  if (status === 403 && lower.includes("admin token")) {
+    return (
+      "Admin API key required. Set ADMIN_API_KEY on Render and VITE_ADMIN_API_KEY " +
+      "in Amplify (same value), then redeploy both."
+    );
+  }
+
   if (
     status >= 500 &&
     path.includes("/metadata") &&
@@ -343,12 +356,14 @@ export const titlesApi = {
       return filterArtworkAssets(fallbackAssets);
     }
   },
-  syncArtwork: (id: number) =>
-    requestWithRetry<MediaAsset[]>(`/titles/${id}/artwork/sync`, {
-      method: "POST",
-    }).then(filterArtworkAssets),
   artworkDownloadUrl: (titleId: number, assetId: number) =>
     `${API}/titles/${titleId}/artwork/${assetId}/download`,
+  deleteArtwork: (titleId: number, assetId: number) =>
+    request<void>(`/titles/${titleId}/artwork/${assetId}`, { method: "DELETE" }),
+  clearAllArtwork: (titleId: number) =>
+    request<{ removed: number }>(`/titles/${titleId}/artwork`, {
+      method: "DELETE",
+    }),
   saveArtwork: (id: number, items: ArtworkItem[]) =>
     request<MediaAsset[]>(`/titles/${id}/artwork`, {
       method: "POST",

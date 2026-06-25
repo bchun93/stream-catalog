@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     ingest_operator_token: str | None = Field(
         default=None, validation_alias="INGEST_OPERATOR_TOKEN"
     )
+    admin_api_key: str | None = Field(default=None, validation_alias="ADMIN_API_KEY")
     ingest_max_keys: int = Field(default=1000, validation_alias="INGEST_MAX_KEYS")
     aws_profile: str | None = Field(default=None, validation_alias="AWS_PROFILE")
     aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")

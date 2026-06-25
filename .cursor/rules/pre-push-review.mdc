@@ -1,0 +1,37 @@
+---
+description: Mandatory pre-push code review and security audit before any GitHub push
+alwaysApply: true
+---
+
+# Pre-push review (mandatory)
+
+When the user asks to **push to GitHub** — or equivalent phrasing such as "commit and push", "push to remote", "push to main", "deploy to github" — you MUST complete this workflow **before** `git push`:
+
+## 1. Gather the diff
+Run in parallel:
+- `git status`
+- `git diff` (staged + unstaged)
+- `git log` and `git diff [base]...HEAD` for everything that would be pushed
+
+## 2. Run both subagents (required)
+Launch **in parallel** (readonly):
+- **code-reviewer** — correctness, edge cases, conventions, production readiness
+- **security-auditor** — auth, secrets, injection, CORS, SSRF, trust boundaries
+
+Pass each agent the full diff/commits to be pushed and relevant project context (FastAPI backend, React/Vite frontend, Neon PostgreSQL, Render + Amplify).
+
+## 3. Act on findings
+- **Critical / High**: Fix before pushing. Re-run both agents on the fix if material.
+- **Medium**: Fix when quick; otherwise note in push summary for user awareness.
+- **Nit**: Optional; do not block push.
+
+Do **not** push if Critical or unresolved High security issues remain unless the user **explicitly** overrides after seeing the report.
+
+## 4. Push only after review
+After a clean or acceptable review:
+- Follow the user's git commit rules (only commit when asked).
+- Push with required permissions.
+- Summarize: what was pushed, review outcome, and any remaining Medium/Nit items.
+
+## Standard
+This is a portfolio/production app. Reviews should be strict enough that a senior engineer cannot easily find obvious security holes or "vibecoded" gaps (missing validation, open endpoints, leaked secrets, SQL injection, permissive CORS, unauthenticated destructive actions).

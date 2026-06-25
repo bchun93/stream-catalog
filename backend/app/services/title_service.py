@@ -8,6 +8,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.media_asset import AssetType, MediaAsset
+from app.models.ingest_job import IngestItem, IngestJob
 from app.models.title import Title, TitleStatus, TitleType
 from app.schemas.metadata import SeriesHierarchyApplyResult, SeriesHierarchyPreview
 from app.schemas.title import TitleCreate, TitleRead, TitleUpdate
@@ -396,7 +397,16 @@ def sync_title_poster_cache(db: Session, title_id: int) -> None:
         )
         poster_assets = [asset for asset in assets if asset.asset_type in _POSTER_TYPES]
         best = pick_best_poster_uri(poster_assets)
-        if best and title.poster_url != best:
+        if not best:
+            return
+        if is_usable_poster_url(title.poster_url) and title.poster_url != best:
+            current = title.poster_url.lower()
+            candidate = best.lower()
+            if any(m in candidate for m in ("/w185/", "/w154/", "/w45/")) and any(
+                m in current for m in ("/w500/", "/w780/", "/original/")
+            ):
+                return
+        if title.poster_url != best:
             title.poster_url = best
             db.commit()
     except Exception:
@@ -505,8 +515,38 @@ def update_title(db: Session, title: Title, payload: TitleUpdate) -> Title:
     return title
 
 
+def _title_ids_postorder(db: Session, root_id: int) -> list[int]:
+    order: list[int] = []
+
+    def visit(title_id: int) -> None:
+        child_ids = [
+            row[0] for row in db.query(Title.id).filter(Title.parent_id == title_id).all()
+        ]
+        for child_id in child_ids:
+            visit(child_id)
+        order.append(title_id)
+
+    visit(root_id)
+    return order
+
+
 def delete_title(db: Session, title: Title) -> None:
-    db.delete(title)
+    title_ids = _title_ids_postorder(db, title.id)
+    for tid in title_ids:
+        job_ids = [
+            row[0] for row in db.query(IngestJob.id).filter(IngestJob.title_id == tid).all()
+        ]
+        if job_ids:
+            db.query(IngestItem).filter(IngestItem.job_id.in_(job_ids)).delete(
+                synchronize_session=False
+            )
+        db.query(IngestJob).filter(IngestJob.title_id == tid).delete(
+            synchronize_session=False
+        )
+    for tid in title_ids:
+        row = db.query(Title).filter(Title.id == tid).first()
+        if row:
+            db.delete(row)
     db.commit()
 
 

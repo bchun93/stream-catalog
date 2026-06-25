@@ -13,17 +13,6 @@ import type { Title, TitleTree } from "../types";
 
 const TITLE_FORM_ID = "title-form";
 
-function titleMetaLine(title: Title): string {
-  return [
-    title.title_type,
-    title.release_year,
-    title.rating,
-    title.runtime_minutes ? `${title.runtime_minutes} min` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function displayInternalId(title: Pick<Title, "internal_id" | "slug">): string {
   return title.internal_id || "Pending";
 }
@@ -33,32 +22,6 @@ function stripHierarchyPrefix(name: string): string {
   if (!name.includes(marker)) return name;
   const tail = name.split(marker)[1] ?? name;
   return tail.replace(/^\d+: /, "");
-}
-
-function TitleSheetSummary({ title }: { title: Title }) {
-  const displayName =
-    title.title_type === "episode" ? stripHierarchyPrefix(title.name) : title.name;
-  return (
-    <section className="title-modal-summary" aria-label="Title summary">
-      {title.poster_url ? (
-        <img src={title.poster_url} alt="" className="title-modal-poster" loading="lazy" />
-      ) : (
-        <div className="title-modal-poster title-modal-poster-empty" aria-hidden>
-          —
-        </div>
-      )}
-      <div className="title-modal-summary-body">
-        <div className="title-modal-kicker">Editing title</div>
-        <h3>{displayName}</h3>
-        <p>{titleMetaLine(title) || "Basic title details"}</p>
-        <div className="title-modal-pills">
-          <StatusBadge value={title.status} />
-          <span className="title-modal-pill mono">{displayInternalId(title)}</span>
-          {title.eidr && <span className="title-modal-pill mono">EIDR {title.eidr}</span>}
-        </div>
-      </div>
-    </section>
-  );
 }
 
 function matchesFilters(node: TitleTree, search: string, typeFilter: string): boolean {
@@ -86,6 +49,22 @@ function filterTree(nodes: TitleTree[], search: string, typeFilter: string): Tit
 
 function flattenTitleTree(nodes: TitleTree[]): Title[] {
   return nodes.flatMap((node) => [node, ...flattenTitleTree(node.children)]);
+}
+
+function findTreeNode(nodes: TitleTree[], id: number): TitleTree | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const found = findTreeNode(node.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function countChildTitles(node: TitleTree): number {
+  return node.children.reduce(
+    (total, child) => total + 1 + countChildTitles(child),
+    0
+  );
 }
 
 function titleContextLabel(title: Title): string | null {
@@ -330,6 +309,7 @@ export function TitlesPage() {
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [formSessionKey, setFormSessionKey] = useState(0);
   const requestSeq = useRef(0);
 
@@ -369,6 +349,7 @@ export function TitlesPage() {
     setEditing(null);
     setFormTab("details");
     setSaving(false);
+    setDeleting(false);
   };
 
   const openEdit = async (t: Title, tab: "details" | "artwork" = "details") => {
@@ -398,6 +379,29 @@ export function TitlesPage() {
       else next.add(id);
       return next;
     });
+  };
+
+  const handleDeleteTitle = async () => {
+    if (!editing) return;
+    const treeNode = findTreeNode(tree, editing.id);
+    const childCount = treeNode ? countChildTitles(treeNode) : 0;
+    const message =
+      childCount > 0
+        ? `Delete "${editing.name}" and its ${childCount} child title${childCount === 1 ? "" : "s"}? This cannot be undone.`
+        : `Delete "${editing.name}"? This cannot be undone.`;
+    if (!confirm(message)) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await titlesApi.delete(editing.id);
+      closeSheet();
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete title");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -534,22 +538,32 @@ export function TitlesPage() {
           title={sheet === "create" ? "Create title" : "Edit title"}
           onClose={closeSheet}
           footer={
-            <>
-              <Button variant="ghost" onClick={closeSheet}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                type="submit"
-                form={TITLE_FORM_ID}
-                disabled={saving}
-              >
-                {saving ? "Saving…" : "Save title"}
-              </Button>
-            </>
+            <div className="sheet-footer-inner">
+              {sheet === "edit" && editing ? (
+                <Button
+                  variant="danger"
+                  disabled={saving || deleting}
+                  onClick={handleDeleteTitle}
+                >
+                  {deleting ? "Deleting…" : "Delete title"}
+                </Button>
+              ) : null}
+              <div className="sheet-footer-actions">
+                <Button variant="ghost" onClick={closeSheet} disabled={deleting}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  form={TITLE_FORM_ID}
+                  disabled={saving || deleting}
+                >
+                  {saving ? "Saving…" : "Save title"}
+                </Button>
+              </div>
+            </div>
           }
         >
-          {sheet === "edit" && editing && <TitleSheetSummary title={editing} />}
           <TitleForm
             key={formSessionKey}
             formId={TITLE_FORM_ID}
