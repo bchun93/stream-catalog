@@ -67,6 +67,22 @@ function countChildTitles(node: TitleTree): number {
   );
 }
 
+function collectSubtreeIds(node: TitleTree): number[] {
+  return [node.id, ...node.children.flatMap(collectSubtreeIds)];
+}
+
+function removeTitleFromTree(nodes: TitleTree[], titleId: number): TitleTree[] {
+  const result: TitleTree[] = [];
+  for (const node of nodes) {
+    if (node.id === titleId) continue;
+    result.push({
+      ...node,
+      children: removeTitleFromTree(node.children, titleId),
+    });
+  }
+  return result;
+}
+
 function titleContextLabel(title: Title): string | null {
   if (title.title_type === "episode" && title.episode_number) {
     return `Episode ${title.episode_number}`;
@@ -349,7 +365,6 @@ export function TitlesPage() {
     setEditing(null);
     setFormTab("details");
     setSaving(false);
-    setDeleting(false);
   };
 
   const openEdit = async (t: Title, tab: "details" | "artwork" = "details") => {
@@ -383,7 +398,8 @@ export function TitlesPage() {
 
   const handleDeleteTitle = async () => {
     if (!editing) return;
-    const treeNode = findTreeNode(tree, editing.id);
+    const deletedId = editing.id;
+    const treeNode = findTreeNode(tree, deletedId);
     const childCount = treeNode ? countChildTitles(treeNode) : 0;
     const message =
       childCount > 0
@@ -391,13 +407,23 @@ export function TitlesPage() {
         : `Delete "${editing.name}"? This cannot be undone.`;
     if (!confirm(message)) return;
 
+    const removedIds = treeNode ? collectSubtreeIds(treeNode) : [deletedId];
+    const snapshot = tree;
+
     setDeleting(true);
     setError(null);
+    setTree((current) => removeTitleFromTree(current, deletedId));
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      for (const id of removedIds) next.delete(id);
+      return next;
+    });
+    closeSheet();
+
     try {
-      await titlesApi.delete(editing.id);
-      closeSheet();
-      load();
+      await titlesApi.delete(deletedId);
     } catch (e) {
+      setTree(snapshot);
       setError(e instanceof Error ? e.message : "Failed to delete title");
     } finally {
       setDeleting(false);

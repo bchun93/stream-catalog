@@ -201,6 +201,23 @@ export interface MetadataSearchResult {
 export type IngestJobStatus = "pending" | "running" | "completed" | "failed";
 export type IngestItemStatus = "discovered" | "skipped" | "ingested" | "failed";
 
+export type PackageStatus = "draft" | "ready" | "delivered" | "archived";
+export type DeliveryMode = "vod" | "linear";
+export type MonetizationModel = "svod" | "avod" | "tvod" | "fast";
+
+export interface DeliveryPackage {
+  id: number;
+  name: string;
+  slug: string;
+  buyer_slug?: string | null;
+  deal_date?: string | null;
+  delivery_mode: DeliveryMode;
+  monetization: MonetizationModel;
+  status: PackageStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface IngestManifestRule {
   name?: string | null;
   pattern: string;

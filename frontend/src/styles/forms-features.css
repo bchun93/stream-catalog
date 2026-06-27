@@ -31,6 +31,23 @@
   resize: vertical;
 }
 
+.field-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.field-hint strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.package-form .form-grid {
+  margin-bottom: 0;
+}
+
 .form-actions {
   display: flex;
   gap: 0.5rem;

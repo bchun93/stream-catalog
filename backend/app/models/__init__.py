@@ -1,3 +1,4 @@
+from app.models.delivery_package import DeliveryPackage
 from app.models.artwork_ai import ArtworkClassification, ArtworkTrainingExample
 from app.models.media_asset import MediaAsset
 from app.models.ingest_job import IngestItem, IngestJob
@@ -14,4 +15,5 @@ __all__ = [
     "IngestItem",
     "ArtworkClassification",
     "ArtworkTrainingExample",
+    "DeliveryPackage",
 ]

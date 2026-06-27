@@ -8,6 +8,7 @@ import { ApiWakeProvider } from "./context/ApiWakeContext";
 import { AITrainingPage } from "./pages/AITrainingPage";
 import { AssetsPage } from "./pages/AssetsPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { DeliveryPage } from "./pages/DeliveryPage";
 import { MetadataConfigPage } from "./pages/MetadataConfigPage";
 import { StoragePage } from "./pages/StoragePage";
 import { TitlesPage } from "./pages/TitlesPage";
@@ -64,6 +65,7 @@ export default function App() {
               <Route path="/titles" element={<TitlesPage />} />
               <Route path="/metadata-config" element={<MetadataConfigPage />} />
               <Route path="/assets" element={<AssetsPage />} />
+              <Route path="/delivery" element={<DeliveryPage />} />
               <Route path="/storage" element={<StoragePage />} />
               <Route path="/ai-training" element={<AITrainingPage />} />
             </Routes>

@@ -15,6 +15,7 @@ from app.middleware.cors import EchoOriginCORSMiddleware
 from app.migrate import run_migrations
 from app.routers import (
     artwork_ai,
+    delivery,
     diagnostics,
     ingest,
     media_assets,
@@ -129,6 +130,7 @@ app.include_router(storage.router, prefix=api)
 app.include_router(metadata.router, prefix=api)
 app.include_router(metadata_config.router, prefix=api)
 app.include_router(titles.router, prefix=api)
+app.include_router(delivery.router, prefix=api)
 app.include_router(artwork_ai.router, prefix=api)
 app.include_router(media_assets.router, prefix=api)
 

@@ -7,6 +7,7 @@ const STATUS_STYLES: Record<string, string> = {
   uploaded: "status-draft",
   processing: "status-processing",
   ready: "status-published",
+  delivered: "status-scheduled",
   failed: "status-failed",
 };
 

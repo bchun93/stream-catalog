@@ -33,6 +33,11 @@ _MEDIA_ASSET_COLUMNS = [
     ("metadata_json", "TEXT"),
 ]
 
+_DELIVERY_PACKAGE_COLUMNS = [
+    ("delivery_mode", "VARCHAR(32)", "'vod'"),
+    ("monetization", "VARCHAR(32)", "'svod'"),
+]
+
 # Legacy Postgres enum type names (from early deploys).
 _PG_ENUM_TYPES = (
     "assettype",
@@ -477,6 +482,33 @@ def run_migrations() -> None:
                     conn.execute(
                         text(f"ALTER TABLE media_assets ADD COLUMN {col} {col_type}")
                     )
+
+    if "delivery_packages" in inspector.get_table_names():
+        package_cols = {
+            col["name"] for col in inspector.get_columns("delivery_packages")
+        }
+        with engine.begin() as conn:
+            for name, col_type, default in _DELIVERY_PACKAGE_COLUMNS:
+                if name not in package_cols:
+                    col = _quote_ident(name)
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE delivery_packages ADD COLUMN {col} {col_type} "
+                            f"DEFAULT {default}"
+                        )
+                    )
+            conn.execute(
+                text(
+                    "UPDATE delivery_packages SET delivery_mode = 'vod' "
+                    "WHERE delivery_mode IS NULL OR delivery_mode = ''"
+                )
+            )
+            conn.execute(
+                text(
+                    "UPDATE delivery_packages SET monetization = 'svod' "
+                    "WHERE monetization IS NULL OR monetization = ''"
+                )
+            )
 
     if engine.dialect.name == "postgresql":
         # Commit enum→VARCHAR first — a later failure must not roll this back.

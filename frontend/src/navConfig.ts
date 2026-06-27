@@ -4,6 +4,7 @@ export const NAV_ITEMS = [
   { path: "/titles", label: "Titles" },
   { path: "/metadata-config", label: "Metadata config", hidden: true },
   { path: "/assets", label: "Media assets" },
+  { path: "/delivery", label: "Delivery" },
   { path: "/storage", label: "Storage", hidden: true },
   { path: "/ai-training", label: "AI training", hidden: true },
 ] as const;

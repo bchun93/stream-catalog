@@ -22,6 +22,10 @@ import type {
   TitleMetadataImport,
   TitleTree,
   TitleType,
+  DeliveryPackage,
+  DeliveryMode,
+  MonetizationModel,
+  PackageStatus,
 } from "../types";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
@@ -222,6 +226,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
           "Hierarchy preview is not available on this API yet. Deploy the latest Render backend or run the local backend with Python 3.10+."
         );
       }
+      if (path.includes("/delivery/packages")) {
+        throw new Error(
+          "Delivery API is not deployed yet. Push the latest backend to Render and redeploy, or run ./scripts/dev.sh locally."
+        );
+      }
       throw new Error(
         "API route not found. Redeploy Render from latest main and verify /api/v1 is live."
       );
@@ -261,6 +270,17 @@ function formatApiError(path: string, status: number, detail: string): string {
     return (
       "Admin API key required. Set ADMIN_API_KEY on Render and VITE_ADMIN_API_KEY " +
       "in Amplify (same value), then redeploy both."
+    );
+  }
+
+  if (
+    status >= 500 &&
+    path.includes("/delivery/packages") &&
+    lower.includes("response validation failed")
+  ) {
+    return (
+      "Delivery API schema mismatch. Restart the local backend (./scripts/dev.sh) so migrations " +
+      "run, or redeploy the latest Render backend."
     );
   }
 
@@ -556,6 +576,22 @@ export const assetsApi = {
     }),
   delete: (id: number) =>
     request<void>(`/assets/${id}`, { method: "DELETE" }),
+};
+
+export const deliveryApi = {
+  list: () => requestWithRetry<DeliveryPackage[]>("/delivery/packages"),
+  create: (body: {
+    name: string;
+    buyer_slug?: string | null;
+    deal_date?: string | null;
+    delivery_mode?: DeliveryMode;
+    monetization?: MonetizationModel;
+    status?: PackageStatus;
+  }) =>
+    request<DeliveryPackage>("/delivery/packages", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 function operatorRequest<T>(path: string, init?: RequestInit): Promise<T> {
