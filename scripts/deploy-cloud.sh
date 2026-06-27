@@ -28,10 +28,14 @@ echo "==> Verifying AWS credentials"
 aws sts get-caller-identity
 
 echo "==> Setting Amplify VITE_API_URL=${API_URL}"
+ENV_VARS="VITE_API_URL=${API_URL}"
+if [[ -n "${VITE_ADMIN_API_KEY:-}" ]]; then
+  ENV_VARS="${ENV_VARS},VITE_ADMIN_API_KEY=${VITE_ADMIN_API_KEY}"
+fi
 aws amplify update-branch \
   --app-id "$AMPLIFY_APP_ID" \
   --branch-name "$AMPLIFY_BRANCH" \
-  --environment-variables "VITE_API_URL=${API_URL}" \
+  --environment-variables "$ENV_VARS" \
   --no-cli-pager
 
 echo "==> Triggering Amplify rebuild"
@@ -45,7 +49,12 @@ echo "Amplify job started: $JOB_ID"
 
 echo ""
 echo "==> API (Render): ensure these env vars are set in Render dashboard:"
-echo "      DATABASE_URL, TMDB_API_KEY, SEED_ON_STARTUP=false (after first seed)"
+echo "      DATABASE_URL, TMDB_API_KEY, ADMIN_API_KEY, SEED_ON_STARTUP=false (after first seed)"
+if [[ -n "${VITE_ADMIN_API_KEY:-}" ]]; then
+  echo "      Amplify VITE_ADMIN_API_KEY was updated to match ADMIN_API_KEY"
+else
+  echo "      Set ADMIN_API_KEY in deploy.env and re-run to sync VITE_ADMIN_API_KEY to Amplify"
+fi
 echo ""
 echo "==> Verify:"
 echo "  ./scripts/verify-cloud.sh ${API_URL}"
