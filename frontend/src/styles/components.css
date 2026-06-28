@@ -1359,3 +1359,116 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* --- Time-coded results layer --- */
+.reko-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.reko-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.reko-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.reko-section-head h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+.reko-section-head svg {
+  color: var(--text-secondary);
+}
+.reko-empty-line {
+  font-size: 0.8125rem;
+  margin: 0;
+}
+.reko-timeline-track {
+  position: relative;
+  height: 28px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.reko-timeline-cue {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--info-bg);
+  border-left: 2px solid var(--info);
+  min-width: 2px;
+}
+.reko-timeline-cue.cue-blackframes {
+  background: rgba(255, 255, 255, 0.06);
+  border-left-color: var(--text-secondary);
+}
+.reko-timeline-cue.cue-colorbars {
+  background: var(--violet-bg);
+  border-left-color: var(--violet);
+}
+.reko-timeline-cue.cue-endcredits,
+.reko-timeline-cue.cue-opening_credits,
+.reko-timeline-cue.cue-openingcredits {
+  background: var(--warn-bg);
+  border-left-color: var(--warn);
+}
+.reko-timeline-shot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-strong);
+}
+.reko-cue-chip,
+.reko-mod-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  background: var(--info-bg);
+  color: var(--info);
+}
+.reko-mod-chip {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.reko-cue-table {
+  margin-top: var(--space-1);
+}
+.reko-label-search {
+  width: 100%;
+  max-width: 320px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.8125rem;
+}
+.reko-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.reko-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 3px 6px 3px 10px;
+  font-size: 0.8125rem;
+}
+.reko-tag-time {
+  background: var(--bg-inset);
+  color: var(--text-tertiary);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 0.6875rem;
+}

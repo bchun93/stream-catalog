@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { StatusBadge } from "./ui/Badge";
 import { Button } from "./ui/Button";
+import { RekognitionResults } from "./RekognitionResults";
 import { RekognitionVideoPicker } from "./RekognitionVideoPicker";
 
 const FEATURES: { key: RekognitionFeature; label: string; hint: string }[] = [
@@ -36,11 +37,13 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
   const [loading, setLoading] = useState(true);
   const [draining, setDraining] = useState(false);
   const [drainMsg, setDrainMsg] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const loadJobs = useCallback(async () => {
     setLoading(true);
     try {
       setJobs(await rekognitionApi.listJobs(asset.id));
+      setReloadToken((t) => t + 1);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load jobs");
@@ -217,6 +220,8 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
           </tbody>
         </table>
       </div>
+
+      <RekognitionResults asset={asset} reloadToken={reloadToken} />
     </div>
   );
 }
