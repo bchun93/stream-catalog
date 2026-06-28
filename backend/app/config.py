@@ -66,6 +66,29 @@ class Settings(BaseSettings):
     )
     aws_endpoint_url: str | None = Field(default=None, validation_alias="AWS_ENDPOINT_URL")
 
+    # --- Amazon Rekognition Video integration ---
+    s3_analysis_bucket: str | None = Field(
+        default=None, validation_alias="S3_ANALYSIS_BUCKET"
+    )
+    rekognition_role_arn: str | None = Field(
+        default=None, validation_alias="REKOGNITION_ROLE_ARN"
+    )
+    rekognition_sns_topic_arn: str | None = Field(
+        default=None, validation_alias="REKOGNITION_SNS_TOPIC_ARN"
+    )
+    rekognition_sqs_queue_url: str | None = Field(
+        default=None, validation_alias="REKOGNITION_SQS_QUEUE_URL"
+    )
+    ddb_jobs_table: str = Field(
+        default="relay_rekognition_jobs", validation_alias="DDB_JOBS_TABLE"
+    )
+    ddb_detections_table: str = Field(
+        default="relay_rekognition_detections", validation_alias="DDB_DETECTIONS_TABLE"
+    )
+    rekognition_consumer_secret: str | None = Field(
+        default=None, validation_alias="REKOGNITION_CONSUMER_SECRET"
+    )
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_db_url(cls, value: object) -> object:
@@ -99,6 +122,14 @@ class Settings(BaseSettings):
     def cors_regex(self) -> str | None:
         value = (self.cors_origin_regex or "").strip()
         return value if value else None
+
+    @property
+    def rekognition_configured(self) -> bool:
+        """True when the minimum AWS wiring for starting jobs is present."""
+        return bool(
+            (self.rekognition_role_arn or "").strip()
+            and (self.rekognition_sns_topic_arn or "").strip()
+        )
 
 
 settings = Settings()
