@@ -18,7 +18,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, TypedDict
+from typing import Any, Iterable, Iterator, TypedDict
 
 from boto3.dynamodb.conditions import Key
 
@@ -30,14 +30,13 @@ from app.services.rekognition.constants import (
     JobStatus,
 )
 
-if TYPE_CHECKING:
-    from botocore.exceptions import ClientError as _ClientError
-
 logger = logging.getLogger(__name__)
 
 _GSI_JOB_ID = "gsi_job_id"
 _MAX_BATCH = 25
 _BATCH_RETRY_ATTEMPTS = 6
+# Safety cap so an unbounded read can't fan out to thousands of items / RCU.
+_DEFAULT_MAX_DETECTIONS = 5000
 
 
 class JobItem(TypedDict, total=False):
@@ -157,7 +156,13 @@ def get_job(*, asset_id: str, feature: Feature) -> JobItem | None:
 
 
 def get_job_by_aws_job_id(aws_job_id: str) -> JobItem | None:
-    """Consumer lookup-by-JobId via the gsi_job_id GSI."""
+    """Consumer lookup-by-JobId via the gsi_job_id GSI.
+
+    NOTE: the GSI projects only ``asset_id``, ``feature``, ``status`` (+ the ``aws_job_id``
+    key). Callers needing the full row (e.g. ``client_request_token``, ``created_at``) must
+    re-fetch with ``get_job(asset_id, feature)``. The consumer only needs asset_id+feature,
+    which are projected.
+    """
     resp = jobs_table().query(
         IndexName=_GSI_JOB_ID,
         KeyConditionExpression=Key("aws_job_id").eq(aws_job_id),
@@ -204,7 +209,9 @@ def build_detection_sk(feature: Feature, time_ms: int | None, dedupe_seed: str) 
     instead of duplicating it.
     """
     padded = str(max(0, time_ms or 0)).zfill(SK_TIME_PAD_WIDTH)
-    short = hashlib.sha1(dedupe_seed.encode("utf-8")).hexdigest()[:10]
+    short = hashlib.sha1(
+        dedupe_seed.encode("utf-8"), usedforsecurity=False
+    ).hexdigest()[:10]
     return f"{feature.value}#{padded}#{short}"
 
 
@@ -257,24 +264,29 @@ def query_detections(
 ) -> list[DetectionItem]:
     """Time-ordered detections for an asset, optionally filtered by feature.
 
-    Paginates over LastEvaluatedKey (each Query page returns <= 1 MB).
+    Paginates over LastEvaluatedKey (each Query page returns <= 1 MB) and pushes the bound
+    server-side via ``Limit``. An unbounded call is capped at ``_DEFAULT_MAX_DETECTIONS`` to
+    protect memory/RCU.
     """
     table = detections_table()
     key_cond = Key("asset_id").eq(asset_id)
     if feature is not None:
         key_cond = key_cond & Key("sk").begins_with(f"{feature.value}#")
 
+    cap = limit if limit is not None else _DEFAULT_MAX_DETECTIONS
     items: list[dict[str, Any]] = []
     last_key: dict[str, Any] | None = None
-    while True:
-        kwargs: dict[str, Any] = {"KeyConditionExpression": key_cond}
+    while len(items) < cap:
+        kwargs: dict[str, Any] = {
+            "KeyConditionExpression": key_cond,
+            "Limit": cap - len(items),
+        }
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
         resp = table.query(**kwargs)
         items.extend(resp.get("Items", []))
         last_key = resp.get("LastEvaluatedKey")  # type: ignore[assignment]
-        if not last_key or (limit is not None and len(items) >= limit):
+        if not last_key:
             break
 
-    result = [_from_ddb(i) for i in items]
-    return result[:limit] if limit is not None else result  # type: ignore[return-value]
+    return [_from_ddb(i) for i in items[:cap]]  # type: ignore[return-value]
