@@ -56,9 +56,13 @@ def s3_client() -> "S3Client":
     return _session().client("s3", **_client_kwargs())
 
 
-@lru_cache(maxsize=1)
 def dynamodb_resource() -> "DynamoDBServiceResource":
-    """High-level resource — auto-marshals Python types (Python's DocumentClient)."""
+    """High-level resource — auto-marshals Python types (Python's DocumentClient).
+
+    NOT cached: boto3 *resources* are not thread-safe (unlike botocore clients), and the
+    consumer/reads run on FastAPI's thread pool. A fresh resource per call avoids races;
+    the cost is negligible at this app's scale.
+    """
     return _session().resource("dynamodb", **_client_kwargs())
 
 
@@ -71,8 +75,9 @@ def detections_table() -> "Table":
 
 
 def reset_clients() -> None:
-    """Clear cached clients (useful in tests after env changes)."""
+    """Clear cached clients. Note: ``_session()`` reads the module-level ``settings``
+    singleton, so tests that change env must also re-instantiate/patch ``settings`` for a
+    cleared client to pick up new values. (``dynamodb_resource`` is uncached already.)"""
     rekognition_client.cache_clear()
     sqs_client.cache_clear()
     s3_client.cache_clear()
-    dynamodb_resource.cache_clear()

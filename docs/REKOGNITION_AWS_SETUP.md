@@ -55,6 +55,40 @@ fi
 aws s3api put-public-access-block --bucket "$S3_ANALYSIS_BUCKET" \
   --public-access-block-configuration \
   BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+# Default encryption at rest (SSE-S3)
+aws s3api put-bucket-encryption --bucket "$S3_ANALYSIS_BUCKET" \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+
+# Enforce TLS in transit (deny non-HTTPS)
+cat > /tmp/s3-tls-only.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::$S3_ANALYSIS_BUCKET",
+        "arn:aws:s3:::$S3_ANALYSIS_BUCKET/*"
+      ],
+      "Condition": { "Bool": { "aws:SecureTransport": "false" } }
+    }
+  ]
+}
+EOF
+aws s3api put-bucket-policy --bucket "$S3_ANALYSIS_BUCKET" --policy file:///tmp/s3-tls-only.json
+```
+
+**If you reuse an existing bucket** (analyze-in-place), still verify Block Public Access and
+apply the encryption + TLS policy above to that bucket:
+
+```bash
+# Verify BPA is fully on; if any value is false, re-run put-public-access-block above.
+aws s3api get-public-access-block --bucket "$S3_ANALYSIS_BUCKET"
 ```
 
 > Rekognition reads whatever bucket the **service role** (section 5) is granted `s3:GetObject`
@@ -256,7 +290,13 @@ echo "REKOGNITION_ROLE_ARN=$REKOGNITION_ROLE_ARN"
 ## 6. IAM identity #2 — Relay app credentials (used by the backend)
 
 Least-privilege for the three `Start*` + three `Get*` ops, SQS consume, S3 read of the proxy,
-and the DynamoDB access patterns (incl. the GSI index ARN).
+and the DynamoDB access patterns (incl. the jobs-table GSI index ARN; the detections table has
+no GSI so no `index/*` grant is needed there).
+
+> Note: Rekognition Video `Start*`/`Get*` actions **do not support resource-level
+> permissions**, so `"Resource": "*"` on the `RekognitionStartGet` statement is the only valid
+> (and tightest possible) scoping. The `iam:PassRole` condition below still constrains which
+> role can be handed to the service.
 
 > **Important — don't break existing S3:** Relay's current ingest/storage features already use
 > AWS credentials (via `AWS_PROFILE` or `AWS_ACCESS_KEY_ID`). Either (a) attach this policy to
@@ -319,8 +359,7 @@ cat > /tmp/relay-app-perms.json <<EOF
       "Resource": [
         "arn:aws:dynamodb:${AWS_REGION}:${ACCOUNT_ID}:table/${DDB_JOBS_TABLE}",
         "arn:aws:dynamodb:${AWS_REGION}:${ACCOUNT_ID}:table/${DDB_JOBS_TABLE}/index/*",
-        "arn:aws:dynamodb:${AWS_REGION}:${ACCOUNT_ID}:table/${DDB_DETECTIONS_TABLE}",
-        "arn:aws:dynamodb:${AWS_REGION}:${ACCOUNT_ID}:table/${DDB_DETECTIONS_TABLE}/index/*"
+        "arn:aws:dynamodb:${AWS_REGION}:${ACCOUNT_ID}:table/${DDB_DETECTIONS_TABLE}"
       ]
     }
   ]
