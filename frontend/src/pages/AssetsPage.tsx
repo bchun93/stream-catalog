@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { HardDrive, Image, Plus } from "lucide-react";
+import { HardDrive, Image, Plus, ScanSearch } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { assetsApi, titlesApi } from "../api/client";
 import { AssetForm } from "../components/AssetForm";
@@ -159,10 +159,7 @@ export function AssetsPage() {
                   key={a.id}
                   type="button"
                   className="asset-mobile-card"
-                  onClick={() => {
-                    setEditing(a);
-                    setModal("edit");
-                  }}
+                  onClick={() => navigate(`/assets/${a.id}`)}
                 >
                   <AssetThumb
                     uri={a.storage_uri}
@@ -210,7 +207,13 @@ export function AssetsPage() {
                             label={assetPrimaryLabel(a.filename, a.asset_type)}
                           />
                           <div className="asset-row-label">
-                            <strong>{assetPrimaryLabel(a.filename, a.asset_type)}</strong>
+                            <button
+                              type="button"
+                              className="asset-row-link"
+                              onClick={() => navigate(`/assets/${a.id}`)}
+                            >
+                              {assetPrimaryLabel(a.filename, a.asset_type)}
+                            </button>
                             <span className="mono" title={a.filename}>
                               {a.filename}
                             </span>
@@ -238,6 +241,14 @@ export function AssetsPage() {
                       <td className="num text-tertiary">{formatBytes(a.size_bytes)}</td>
                       <td className="actions-cell">
                         <div className="row-actions">
+                          <Button
+                            variant="ghost"
+                            icon={<ScanSearch size={15} />}
+                            onClick={() => navigate(`/assets/${a.id}`)}
+                            title="Open asset detail and Rekognition QC"
+                          >
+                            QC
+                          </Button>
                           <Button
                             variant="ghost"
                             onClick={() => {
