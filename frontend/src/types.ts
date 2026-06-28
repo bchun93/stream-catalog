@@ -419,6 +419,50 @@ export interface StoragePresignDownload {
   storage_uri: string;
 }
 
+// --- Amazon Rekognition Video ---
+export type RekognitionFeature = "SEGMENT" | "MODERATION" | "LABELS";
+export type RekognitionJobStatus = "IN_PROGRESS" | "SUCCEEDED" | "FAILED";
+
+export interface RekognitionJob {
+  asset_id: string;
+  feature: RekognitionFeature;
+  aws_job_id?: string | null;
+  status: RekognitionJobStatus;
+  error?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface RekognitionFeatureResult {
+  feature: RekognitionFeature;
+  status: string;
+  aws_job_id?: string | null;
+  started: boolean;
+  message?: string | null;
+}
+
+export interface RekognitionAnalyzeResponse {
+  asset_id: number;
+  bucket: string;
+  key: string;
+  warnings: string[];
+  results: RekognitionFeatureResult[];
+}
+
+export interface RekognitionDetection {
+  sk: string;
+  feature: RekognitionFeature;
+  kind?: string | null;
+  name?: string | null;
+  confidence?: number | null;
+  timestamp_ms?: number | null;
+  start_ms?: number | null;
+  end_ms?: number | null;
+  bounding_box?: Record<string, number> | null;
+  job_id?: string | null;
+  created_at?: string | null;
+}
+
 export const ARTWORK_TYPES: ArtworkType[] = [
   "poster",
   "backdrop",

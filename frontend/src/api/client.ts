@@ -12,6 +12,10 @@ import type {
   MetadataConfig,
   MetadataDisplaySettings,
   MetadataSearchResult,
+  RekognitionAnalyzeResponse,
+  RekognitionDetection,
+  RekognitionFeature,
+  RekognitionJob,
   SeriesHierarchyApplyResult,
   SeriesHierarchyPreview,
   StorageBrowse,
@@ -576,6 +580,24 @@ export const assetsApi = {
     }),
   delete: (id: number) =>
     request<void>(`/assets/${id}`, { method: "DELETE" }),
+};
+
+export const rekognitionApi = {
+  analyze: (assetId: number, body?: { s3_key?: string }) =>
+    request<RekognitionAnalyzeResponse>(`/assets/${assetId}/rekognition/analyze`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+  listJobs: (assetId: number) =>
+    requestWithRetry<RekognitionJob[]>(`/assets/${assetId}/rekognition/jobs`),
+  listDetections: (assetId: number, feature?: RekognitionFeature, limit?: number) => {
+    const q = new URLSearchParams();
+    if (feature) q.set("feature", feature);
+    if (limit) q.set("limit", String(limit));
+    return requestWithRetry<RekognitionDetection[]>(
+      `/assets/${assetId}/rekognition/detections${q.toString() ? `?${q}` : ""}`
+    );
+  },
 };
 
 export const deliveryApi = {

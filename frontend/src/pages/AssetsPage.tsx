@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { HardDrive, Image, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { assetsApi, titlesApi } from "../api/client";
 import { AssetForm } from "../components/AssetForm";
 import { StatusBadge, TypeBadge } from "../components/ui/Badge";
@@ -43,6 +44,7 @@ export function AssetsPage() {
   const [editing, setEditing] = useState<MediaAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const titleMap = Object.fromEntries(titles.map((t) => [t.id, t.name]));
 
@@ -248,6 +250,10 @@ export function AssetsPage() {
                           <OverflowMenu
                             label={`Actions for ${a.filename}`}
                             items={[
+                              {
+                                label: "Open detail / QC",
+                                onClick: () => navigate(`/assets/${a.id}`),
+                              },
                               {
                                 label: "Delete",
                                 danger: true,

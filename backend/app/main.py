@@ -21,6 +21,7 @@ from app.routers import (
     media_assets,
     metadata,
     metadata_config,
+    rekognition,
     storage,
     titles,
 )
@@ -133,6 +134,7 @@ app.include_router(titles.router, prefix=api)
 app.include_router(delivery.router, prefix=api)
 app.include_router(artwork_ai.router, prefix=api)
 app.include_router(media_assets.router, prefix=api)
+app.include_router(rekognition.router, prefix=api)
 
 
 @app.get("/")
