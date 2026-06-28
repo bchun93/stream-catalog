@@ -44,10 +44,18 @@ export function RekognitionResults({
   }, [load, reloadToken]);
 
   const { techCues, shots, moderation, labels, durationMs } = useMemo(() => {
-    const techCues = detections.filter(isTechnicalCue);
-    const shots = detections.filter((d) => d.feature === "SEGMENT" && d.kind === "Shot");
-    const moderation = detections.filter((d) => d.feature === "MODERATION");
-    const labels = detections.filter((d) => d.feature === "LABELS");
+    const byStart = (a: RekognitionDetection, b: RekognitionDetection) =>
+      (a.start_ms ?? 0) - (b.start_ms ?? 0);
+    const byTimestamp = (a: RekognitionDetection, b: RekognitionDetection) =>
+      (a.timestamp_ms ?? 0) - (b.timestamp_ms ?? 0);
+    const techCues = detections.filter(isTechnicalCue).sort(byStart);
+    const shots = detections
+      .filter((d) => d.feature === "SEGMENT" && d.kind === "Shot")
+      .sort(byStart);
+    const moderation = detections
+      .filter((d) => d.feature === "MODERATION")
+      .sort(byTimestamp);
+    const labels = detections.filter((d) => d.feature === "LABELS").sort(byTimestamp);
     const maxMs = detections.reduce(
       (m, d) => Math.max(m, d.end_ms ?? d.timestamp_ms ?? d.start_ms ?? 0),
       0
@@ -64,8 +72,10 @@ export function RekognitionResults({
     return labels.filter((d) => (d.name ?? d.kind ?? "").toLowerCase().includes(q));
   }, [labels, labelQuery]);
 
-  if (loading) return <p className="empty">Loading detections…</p>;
-  if (error) return <div className="error-banner">{error}</div>;
+  // Only show the full-screen placeholder on the first load; keep prior results visible
+  // (and the search input mounted) during user-initiated reloads.
+  if (loading && detections.length === 0) return <p className="empty">Loading detections…</p>;
+  if (error && detections.length === 0) return <div className="error-banner">{error}</div>;
 
   const hasAny =
     techCues.length + shots.length + moderation.length + labels.length > 0;

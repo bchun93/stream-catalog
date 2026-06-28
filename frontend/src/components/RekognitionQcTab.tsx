@@ -43,7 +43,6 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
     setLoading(true);
     try {
       setJobs(await rekognitionApi.listJobs(asset.id));
-      setReloadToken((t) => t + 1);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load jobs");
@@ -51,6 +50,13 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
       setLoading(false);
     }
   }, [asset.id]);
+
+  // Reload jobs AND detections together (used by user actions, not the initial mount —
+  // RekognitionResults already fetches once on mount, so we avoid a double fetch).
+  const refreshAll = useCallback(async () => {
+    await loadJobs();
+    setReloadToken((t) => t + 1);
+  }, [loadJobs]);
 
   useEffect(() => {
     void loadJobs();
@@ -67,7 +73,7 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
         overrideKey ? { s3_key: overrideKey } : undefined
       );
       setResult(res);
-      await loadJobs();
+      await refreshAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analyze failed");
     } finally {
@@ -84,7 +90,7 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
       setDrainMsg(
         `Drained queue: received ${res.received}, processed ${res.processed}, failed ${res.failed}.`
       );
-      await loadJobs();
+      await refreshAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Drain failed");
     } finally {
@@ -157,7 +163,7 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
           variant="ghost"
           icon={<RefreshCw size={15} />}
           disabled={loading}
-          onClick={() => void loadJobs()}
+          onClick={() => void refreshAll()}
         >
           Refresh
         </Button>
@@ -176,8 +182,8 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
 
       {result?.warnings?.length ? (
         <div className="reko-qc-warnings">
-          {result.warnings.map((w) => (
-            <div key={w} className="reko-qc-warning">
+          {result.warnings.map((w, i) => (
+            <div key={`${i}-${w}`} className="reko-qc-warning">
               {w}
             </div>
           ))}
