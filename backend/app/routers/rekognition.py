@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.deps import require_admin_token
 from app.schemas.rekognition import (
@@ -41,6 +42,14 @@ def analyze_asset(
     db: Session = Depends(get_db),
     _: None = Depends(require_admin_token),
 ):
+    # This endpoint incurs AWS cost, so refuse to run it wide-open: require ADMIN_API_KEY to
+    # be configured (require_admin_token then enforces the header match).
+    if not (settings.admin_api_key or "").strip():
+        raise HTTPException(
+            status_code=503,
+            detail="Set ADMIN_API_KEY to enable Rekognition analyze (this endpoint incurs AWS cost).",
+        )
+
     asset = media_service.get_asset(db, asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -52,9 +61,12 @@ def analyze_asset(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AnalysisConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 - surface AWS/DynamoDB failures clearly
+    except Exception as exc:  # noqa: BLE001 - log full error, return generic message
         logger.exception("analyze_asset failed for asset %s", asset_id)
-        raise HTTPException(status_code=503, detail=f"Rekognition analyze failed: {exc}") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Rekognition analyze failed; check server logs for details.",
+        ) from exc
 
     return AnalyzeResponse(
         asset_id=result.asset_id,
@@ -82,7 +94,9 @@ def list_jobs(asset_id: int):
         jobs = ddb.list_jobs_for_asset(str(asset_id))
     except Exception as exc:  # noqa: BLE001
         logger.exception("list_jobs failed for asset %s", asset_id)
-        raise HTTPException(status_code=503, detail=f"Could not load jobs: {exc}") from exc
+        raise HTTPException(
+            status_code=503, detail="Could not load Rekognition jobs; check server logs."
+        ) from exc
     return [RekognitionJobRead(**job) for job in jobs]
 
 
@@ -102,6 +116,6 @@ def list_detections(
     except Exception as exc:  # noqa: BLE001
         logger.exception("list_detections failed for asset %s", asset_id)
         raise HTTPException(
-            status_code=503, detail=f"Could not load detections: {exc}"
+            status_code=503, detail="Could not load detections; check server logs."
         ) from exc
     return [DetectionRead(**row) for row in rows]

@@ -77,14 +77,23 @@ def _parse_s3_uri(uri: str) -> tuple[str, str]:
 
 
 def _resolve_proxy(asset: MediaAsset, s3_key_override: str | None) -> tuple[str, str]:
+    analysis_bucket = (settings.s3_analysis_bucket or "").strip()
     if s3_key_override:
-        bucket = (settings.s3_analysis_bucket or "").strip()
-        if not bucket:
+        if not analysis_bucket:
             raise AnalysisConfigError(
                 "S3_ANALYSIS_BUCKET is not configured; cannot resolve an overridden S3 key."
             )
-        return bucket, s3_key_override.lstrip("/")
-    return _parse_s3_uri(asset.storage_uri or "")
+        return analysis_bucket, s3_key_override.lstrip("/")
+
+    bucket, key = _parse_s3_uri(asset.storage_uri or "")
+    # Defense-in-depth: even the default path must stay within the analysis bucket, so an
+    # attacker-set storage_uri can't make Rekognition read an arbitrary bucket.
+    if analysis_bucket and bucket != analysis_bucket:
+        raise AnalysisInputError(
+            f"Asset proxy is in bucket '{bucket}', not the configured analysis bucket "
+            f"'{analysis_bucket}'. Only objects in the analysis bucket can be analyzed."
+        )
+    return bucket, key
 
 
 def _guard_video(asset: MediaAsset, key: str, *, is_override: bool) -> list[str]:
@@ -116,9 +125,13 @@ def _guard_video(asset: MediaAsset, key: str, *, is_override: bool) -> list[str]
     return warnings
 
 
-def _client_request_token(asset_id: str, feature: Feature) -> str:
+def _client_request_token(asset_id: str, feature: Feature, attempt: int = 1) -> str:
     # AWS ClientRequestToken charset is [a-zA-Z0-9-_] (no ':'), so use '_' as the separator.
-    return f"{asset_id}_{feature.value}"
+    # attempt 1 keeps the stable token (double-click dedupe); a FAILED re-run bumps attempt so
+    # AWS starts a genuinely new job instead of returning the old failed JobId within its
+    # 7-day idempotency window.
+    base = f"{asset_id}_{feature.value}"
+    return base if attempt <= 1 else f"{base}_{attempt}"
 
 
 def _job_tag(asset_id: str, feature: Feature) -> str:
@@ -133,6 +146,7 @@ def _start_feature(
     bucket: str,
     key: str,
     asset_id: str,
+    token: str,
 ) -> str:
     video = {"S3Object": {"Bucket": bucket, "Name": key}}
     notification = {
@@ -142,7 +156,7 @@ def _start_feature(
     common = {
         "Video": video,
         "NotificationChannel": notification,
-        "ClientRequestToken": _client_request_token(asset_id, feature),
+        "ClientRequestToken": token,
         "JobTag": _job_tag(asset_id, feature),
     }
     if feature is Feature.SEGMENT:
@@ -230,9 +244,11 @@ def start_analysis(
             )
             continue
 
+        attempt = int(existing.get("attempt", 0)) + 1 if existing else 1
+        token = _client_request_token(asset_id, feature, attempt)
         try:
             job_id = _start_feature(
-                rek, feature, bucket=bucket, key=key, asset_id=asset_id
+                rek, feature, bucket=bucket, key=key, asset_id=asset_id, token=token
             )
         except ClientError as exc:
             message = _explain_client_error(exc)
@@ -252,7 +268,8 @@ def start_analysis(
                 asset_id=asset_id,
                 feature=feature,
                 aws_job_id=job_id,
-                client_request_token=_client_request_token(asset_id, feature),
+                client_request_token=token,
+                attempt=attempt,
             )
             results.append(
                 FeatureResult(

@@ -45,6 +45,7 @@ class JobItem(TypedDict, total=False):
     aws_job_id: str
     client_request_token: str
     status: str
+    attempt: int
     error: str | None
     created_at: str
     updated_at: str
@@ -112,12 +113,14 @@ def put_job(
     feature: Feature,
     aws_job_id: str,
     client_request_token: str,
+    attempt: int = 1,
 ) -> JobItem:
     """Idempotently create an IN_PROGRESS job row.
 
     Conditional on the (asset_id, feature) key not existing, OR a prior row in FAILED state
     (so a failed feature can be re-run, but an IN_PROGRESS/SUCCEEDED one cannot be duplicated).
-    Raises ``JobConflictError`` if a non-retryable row already exists.
+    ``attempt`` increments on each FAILED re-run so callers can derive a fresh idempotency
+    token. Raises ``JobConflictError`` if a non-retryable row already exists.
     """
     now = _now_iso()
     item: JobItem = {
@@ -126,6 +129,7 @@ def put_job(
         "aws_job_id": aws_job_id,
         "client_request_token": client_request_token,
         "status": JobStatus.IN_PROGRESS.value,
+        "attempt": attempt,
         "error": None,
         "created_at": now,
         "updated_at": now,

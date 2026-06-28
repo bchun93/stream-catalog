@@ -143,7 +143,7 @@ export function AssetDetailPage() {
               </dl>
             </div>
           ) : (
-            <RekognitionQcTab asset={asset} />
+            <RekognitionQcTab key={asset.id} asset={asset} />
           )}
         </>
       )}

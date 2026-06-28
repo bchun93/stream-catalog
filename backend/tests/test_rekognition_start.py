@@ -156,6 +156,32 @@ class StartAnalysisTests(unittest.TestCase):
                 self._asset(storage_uri="https://cdn.example.com/x.mp4")
             )
 
+    def test_failed_feature_retry_uses_fresh_token(self) -> None:
+        fake = _FakeRekognition()
+        with patch.object(self.start, "rekognition_client", return_value=fake):
+            self.start.start_analysis(self._asset())
+            first_tokens = {c[1]["ClientRequestToken"] for c in fake.calls}
+            # Mark one feature FAILED, then re-run.
+            self.ddb.update_job_status(
+                asset_id="1",
+                feature=self.start.Feature.LABELS,
+                status=self.start.JobStatus.FAILED,
+                error="boom",
+            )
+            again = self.start.start_analysis(self._asset())
+        labels = next(r for r in again.results if r.feature.value == "LABELS")
+        self.assertTrue(labels.started)
+        # The retry used a distinct token (attempt-bumped), not the original.
+        retry_tokens = {c[1]["ClientRequestToken"] for c in fake.calls}
+        self.assertIn("1_LABELS_2", retry_tokens)
+        self.assertIn("1_LABELS", first_tokens)
+
+    def test_default_path_rejects_foreign_bucket(self) -> None:
+        with self.assertRaises(self.start.AnalysisInputError):
+            self.start.start_analysis(
+                self._asset(storage_uri="s3://some-other-bucket/clip.mp4", codec="h264")
+            )
+
     def test_unknown_codec_warns_but_proceeds(self) -> None:
         fake = _FakeRekognition()
         with patch.object(self.start, "rekognition_client", return_value=fake):
