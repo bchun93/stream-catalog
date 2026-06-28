@@ -35,12 +35,12 @@ jobs:
           # Wake the API first (Render free tier), then drain.
           curl -sfS --max-time 120 "${API_URL}/health" > /dev/null || true
           http_code=$(curl -s -o /tmp/consume.json -w "%{http_code}" \
-            --max-time 120 -X POST \
+            --max-time 170 -X POST \
             -H "X-Rekognition-Consumer-Secret: ${CONSUMER_SECRET}" \
             "${API_URL}/api/v1/rekognition/consume")
           echo "HTTP $http_code"
-          cat /tmp/consume.json || true
-          echo
+          # Print counts only (avoid echoing per-message detail into CI logs).
+          python3 -c "import json;d=json.load(open('/tmp/consume.json'));print({k:d[k] for k in ('received','processed','deleted','failed') if k in d})" 2>/dev/null || true
           if [ "$http_code" != "200" ]; then
             echo "Consumer drain returned non-200."
             exit 1

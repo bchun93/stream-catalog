@@ -141,7 +141,8 @@ def _drain_to_response(result: DrainResult) -> ConsumeResponse:
 def consume(_: None = Depends(require_consumer_secret)):
     """Scheduled SQS drain (GitHub Actions cron). Secret-protected, never publicly callable."""
     try:
-        result = drain_queue()
+        # Bounded so the cron's curl --max-time can't trip while the server keeps polling.
+        result = drain_queue(max_batches=5, wait_time_seconds=5)
     except ConsumerConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001

@@ -242,6 +242,26 @@ class ConsumerTests(unittest.TestCase):
         )
         self.assertEqual(attrs["Attributes"]["ApproximateNumberOfMessages"], "0")
 
+    def test_drain_keeps_unidentifiable_message(self) -> None:
+        import app.services.aws_clients as aws_clients
+
+        sqs = aws_clients.sqs_client()
+        queue_url = sqs.create_queue(QueueName="test-q2")["QueueUrl"]
+        os.environ["REKOGNITION_SQS_QUEUE_URL"] = queue_url
+        importlib.reload(self.config)
+        importlib.reload(aws_clients)
+        importlib.reload(self.consumer)
+
+        # No job row / no JobTag -> unidentifiable -> must NOT be deleted (at-least-once).
+        sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=_sns_envelope({"JobId": "ghost", "Status": "SUCCEEDED"}),
+        )
+        result = self.consumer.drain_queue(max_batches=1, wait_time_seconds=0)
+        self.assertEqual(result.received, 1)
+        self.assertEqual(result.deleted, 0)
+        self.assertEqual(result.failed, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

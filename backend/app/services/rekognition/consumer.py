@@ -291,10 +291,11 @@ def drain_queue(*, max_batches: int = 10, wait_time_seconds: int = 10) -> DrainR
             result.received += 1
             try:
                 outcome = process_completion(message["Body"])
-            except Exception as exc:  # noqa: BLE001 - one bad message shouldn't stop the drain
+            except Exception:  # noqa: BLE001 - one bad message shouldn't stop the drain
                 result.failed += 1
                 logger.exception("process_completion raised; leaving message for retry/DLQ")
-                result.messages.append(f"error: {exc}")
+                # Don't echo raw exception text to the caller/CI logs; full detail is logged.
+                result.messages.append("error processing a message (see server logs)")
                 continue
             if outcome.ok:
                 sqs.delete_message(
