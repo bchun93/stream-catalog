@@ -402,6 +402,21 @@ secret only — **GitHub Actions secrets**. (`*.env.example` files are updated i
 > Local dev uses your existing `AWS_PROFILE` if set (same as the S3 ingest flow). The
 > `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` form is for Render/CI where SSO isn't available.
 
+### 7a. Completion consumer scheduling (GitHub Actions, free)
+
+The SQS queue is drained by `.github/workflows/rekognition-consume.yml` (runs every ~5 min,
+plus manual `workflow_dispatch`). It POSTs to the secret-protected
+`/api/v1/rekognition/consume`. Configure:
+
+- **GitHub → Settings → Secrets and variables → Actions → Secrets:** add
+  `REKOGNITION_CONSUMER_SECRET` (the same value as on the API).
+- Optional **Variables:** `API_URL` if your Render API URL differs from the default.
+
+For instant results during a demo/test, use the **"Drain now"** button in the asset QC tab
+(admin-token protected `POST /api/v1/rekognition/drain`) instead of waiting for the cron.
+`S3_ANALYSIS_BUCKET` should equal your assets' bucket (`INGEST_S3_BUCKET`) under decision 1A,
+so the QC video picker (which browses the ingest bucket) and the analyzer agree.
+
 ---
 
 ## 8. DLQ redrive (operations)

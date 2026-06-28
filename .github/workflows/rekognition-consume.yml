@@ -1,0 +1,47 @@
+# Drain the Rekognition SNS->SQS completion queue on a schedule (free-tier consumer).
+# Calls the secret-protected POST /api/v1/rekognition/consume on the Render API.
+#
+# Required GitHub Actions secret: REKOGNITION_CONSUMER_SECRET (must equal the value set on
+# the API service). Optional repo variable API_URL (defaults below) to point at your API.
+name: Rekognition consume
+
+on:
+  schedule:
+    # GitHub's effective minimum is ~5 min; jobs may also lag under load.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+# Avoid overlapping drains if a run is slow.
+concurrency:
+  group: rekognition-consume
+  cancel-in-progress: false
+
+env:
+  API_URL: ${{ vars.API_URL || 'https://stream-catalog.onrender.com' }}
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Drain SQS via consumer endpoint
+        env:
+          CONSUMER_SECRET: ${{ secrets.REKOGNITION_CONSUMER_SECRET }}
+        run: |
+          if [ -z "$CONSUMER_SECRET" ]; then
+            echo "REKOGNITION_CONSUMER_SECRET secret is not set; skipping."
+            exit 0
+          fi
+          # Wake the API first (Render free tier), then drain.
+          curl -sfS --max-time 120 "${API_URL}/health" > /dev/null || true
+          http_code=$(curl -s -o /tmp/consume.json -w "%{http_code}" \
+            --max-time 120 -X POST \
+            -H "X-Rekognition-Consumer-Secret: ${CONSUMER_SECRET}" \
+            "${API_URL}/api/v1/rekognition/consume")
+          echo "HTTP $http_code"
+          cat /tmp/consume.json || true
+          echo
+          if [ "$http_code" != "200" ]; then
+            echo "Consumer drain returned non-200."
+            exit 1
+          fi

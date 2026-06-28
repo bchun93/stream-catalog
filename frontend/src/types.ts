@@ -449,6 +449,14 @@ export interface RekognitionAnalyzeResponse {
   results: RekognitionFeatureResult[];
 }
 
+export interface RekognitionConsumeResult {
+  received: number;
+  processed: number;
+  deleted: number;
+  failed: number;
+  messages: string[];
+}
+
 export interface RekognitionDetection {
   sk: string;
   feature: RekognitionFeature;

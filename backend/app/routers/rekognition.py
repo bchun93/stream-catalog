@@ -5,10 +5,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.deps import require_admin_token
+from app.deps import require_admin_token, require_consumer_secret
 from app.schemas.rekognition import (
     AnalyzeRequest,
     AnalyzeResponse,
+    ConsumeResponse,
     DetectionRead,
     FeatureResultRead,
     RekognitionJobRead,
@@ -16,6 +17,11 @@ from app.schemas.rekognition import (
 from app.services import media_service
 from app.services.rekognition import ddb
 from app.services.rekognition.constants import Feature
+from app.services.rekognition.consumer import (
+    ConsumerConfigError,
+    DrainResult,
+    drain_queue,
+)
 from app.services.rekognition.start import (
     AnalysisConfigError,
     AnalysisInputError,
@@ -119,3 +125,48 @@ def list_detections(
             status_code=503, detail="Could not load detections; check server logs."
         ) from exc
     return [DetectionRead(**row) for row in rows]
+
+
+def _drain_to_response(result: DrainResult) -> ConsumeResponse:
+    return ConsumeResponse(
+        received=result.received,
+        processed=result.processed,
+        deleted=result.deleted,
+        failed=result.failed,
+        messages=result.messages,
+    )
+
+
+@router.post("/rekognition/consume", response_model=ConsumeResponse)
+def consume(_: None = Depends(require_consumer_secret)):
+    """Scheduled SQS drain (GitHub Actions cron). Secret-protected, never publicly callable."""
+    try:
+        result = drain_queue()
+    except ConsumerConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("consume failed")
+        raise HTTPException(
+            status_code=503, detail="Consumer drain failed; check server logs."
+        ) from exc
+    return _drain_to_response(result)
+
+
+@router.post("/rekognition/drain", response_model=ConsumeResponse)
+def manual_drain(_: None = Depends(require_admin_token)):
+    """Manual 'Drain now' for the UI — admin-token protected (not the cron secret)."""
+    if not (settings.admin_api_key or "").strip():
+        raise HTTPException(
+            status_code=503,
+            detail="Set ADMIN_API_KEY to enable the manual drain.",
+        )
+    try:
+        result = drain_queue(max_batches=3)
+    except ConsumerConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("manual drain failed")
+        raise HTTPException(
+            status_code=503, detail="Drain failed; check server logs."
+        ) from exc
+    return _drain_to_response(result)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, ScanSearch } from "lucide-react";
+import { DownloadCloud, RefreshCw, ScanSearch } from "lucide-react";
 
 import { rekognitionApi } from "../api/client";
 import type {
@@ -34,6 +34,8 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [draining, setDraining] = useState(false);
+  const [drainMsg, setDrainMsg] = useState<string | null>(null);
 
   const loadJobs = useCallback(async () => {
     setLoading(true);
@@ -67,6 +69,23 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
       setError(e instanceof Error ? e.message : "Analyze failed");
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const handleDrain = async () => {
+    setDraining(true);
+    setDrainMsg(null);
+    setError(null);
+    try {
+      const res = await rekognitionApi.drain();
+      setDrainMsg(
+        `Drained queue: received ${res.received}, processed ${res.processed}, failed ${res.failed}.`
+      );
+      await loadJobs();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Drain failed");
+    } finally {
+      setDraining(false);
     }
   };
 
@@ -139,7 +158,18 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
         >
           Refresh
         </Button>
+        <Button
+          variant="subtle"
+          icon={<DownloadCloud size={15} />}
+          disabled={draining}
+          onClick={handleDrain}
+          title="Pull any completed Rekognition results from the queue now (instead of waiting for the cron)."
+        >
+          {draining ? "Draining…" : "Drain now"}
+        </Button>
       </div>
+
+      {drainMsg && <div className="reko-qc-drain-note">{drainMsg}</div>}
 
       {result?.warnings?.length ? (
         <div className="reko-qc-warnings">

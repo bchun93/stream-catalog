@@ -13,6 +13,7 @@ import type {
   MetadataDisplaySettings,
   MetadataSearchResult,
   RekognitionAnalyzeResponse,
+  RekognitionConsumeResult,
   RekognitionDetection,
   RekognitionFeature,
   RekognitionJob,
@@ -598,6 +599,8 @@ export const rekognitionApi = {
       `/assets/${assetId}/rekognition/detections${q.toString() ? `?${q}` : ""}`
     );
   },
+  drain: () =>
+    request<RekognitionConsumeResult>(`/rekognition/drain`, { method: "POST" }),
 };
 
 export const deliveryApi = {
