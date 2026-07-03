@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { HardDrive, Image, Plus } from "lucide-react";
+import { HardDrive, Image, Plus, ScanSearch } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { assetsApi, titlesApi } from "../api/client";
 import { AssetForm } from "../components/AssetForm";
 import { StatusBadge, TypeBadge } from "../components/ui/Badge";
@@ -43,6 +44,7 @@ export function AssetsPage() {
   const [editing, setEditing] = useState<MediaAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const titleMap = Object.fromEntries(titles.map((t) => [t.id, t.name]));
   const filterTitles = titles.filter((t) => t.title_type !== "episode");
@@ -158,10 +160,7 @@ export function AssetsPage() {
                   key={a.id}
                   type="button"
                   className="asset-mobile-card"
-                  onClick={() => {
-                    setEditing(a);
-                    setModal("edit");
-                  }}
+                  onClick={() => navigate(`/assets/${a.id}`)}
                 >
                   <AssetThumb
                     uri={a.storage_uri}
@@ -209,7 +208,13 @@ export function AssetsPage() {
                             label={assetPrimaryLabel(a.filename, a.asset_type)}
                           />
                           <div className="asset-row-label">
-                            <strong>{assetPrimaryLabel(a.filename, a.asset_type)}</strong>
+                            <button
+                              type="button"
+                              className="asset-row-link"
+                              onClick={() => navigate(`/assets/${a.id}`)}
+                            >
+                              {assetPrimaryLabel(a.filename, a.asset_type)}
+                            </button>
                             <span className="mono" title={a.filename}>
                               {a.filename}
                             </span>
@@ -239,6 +244,14 @@ export function AssetsPage() {
                         <div className="row-actions">
                           <Button
                             variant="ghost"
+                            icon={<ScanSearch size={15} />}
+                            onClick={() => navigate(`/assets/${a.id}`)}
+                            title="Open asset detail and Rekognition QC"
+                          >
+                            QC
+                          </Button>
+                          <Button
+                            variant="ghost"
                             onClick={() => {
                               setEditing(a);
                               setModal("edit");
@@ -249,6 +262,10 @@ export function AssetsPage() {
                           <OverflowMenu
                             label={`Actions for ${a.filename}`}
                             items={[
+                              {
+                                label: "Open detail / QC",
+                                onClick: () => navigate(`/assets/${a.id}`),
+                              },
                               {
                                 label: "Delete",
                                 danger: true,

@@ -35,6 +35,23 @@ def require_ingest_operator_token(x_ingest_token: str | None = Header(default=No
         )
 
 
+def require_consumer_secret(
+    x_rekognition_consumer_secret: str | None = Header(default=None),
+) -> None:
+    """Protect the SQS consumer endpoint. Unlike the optional admin token, this REQUIRES the
+    secret to be configured — a cost/AWS-touching endpoint must never be publicly callable."""
+    expected = (settings.rekognition_consumer_secret or "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="REKOGNITION_CONSUMER_SECRET is not configured on the server.",
+        )
+    if not _token_matches(x_rekognition_consumer_secret, expected):
+        raise HTTPException(
+            status_code=403, detail="Missing or invalid consumer secret."
+        )
+
+
 def require_db(request: Request) -> None:
     if not getattr(request.app.state, "db_ready", False):
         raise HTTPException(

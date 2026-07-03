@@ -6,6 +6,7 @@ import { RelayMark } from "./components/brand/RelayMark";
 import { Sidebar } from "./components/layout/Sidebar";
 import { ApiWakeProvider } from "./context/ApiWakeContext";
 import { AITrainingPage } from "./pages/AITrainingPage";
+import { AssetDetailPage } from "./pages/AssetDetailPage";
 import { AssetsPage } from "./pages/AssetsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DeliveryPage } from "./pages/DeliveryPage";
@@ -65,6 +66,7 @@ export default function App() {
               <Route path="/titles" element={<TitlesPage />} />
               <Route path="/metadata-config" element={<MetadataConfigPage />} />
               <Route path="/assets" element={<AssetsPage />} />
+              <Route path="/assets/:assetId" element={<AssetDetailPage />} />
               <Route path="/delivery" element={<DeliveryPage />} />
               <Route path="/storage" element={<StoragePage />} />
               <Route path="/ai-training" element={<AITrainingPage />} />
