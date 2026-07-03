@@ -2,7 +2,7 @@ import enum
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.db_enums import str_enum
@@ -50,3 +50,12 @@ class DeliveryPackage(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    package_titles: Mapped[list["DeliveryPackageTitle"]] = relationship(
+        "DeliveryPackageTitle",
+        back_populates="package",
+        cascade="all, delete-orphan",
+    )
+
+
+from app.models.delivery_package_title import DeliveryPackageTitle  # noqa: E402

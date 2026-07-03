@@ -587,6 +587,7 @@ export const deliveryApi = {
     delivery_mode?: DeliveryMode;
     monetization?: MonetizationModel;
     status?: PackageStatus;
+    title_ids?: number[];
   }) =>
     request<DeliveryPackage>("/delivery/packages", {
       method: "POST",

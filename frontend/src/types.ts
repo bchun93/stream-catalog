@@ -205,6 +205,12 @@ export type PackageStatus = "draft" | "ready" | "delivered" | "archived";
 export type DeliveryMode = "vod" | "linear";
 export type MonetizationModel = "svod" | "avod" | "tvod" | "fast";
 
+export interface DeliveryPackageTitleSummary {
+  id: number;
+  name: string;
+  title_type: TitleType;
+}
+
 export interface DeliveryPackage {
   id: number;
   name: string;
@@ -214,6 +220,8 @@ export interface DeliveryPackage {
   delivery_mode: DeliveryMode;
   monetization: MonetizationModel;
   status: PackageStatus;
+  title_count: number;
+  titles: DeliveryPackageTitleSummary[];
   created_at: string;
   updated_at: string;
 }

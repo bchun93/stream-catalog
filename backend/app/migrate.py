@@ -449,6 +449,19 @@ def _ensure_common_indexes(conn) -> None:
                 "ON artwork_classifications (title_id, confidence DESC)"
             )
         )
+    if "delivery_package_titles" in tables:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_delivery_package_titles_package "
+                "ON delivery_package_titles (package_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_delivery_package_titles_title "
+                "ON delivery_package_titles (title_id)"
+            )
+        )
 
 
 def run_migrations() -> None:

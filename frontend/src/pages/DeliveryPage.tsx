@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { Package, Plus } from "lucide-react";
-import { deliveryApi } from "../api/client";
-import { CreatePackageForm, deliveryModeLabel, monetizationLabel } from "../components/CreatePackageForm";
+import { deliveryApi, titlesApi } from "../api/client";
+import {
+  CreatePackageForm,
+  type CreatePackagePayload,
+  deliveryModeLabel,
+  monetizationLabel,
+} from "../components/CreatePackageForm";
 import { Modal } from "../components/Modal";
 import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
 import { TableSkeleton } from "../components/ui/TableSkeleton";
-import type { DeliveryMode, DeliveryPackage, MonetizationModel } from "../types";
+import type { DeliveryPackage, Title } from "../types";
 
 function formatDealDate(value: string | null | undefined): string {
   if (!value) return "—";
@@ -26,6 +31,8 @@ export function DeliveryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [catalogTitles, setCatalogTitles] = useState<Title[]>([]);
+  const [titlesLoading, setTitlesLoading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -41,19 +48,26 @@ export function DeliveryPage() {
     load();
   }, [load]);
 
-  const handleCreated = async (data: {
-    name: string;
-    buyer_slug: string;
-    deal_date: string;
-    delivery_mode: DeliveryMode;
-    monetization: MonetizationModel;
-  }) => {
+  useEffect(() => {
+    if (!createOpen) return;
+    setTitlesLoading(true);
+    Promise.all([
+      titlesApi.list({ title_type: "movie", limit: "500" }),
+      titlesApi.list({ title_type: "series", limit: "500" }),
+    ])
+      .then(([movies, series]) => setCatalogTitles([...movies, ...series]))
+      .catch(() => setCatalogTitles([]))
+      .finally(() => setTitlesLoading(false));
+  }, [createOpen]);
+
+  const handleCreated = async (data: CreatePackagePayload) => {
     const created = await deliveryApi.create({
       name: data.name,
       buyer_slug: data.buyer_slug,
       deal_date: data.deal_date,
       delivery_mode: data.delivery_mode,
       monetization: data.monetization,
+      title_ids: data.title_ids,
       status: "draft",
     });
     setPackages((current) => [created, ...current]);
@@ -87,7 +101,7 @@ export function DeliveryPage() {
 
       <div className="card">
         {loading ? (
-          <TableSkeleton rows={6} cols={7} />
+          <TableSkeleton rows={6} cols={8} />
         ) : packages.length === 0 ? (
           <EmptyState
             icon={Package}
@@ -107,6 +121,7 @@ export function DeliveryPage() {
                   <th>Package</th>
                   <th>Buyer</th>
                   <th>Deal date</th>
+                  <th>Titles</th>
                   <th>Delivery</th>
                   <th>Monetization</th>
                   <th>Status</th>
@@ -121,6 +136,7 @@ export function DeliveryPage() {
                     </td>
                     <td>{pkg.buyer_slug ?? "—"}</td>
                     <td>{formatDealDate(pkg.deal_date)}</td>
+                    <td className="num">{pkg.title_count ?? pkg.titles?.length ?? 0}</td>
                     <td>{deliveryModeLabel(pkg.delivery_mode)}</td>
                     <td>{monetizationLabel(pkg.monetization)}</td>
                     <td>
@@ -140,8 +156,10 @@ export function DeliveryPage() {
       </div>
 
       {createOpen && (
-        <Modal title="Create a package" onClose={() => setCreateOpen(false)}>
+        <Modal title="Create a package" wide onClose={() => setCreateOpen(false)}>
           <CreatePackageForm
+            titles={catalogTitles}
+            titlesLoading={titlesLoading}
             onCancel={() => setCreateOpen(false)}
             onSubmit={handleCreated}
           />

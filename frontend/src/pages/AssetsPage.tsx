@@ -45,6 +45,7 @@ export function AssetsPage() {
   const [loading, setLoading] = useState(true);
 
   const titleMap = Object.fromEntries(titles.map((t) => [t.id, t.name]));
+  const filterTitles = titles.filter((t) => t.title_type !== "episode");
 
   const load = useCallback(() => {
     const params: Record<string, string> = {};
@@ -110,7 +111,7 @@ export function AssetsPage() {
             aria-label="Filter by title"
           >
             <option value="">All titles</option>
-            {titles.map((t) => (
+            {filterTitles.map((t) => (
               <option key={t.id} value={String(t.id)}>
                 {t.name}
               </option>

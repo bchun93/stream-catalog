@@ -3,6 +3,15 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.delivery_package import DeliveryMode, MonetizationModel, PackageStatus
+from app.models.title import TitleType
+
+
+class DeliveryPackageTitleSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    title_type: TitleType
 
 
 class DeliveryPackageBase(BaseModel):
@@ -38,6 +47,7 @@ class DeliveryPackageCreate(BaseModel):
     deal_date: date | None = None
     delivery_mode: DeliveryMode = DeliveryMode.VOD
     monetization: MonetizationModel = MonetizationModel.SVOD
+    title_ids: list[int] = Field(default_factory=list, max_length=500)
 
 
 class DeliveryPackageRead(DeliveryPackageBase):
@@ -47,3 +57,5 @@ class DeliveryPackageRead(DeliveryPackageBase):
     slug: str
     created_at: datetime
     updated_at: datetime
+    title_count: int = 0
+    titles: list[DeliveryPackageTitleSummary] = Field(default_factory=list)

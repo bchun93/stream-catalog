@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import type { DeliveryMode, MonetizationModel } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import type { DeliveryMode, MonetizationModel, Title, TitleType } from "../types";
+import { TypeBadge } from "./ui/Badge";
 import { slugify, suggestPackageName, todayIsoDate } from "../utils/slug";
 
 export const DELIVERY_MODE_OPTIONS: { value: DeliveryMode; label: string }[] = [
@@ -20,30 +21,96 @@ export interface CreatePackagePayload {
   deal_date: string;
   delivery_mode: DeliveryMode;
   monetization: MonetizationModel;
+  title_ids: number[];
 }
 
 interface CreatePackageFormProps {
+  titles: Title[];
+  titlesLoading?: boolean;
   onCancel: () => void;
   onSubmit: (data: CreatePackagePayload) => Promise<void>;
 }
 
-export function CreatePackageForm({ onCancel, onSubmit }: CreatePackageFormProps) {
+const PACKAGE_PICKER_TITLE_TYPES = new Set<TitleType>(["movie", "series"]);
+
+function isPackagePickerTitle(title: Title): boolean {
+  return PACKAGE_PICKER_TITLE_TYPES.has(title.title_type);
+}
+
+function titleMatchesSearch(title: Title, query: string): boolean {
+  const haystack = [
+    title.name,
+    title.internal_id ?? "",
+    title.slug,
+    title.studio ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+function displayTitleId(title: Pick<Title, "internal_id" | "slug">): string {
+  return title.internal_id?.trim() || title.slug;
+}
+
+export function CreatePackageForm({
+  titles,
+  titlesLoading = false,
+  onCancel,
+  onSubmit,
+}: CreatePackageFormProps) {
   const [buyerSlug, setBuyerSlug] = useState("");
   const [dealDate, setDealDate] = useState(todayIsoDate);
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("vod");
   const [monetization, setMonetization] = useState<MonetizationModel>("svod");
   const [name, setName] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
+  const [selectedTitleIds, setSelectedTitleIds] = useState<Set<number>>(() => new Set());
+  const [titleSearch, setTitleSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const recommendation = suggestPackageName(buyerSlug, dealDate);
+  const normalizedSearch = titleSearch.trim().toLowerCase();
+
+  const filteredTitles = useMemo(() => {
+    const eligible = titles.filter(isPackagePickerTitle);
+    const sorted = [...eligible].sort((a, b) => a.name.localeCompare(b.name));
+    if (!normalizedSearch) return sorted;
+    return sorted.filter((title) => titleMatchesSearch(title, normalizedSearch));
+  }, [titles, normalizedSearch]);
 
   useEffect(() => {
     if (!nameTouched) {
       setName(recommendation);
     }
   }, [recommendation, nameTouched]);
+
+  const toggleTitle = (titleId: number) => {
+    setSelectedTitleIds((current) => {
+      const next = new Set(current);
+      if (next.has(titleId)) {
+        next.delete(titleId);
+      } else {
+        next.add(titleId);
+      }
+      return next;
+    });
+  };
+
+  const selectFilteredTitles = () => {
+    setSelectedTitleIds((current) => {
+      const next = new Set(current);
+      for (const title of filteredTitles) {
+        next.add(title.id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelectedTitles = () => {
+    setSelectedTitleIds(new Set());
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +128,7 @@ export function CreatePackageForm({ onCancel, onSubmit }: CreatePackageFormProps
         deal_date: dealDate,
         delivery_mode: deliveryMode,
         monetization,
+        title_ids: [...selectedTitleIds],
       });
       onCancel();
     } catch (err) {
@@ -139,6 +207,83 @@ export function CreatePackageForm({ onCancel, onSubmit }: CreatePackageFormProps
             Recommended: <strong>{recommendation}</strong> — buyer slug plus deal date.
           </span>
         </label>
+
+        <div className="form-span-2 package-title-picker">
+          <div className="package-title-picker-header">
+            <div>
+              <span className="package-title-picker-label">Titles</span>
+              <span className="field-hint">
+                Optional — choose movies or series to include in this package.
+              </span>
+            </div>
+            <span className="package-title-picker-count">
+              {selectedTitleIds.size} selected
+            </span>
+          </div>
+
+          <div className="package-title-picker-toolbar">
+            <input
+              type="search"
+              value={titleSearch}
+              onChange={(e) => setTitleSearch(e.target.value)}
+              placeholder="Search titles…"
+              aria-label="Search titles"
+            />
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={selectFilteredTitles}
+              disabled={titlesLoading || filteredTitles.length === 0}
+            >
+              Select shown
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={clearSelectedTitles}
+              disabled={titlesLoading || selectedTitleIds.size === 0}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="package-title-picker-list" aria-busy={titlesLoading}>
+            {titlesLoading ? (
+              <p className="empty">Loading titles…</p>
+            ) : titles.filter(isPackagePickerTitle).length === 0 ? (
+              <p className="empty">No movies or series in the catalog yet.</p>
+            ) : filteredTitles.length === 0 ? (
+              <p className="empty">No titles match your search.</p>
+            ) : (
+              <ul>
+                {filteredTitles.map((title) => {
+                  const checked = selectedTitleIds.has(title.id);
+                  return (
+                    <li key={title.id}>
+                      <label className="package-title-picker-row">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleTitle(title.id)}
+                        />
+                        <span className="package-title-picker-row-main">
+                          <strong>{title.name}</strong>
+                          <span className="package-title-picker-row-meta">
+                            <TypeBadge value={title.title_type} />
+                            <span className="table-meta-id">{displayTitleId(title)}</span>
+                            {title.release_year ? (
+                              <span>{title.release_year}</span>
+                            ) : null}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="form-actions">

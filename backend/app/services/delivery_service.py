@@ -1,10 +1,18 @@
 import re
 from datetime import date
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.delivery_package import DeliveryPackage, DeliveryMode, MonetizationModel, PackageStatus
-from app.schemas.delivery_package import DeliveryPackageCreate
+from app.models.delivery_package_title import DeliveryPackageTitle
+from app.models.title import Title, TitleType
+from app.schemas.delivery_package import (
+    DeliveryPackageCreate,
+    DeliveryPackageRead,
+    DeliveryPackageTitleSummary,
+)
+
+_PACKAGE_TITLE_TYPES = {TitleType.MOVIE, TitleType.SERIES}
 
 
 def _slugify(value: str) -> str:
@@ -30,28 +38,58 @@ def suggest_package_name(buyer_slug: str | None, deal_date: date | None) -> str:
     return f"{buyer}-{when}"
 
 
+def _normalize_package_enums(package: DeliveryPackage) -> None:
+    if package.delivery_mode is None:
+        package.delivery_mode = DeliveryMode.VOD
+    if package.monetization is None:
+        package.monetization = MonetizationModel.SVOD
+
+
+def _title_summaries(package: DeliveryPackage) -> list[DeliveryPackageTitleSummary]:
+    summaries: list[DeliveryPackageTitleSummary] = []
+    for link in package.package_titles:
+        if not link.title:
+            continue
+        summaries.append(
+            DeliveryPackageTitleSummary(
+                id=link.title.id,
+                name=link.title.name,
+                title_type=link.title.title_type,
+            )
+        )
+    summaries.sort(key=lambda item: item.name.lower())
+    return summaries
+
+
+def package_to_read(package: DeliveryPackage) -> DeliveryPackageRead:
+    _normalize_package_enums(package)
+    titles = _title_summaries(package)
+    read = DeliveryPackageRead.model_validate(package)
+    return read.model_copy(update={"titles": titles, "title_count": len(titles)})
+
+
 def list_packages(
     db: Session,
     *,
     skip: int = 0,
     limit: int = 100,
-) -> list[DeliveryPackage]:
+) -> list[DeliveryPackageRead]:
     packages = (
         db.query(DeliveryPackage)
+        .options(
+            joinedload(DeliveryPackage.package_titles).joinedload(
+                DeliveryPackageTitle.title
+            )
+        )
         .order_by(DeliveryPackage.updated_at.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
-    for package in packages:
-        if package.delivery_mode is None:
-            package.delivery_mode = DeliveryMode.VOD
-        if package.monetization is None:
-            package.monetization = MonetizationModel.SVOD
-    return packages
+    return [package_to_read(package) for package in packages]
 
 
-def create_package(db: Session, payload: DeliveryPackageCreate) -> DeliveryPackage:
+def create_package(db: Session, payload: DeliveryPackageCreate) -> DeliveryPackageRead:
     name = payload.name.strip()
     if not name:
         raise ValueError("Package name is required")
@@ -69,6 +107,42 @@ def create_package(db: Session, payload: DeliveryPackageCreate) -> DeliveryPacka
         status=PackageStatus.DRAFT,
     )
     db.add(package)
+    db.flush()
+
+    title_ids = list(dict.fromkeys(payload.title_ids))
+    if title_ids:
+        titles = db.query(Title).filter(Title.id.in_(title_ids)).all()
+        found_ids = {title.id for title in titles}
+        missing = [title_id for title_id in title_ids if title_id not in found_ids]
+        if missing:
+            db.rollback()
+            raise ValueError(f"Unknown title id(s): {', '.join(str(i) for i in missing)}")
+        invalid = [
+            title.id
+            for title in titles
+            if title.title_type not in _PACKAGE_TITLE_TYPES
+        ]
+        if invalid:
+            db.rollback()
+            raise ValueError(
+                "Only movie and series titles can be added to a package "
+                f"(invalid id(s): {', '.join(str(i) for i in invalid)})"
+            )
+        for title_id in title_ids:
+            db.add(DeliveryPackageTitle(package_id=package.id, title_id=title_id))
+
     db.commit()
     db.refresh(package)
-    return package
+    package = (
+        db.query(DeliveryPackage)
+        .options(
+            joinedload(DeliveryPackage.package_titles).joinedload(
+                DeliveryPackageTitle.title
+            )
+        )
+        .filter(DeliveryPackage.id == package.id)
+        .first()
+    )
+    if not package:
+        raise ValueError("Package could not be loaded after create")
+    return package_to_read(package)

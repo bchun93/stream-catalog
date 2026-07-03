@@ -48,6 +48,94 @@
   margin-bottom: 0;
 }
 
+.package-title-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.package-title-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.package-title-picker-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+
+.package-title-picker-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.package-title-picker-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.package-title-picker-toolbar input[type="search"] {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.package-title-picker-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  max-height: 280px;
+  overflow: auto;
+}
+
+.package-title-picker-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.package-title-picker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.package-title-picker-list li:last-child .package-title-picker-row {
+  border-bottom: none;
+}
+
+.package-title-picker-row input {
+  margin-top: 0.2rem;
+}
+
+.package-title-picker-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.package-title-picker-row-main strong {
+  font-weight: 600;
+}
+
+.package-title-picker-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .form-actions {
   display: flex;
   gap: 0.5rem;
