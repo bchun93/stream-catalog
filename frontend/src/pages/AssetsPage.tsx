@@ -11,10 +11,18 @@ import { Modal } from "../components/Modal";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { PageHeader } from "../components/ui/PageHeader";
 import { TableSkeleton } from "../components/ui/TableSkeleton";
-import type { MediaAsset, Title } from "../types";
+import type { AssetType, MediaAsset, Title } from "../types";
 import { assetPrimaryLabel, isImageUri } from "../utils/assetLabel";
 import { formatBytes, truncateMiddle } from "../utils/format";
 import { mimeFromFilename } from "../utils/mimeFromFilename";
+
+function assetTypeFromFilename(filename: string): AssetType {
+  const mime = mimeFromFilename(filename);
+  if (mime.startsWith("image/")) return "poster";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.includes("subrip") || mime.includes("vtt") || mime.includes("ssa")) return "subtitle";
+  return "video_master";
+}
 
 function AssetThumb({ uri, label }: { uri: string; label: string }) {
   const [failed, setFailed] = useState(false);
@@ -74,9 +82,20 @@ export function AssetsPage() {
   // Deep-link from Upload: /assets?register=1&uri=...&filename=...&size=...
   useEffect(() => {
     if (searchParams.get("register") !== "1") return;
-    if (titles.length === 0) return;
+    // Wait until titles have been fetched at least once (loading finished).
+    if (loading) return;
+    if (titles.length === 0) {
+      setError("Create a title before linking an uploaded file as an asset.");
+      setSearchParams({}, { replace: true });
+      return;
+    }
     const uri = searchParams.get("uri") ?? "";
     const filename = searchParams.get("filename") ?? "";
+    if (!uri.startsWith("s3://")) {
+      setError("Only S3 URIs from Upload can be registered via this link.");
+      setSearchParams({}, { replace: true });
+      return;
+    }
     const sizeRaw = searchParams.get("size");
     const size_bytes = sizeRaw && !Number.isNaN(Number(sizeRaw)) ? Number(sizeRaw) : null;
     setCreateInitial({
@@ -84,12 +103,13 @@ export function AssetsPage() {
       filename,
       size_bytes,
       mime_type: mimeFromFilename(filename) || null,
+      asset_type: assetTypeFromFilename(filename),
       status: "uploaded",
     });
     setEditing(null);
     setModal("create");
     setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams, titles.length]);
+  }, [searchParams, setSearchParams, titles.length, loading]);
 
   const closeModal = () => {
     setModal(null);

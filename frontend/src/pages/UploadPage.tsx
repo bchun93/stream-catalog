@@ -22,9 +22,19 @@ function formatBytes(n: number) {
   return `${n} B`;
 }
 
+/** Keep display name readable; make the S3 object key unique to avoid overwrites. */
+function uniqueUploadFilename(name: string): string {
+  const base = name.includes(".") ? name.slice(0, name.lastIndexOf(".")) : name;
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  const stamp = Date.now().toString(36);
+  const rand = crypto.randomUUID().slice(0, 8);
+  return `${base}-${stamp}-${rand}${ext}`;
+}
+
 export function UploadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
+  const uploadingRef = useRef(false);
   const [config, setConfig] = useState<StorageConfig | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -57,7 +67,8 @@ export function UploadPage() {
 
   const uploadFiles = useCallback(
     async (files: File[]) => {
-      if (!files.length) return;
+      if (!files.length || uploadingRef.current) return;
+      uploadingRef.current = true;
 
       const newItems: UploadItem[] = files.map((file) => ({
         id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
@@ -72,9 +83,11 @@ export function UploadPage() {
         for (const item of newItems) {
           updateItem(item.id, { status: "uploading", error: undefined });
           try {
+            // Unique object key so re-drops of the same name do not silently overwrite.
+            const uniqueName = uniqueUploadFilename(item.file.name);
             const presigned = await storageApi.presignUpload({
               prefix: "",
-              filename: item.file.name,
+              filename: uniqueName,
               content_type: item.file.type || undefined,
             });
             const response = await fetch(presigned.upload_url, {
@@ -97,6 +110,7 @@ export function UploadPage() {
           }
         }
       } finally {
+        uploadingRef.current = false;
         setUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }

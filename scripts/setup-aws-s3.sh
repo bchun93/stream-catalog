@@ -125,10 +125,17 @@ SEED_ON_STARTUP=true
 EOF
 fi
 
-# Ensure MinIO is not used: remove endpoint and MinIO-style static keys if present.
+# Ensure MinIO endpoint is not left active. Only strip static keys when they look
+# like the local MinIO placeholders (do not wipe real AWS access keys).
 if [[ -f "$BACKEND_ENV" ]]; then
   tmp="$(mktemp)"
-  grep -v -E '^(AWS_ENDPOINT_URL|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY)=' "$BACKEND_ENV" >"$tmp" || true
+  awk '
+    BEGIN { FS="="; OFS="=" }
+    /^AWS_ENDPOINT_URL=/ { next }
+    /^AWS_ACCESS_KEY_ID=streamcatalog$/ { next }
+    /^AWS_SECRET_ACCESS_KEY=streamcatalog-dev-secret$/ { next }
+    { print }
+  ' "$BACKEND_ENV" >"$tmp"
   mv "$tmp" "$BACKEND_ENV"
 fi
 
