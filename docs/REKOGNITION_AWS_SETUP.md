@@ -1,5 +1,8 @@
 # Amazon Rekognition Video — AWS setup (run these yourself)
 
+> **Local development walkthrough:** see [`REKOGNITION_LOCAL_SETUP.md`](./REKOGNITION_LOCAL_SETUP.md)
+> for step-by-step laptop setup, env files, first analyze, and troubleshooting.
+
 This is the infrastructure bundle for the Rekognition Video integration. **Relay never
 creates or mutates AWS resources at runtime** — you run the commands below once, then put the
 resulting ARNs/URLs into the app's environment (Render + GitHub Actions + your local `.env`).

@@ -13,6 +13,7 @@ import { DeliveryPage } from "./pages/DeliveryPage";
 import { MetadataConfigPage } from "./pages/MetadataConfigPage";
 import { StoragePage } from "./pages/StoragePage";
 import { TitlesPage } from "./pages/TitlesPage";
+import { UploadPage } from "./pages/UploadPage";
 
 export default function App() {
   const [navOpen, setNavOpen] = useState(false);
@@ -68,6 +69,7 @@ export default function App() {
               <Route path="/assets" element={<AssetsPage />} />
               <Route path="/assets/:assetId" element={<AssetDetailPage />} />
               <Route path="/delivery" element={<DeliveryPage />} />
+              <Route path="/upload" element={<UploadPage />} />
               <Route path="/storage" element={<StoragePage />} />
               <Route path="/ai-training" element={<AITrainingPage />} />
             </Routes>

@@ -266,6 +266,17 @@ function formatApiError(path: string, status: number, detail: string): string {
   }
 
   if (waking) {
+    // Prefer the API's own detail when it explains a real config/permission failure
+    // (e.g. Rekognition 503s). Only use the generic wake-up copy for empty/generic bodies.
+    const hasUsefulDetail =
+      detail &&
+      !generic500 &&
+      !lower.includes("<!doctype") &&
+      lower !== "service unavailable" &&
+      lower !== "internal server error";
+    if (hasUsefulDetail) {
+      return detail;
+    }
     return API_BASE
       ? "API is waking up (free Render hosting can take ~30s). Wait a moment and click Retry."
       : "API is unavailable. If developing locally, run ./scripts/start-backend.sh.";

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { HardDrive, Image, Plus, ScanSearch } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { assetsApi, titlesApi } from "../api/client";
 import { AssetForm } from "../components/AssetForm";
 import { StatusBadge, TypeBadge } from "../components/ui/Badge";
@@ -14,6 +14,7 @@ import { TableSkeleton } from "../components/ui/TableSkeleton";
 import type { MediaAsset, Title } from "../types";
 import { assetPrimaryLabel, isImageUri } from "../utils/assetLabel";
 import { formatBytes, truncateMiddle } from "../utils/format";
+import { mimeFromFilename } from "../utils/mimeFromFilename";
 
 function AssetThumb({ uri, label }: { uri: string; label: string }) {
   const [failed, setFailed] = useState(false);
@@ -42,9 +43,11 @@ export function AssetsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<MediaAsset | null>(null);
+  const [createInitial, setCreateInitial] = useState<Partial<MediaAsset> | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const titleMap = Object.fromEntries(titles.map((t) => [t.id, t.name]));
   const filterTitles = titles.filter((t) => t.title_type !== "episode");
@@ -68,9 +71,30 @@ export function AssetsPage() {
     load();
   }, [load]);
 
+  // Deep-link from Upload: /assets?register=1&uri=...&filename=...&size=...
+  useEffect(() => {
+    if (searchParams.get("register") !== "1") return;
+    if (titles.length === 0) return;
+    const uri = searchParams.get("uri") ?? "";
+    const filename = searchParams.get("filename") ?? "";
+    const sizeRaw = searchParams.get("size");
+    const size_bytes = sizeRaw && !Number.isNaN(Number(sizeRaw)) ? Number(sizeRaw) : null;
+    setCreateInitial({
+      storage_uri: uri,
+      filename,
+      size_bytes,
+      mime_type: mimeFromFilename(filename) || null,
+      status: "uploaded",
+    });
+    setEditing(null);
+    setModal("create");
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams, titles.length]);
+
   const closeModal = () => {
     setModal(null);
     setEditing(null);
+    setCreateInitial(undefined);
   };
 
   const handleDelete = async (a: MediaAsset) => {
@@ -95,6 +119,7 @@ export function AssetsPage() {
             disabled={titles.length === 0}
             onClick={() => {
               setEditing(null);
+              setCreateInitial(undefined);
               setModal("create");
             }}
           >
@@ -290,9 +315,9 @@ export function AssetsPage() {
           onClose={closeModal}
         >
           <AssetForm
-            key={editing?.id ?? "new"}
+            key={editing?.id ?? createInitial?.storage_uri ?? "new"}
             titles={titles}
-            initial={editing ?? undefined}
+            initial={modal === "edit" ? (editing ?? undefined) : createInitial}
             onCancel={closeModal}
             onSubmit={async (data) => {
               if (modal === "create") {
