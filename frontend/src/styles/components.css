@@ -983,6 +983,44 @@
   width: 100%;
 }
 
+.sheet-footer-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.sheet-footer-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sheet-footer-meta {
+  width: 100%;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.sheet-footer-uri {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sheet-footer-uri .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-tertiary);
+}
+
+.sheet-footer-meta .error-text {
+  color: var(--danger, #e35d6a);
+}
+
 .sheet-footer-actions {
   display: flex;
   gap: var(--space-2);

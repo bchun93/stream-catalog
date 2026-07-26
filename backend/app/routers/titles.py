@@ -8,14 +8,16 @@ from sqlalchemy.orm import Session
 
 from app.db_repair import retry_after_enum_repair
 from app.database import get_db
-from app.deps import require_admin_token, require_db
+from app.deps import require_admin_token, require_db, require_ingest_operator_token
 from app.services.artwork_fetch import fetch_tmdb_artwork
 from app.models.media_asset import MediaAsset
 from app.models.title import Title, TitleType
 from app.schemas.artwork import SaveArtworkRequest
+from app.schemas.mec import MecGenerateResponse
 from app.schemas.media_asset import MediaAssetRead
 from app.schemas.title import TitleCreate, TitleRead, TitleTree, TitleUpdate
 from app.services import title_service
+from app.services import mec_service
 from app.services.artwork_metadata import enrich_asset_read
 from app.services.artwork_service import (
     clear_all_artwork_assets,
@@ -23,6 +25,7 @@ from app.services.artwork_service import (
     list_artwork_assets,
     save_artwork_selection,
 )
+from app.services.mec_service import MecValidationError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/titles", tags=["titles"])
@@ -216,6 +219,38 @@ def get_title(
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
     return title
+
+
+@router.post("/{title_id}/mec/generate", response_model=MecGenerateResponse)
+def generate_mec(
+    title_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_db),
+    __: None = Depends(require_ingest_operator_token),
+):
+    """Build MovieLabs MEC XML for a movie, store it in the ingest bucket, return XML for download."""
+    title = title_service.get_title(db, title_id)
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    try:
+        result = mec_service.generate_and_store(title)
+    except MecValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("generate_mec failed for title %s", title_id)
+        raise HTTPException(
+            status_code=503,
+            detail="MEC generate failed. Check server logs for details.",
+        ) from exc
+    return MecGenerateResponse(
+        title_id=result.title_id,
+        filename=result.filename,
+        storage_uri=result.storage_uri,
+        content_type=result.content_type,
+        xml=result.xml,
+    )
 
 
 @router.patch("/{title_id}", response_model=TitleRead)

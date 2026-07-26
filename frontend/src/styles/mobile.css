@@ -251,6 +251,11 @@
     align-items: stretch;
   }
 
+  .sheet-footer-secondary {
+    flex-direction: column;
+    width: 100%;
+  }
+
   .sheet-footer-actions {
     flex-direction: column-reverse;
     margin-left: 0;

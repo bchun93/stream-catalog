@@ -3,6 +3,7 @@ import { ChevronRight, Film, Plus, Search } from "lucide-react";
 import { apiBaseUrl, titlesApi } from "../api/client";
 import { StatusBadge, TypeBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
+import { CopyButton } from "../components/ui/CopyButton";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Sheet } from "../components/ui/Sheet";
@@ -10,6 +11,16 @@ import { TableSkeleton } from "../components/ui/TableSkeleton";
 import { TitleForm } from "../components/TitleForm";
 import { TitleRowPoster } from "../components/TitleRowPoster";
 import type { Title, TitleTree } from "../types";
+
+function downloadTextFile(filename: string, contents: string, mimeType: string) {
+  const blob = new Blob([contents], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 const TITLE_FORM_ID = "title-form";
 
@@ -326,6 +337,9 @@ export function TitlesPage() {
   const [opening, setOpening] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [mecGenerating, setMecGenerating] = useState(false);
+  const [mecStorageUri, setMecStorageUri] = useState<string | null>(null);
+  const [mecError, setMecError] = useState<string | null>(null);
   const [formSessionKey, setFormSessionKey] = useState(0);
   const requestSeq = useRef(0);
 
@@ -365,11 +379,16 @@ export function TitlesPage() {
     setEditing(null);
     setFormTab("details");
     setSaving(false);
+    setMecGenerating(false);
+    setMecStorageUri(null);
+    setMecError(null);
   };
 
   const openEdit = async (t: Title, tab: "details" | "artwork" = "details") => {
     setOpening(true);
     setError(null);
+    setMecStorageUri(null);
+    setMecError(null);
     try {
       const full = await titlesApi.get(t.id);
       setFormSessionKey((key) => key + 1);
@@ -380,6 +399,22 @@ export function TitlesPage() {
       setError(e instanceof Error ? e.message : "Could not load title");
     } finally {
       setOpening(false);
+    }
+  };
+
+  const handleGenerateMec = async () => {
+    if (!editing?.id) return;
+    setMecGenerating(true);
+    setMecError(null);
+    setMecStorageUri(null);
+    try {
+      const result = await titlesApi.generateMec(editing.id);
+      downloadTextFile(result.filename, result.xml, result.content_type || "application/xml");
+      setMecStorageUri(result.storage_uri);
+    } catch (e) {
+      setMecError(e instanceof Error ? e.message : "MEC generation failed");
+    } finally {
+      setMecGenerating(false);
     }
   };
 
@@ -441,6 +476,8 @@ export function TitlesPage() {
             icon={<Plus size={16} />}
             onClick={() => {
               setError(null);
+              setMecStorageUri(null);
+              setMecError(null);
               setFormSessionKey((key) => key + 1);
               setEditing(null);
               setFormTab("details");
@@ -564,28 +601,53 @@ export function TitlesPage() {
           title={sheet === "create" ? "Create title" : "Edit title"}
           onClose={closeSheet}
           footer={
-            <div className="sheet-footer-inner">
-              {sheet === "edit" && editing ? (
-                <Button
-                  variant="danger"
-                  disabled={saving || deleting}
-                  onClick={handleDeleteTitle}
-                >
-                  {deleting ? "Deleting…" : "Delete title"}
-                </Button>
-              ) : null}
-              <div className="sheet-footer-actions">
-                <Button variant="ghost" onClick={closeSheet} disabled={deleting}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  type="submit"
-                  form={TITLE_FORM_ID}
-                  disabled={saving || deleting}
-                >
-                  {saving ? "Saving…" : "Save title"}
-                </Button>
+            <div className="sheet-footer-stack">
+              {(mecStorageUri || mecError) && (
+                <div className="sheet-footer-meta">
+                  {mecError ? (
+                    <span className="error-text">{mecError}</span>
+                  ) : mecStorageUri ? (
+                    <span className="sheet-footer-uri">
+                      <span className="mono">{mecStorageUri}</span>
+                      <CopyButton value={mecStorageUri} label="Copy S3 URI" />
+                    </span>
+                  ) : null}
+                </div>
+              )}
+              <div className="sheet-footer-inner">
+                {sheet === "edit" && editing ? (
+                  <div className="sheet-footer-secondary">
+                    <Button
+                      variant="danger"
+                      disabled={saving || deleting || mecGenerating}
+                      onClick={handleDeleteTitle}
+                    >
+                      {deleting ? "Deleting…" : "Delete title"}
+                    </Button>
+                    {editing.title_type === "movie" ? (
+                      <Button
+                        variant="subtle"
+                        disabled={saving || deleting || mecGenerating}
+                        onClick={handleGenerateMec}
+                      >
+                        {mecGenerating ? "Generating…" : "Generate MEC"}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="sheet-footer-actions">
+                  <Button variant="ghost" onClick={closeSheet} disabled={deleting || mecGenerating}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    form={TITLE_FORM_ID}
+                    disabled={saving || deleting || mecGenerating}
+                  >
+                    {saving ? "Saving…" : "Save title"}
+                  </Button>
+                </div>
               </div>
             </div>
           }

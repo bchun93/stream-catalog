@@ -427,6 +427,14 @@ export interface StoragePresignDownload {
   storage_uri: string;
 }
 
+export interface MecGenerateResponse {
+  title_id: number;
+  filename: string;
+  storage_uri: string;
+  content_type: string;
+  xml: string;
+}
+
 // --- Amazon Rekognition Video ---
 export type RekognitionFeature = "SEGMENT" | "MODERATION" | "LABELS";
 export type RekognitionJobStatus = "IN_PROGRESS" | "SUCCEEDED" | "FAILED";

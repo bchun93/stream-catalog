@@ -19,6 +19,7 @@ import type {
   RekognitionJob,
   SeriesHierarchyApplyResult,
   SeriesHierarchyPreview,
+  MecGenerateResponse,
   StorageBrowse,
   StorageConfig,
   StoragePresignDownload,
@@ -372,6 +373,10 @@ export const titlesApi = {
     }),
   delete: (id: number) =>
     request<void>(`/titles/${id}`, { method: "DELETE" }),
+  generateMec: (id: number) =>
+    operatorRequest<MecGenerateResponse>(`/titles/${id}/mec/generate`, {
+      method: "POST",
+    }),
   listArtwork: async (id: number) => {
     try {
       const list = await requestWithRetry<MediaAsset[]>(`/titles/${id}/artwork`);

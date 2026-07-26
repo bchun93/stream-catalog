@@ -205,6 +205,27 @@ def browse_objects(
     )
 
 
+def put_bytes(
+    *,
+    relative_prefix: str,
+    filename: str,
+    body: bytes,
+    content_type: str = "application/octet-stream",
+) -> tuple[str, str]:
+    """Upload bytes to the ingest bucket. Returns (key, storage_uri)."""
+    safe_name = sanitize_filename(filename)
+    base_prefix = joined_prefix(relative_prefix)
+    key = f"{base_prefix}{safe_name}" if base_prefix else safe_name
+    client = s3_client()
+    client.put_object(
+        Bucket=required_bucket(),
+        Key=key,
+        Body=body,
+        ContentType=content_type,
+    )
+    return key, storage_uri(key)
+
+
 def get_object_bytes(key: str) -> bytes:
     client = s3_client()
     resp = client.get_object(Bucket=required_bucket(), Key=key)
