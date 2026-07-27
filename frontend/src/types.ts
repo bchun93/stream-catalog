@@ -430,9 +430,11 @@ export interface StoragePresignDownload {
 export interface MecGenerateResponse {
   title_id: number;
   filename: string;
-  storage_uri: string;
+  storage_uri: string | null;
   content_type: string;
   xml: string;
+  stored?: boolean;
+  warning?: string | null;
 }
 
 // --- Amazon Rekognition Video ---

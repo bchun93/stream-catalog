@@ -1021,6 +1021,13 @@
   color: var(--danger, #e35d6a);
 }
 
+.sheet-footer-warning {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .sheet-footer-actions {
   display: flex;
   gap: var(--space-2);

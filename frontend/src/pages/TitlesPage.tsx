@@ -339,6 +339,7 @@ export function TitlesPage() {
   const [deleting, setDeleting] = useState(false);
   const [mecGenerating, setMecGenerating] = useState(false);
   const [mecStorageUri, setMecStorageUri] = useState<string | null>(null);
+  const [mecWarning, setMecWarning] = useState<string | null>(null);
   const [mecError, setMecError] = useState<string | null>(null);
   const [formSessionKey, setFormSessionKey] = useState(0);
   const requestSeq = useRef(0);
@@ -381,6 +382,7 @@ export function TitlesPage() {
     setSaving(false);
     setMecGenerating(false);
     setMecStorageUri(null);
+    setMecWarning(null);
     setMecError(null);
   };
 
@@ -388,6 +390,7 @@ export function TitlesPage() {
     setOpening(true);
     setError(null);
     setMecStorageUri(null);
+    setMecWarning(null);
     setMecError(null);
     try {
       const full = await titlesApi.get(t.id);
@@ -407,10 +410,12 @@ export function TitlesPage() {
     setMecGenerating(true);
     setMecError(null);
     setMecStorageUri(null);
+    setMecWarning(null);
     try {
       const result = await titlesApi.generateMec(editing.id);
       downloadTextFile(result.filename, result.xml, result.content_type || "application/xml");
-      setMecStorageUri(result.storage_uri);
+      setMecStorageUri(result.storage_uri ?? null);
+      setMecWarning(result.warning ?? null);
     } catch (e) {
       setMecError(e instanceof Error ? e.message : "MEC generation failed");
     } finally {
@@ -477,6 +482,7 @@ export function TitlesPage() {
             onClick={() => {
               setError(null);
               setMecStorageUri(null);
+              setMecWarning(null);
               setMecError(null);
               setFormSessionKey((key) => key + 1);
               setEditing(null);
@@ -602,16 +608,23 @@ export function TitlesPage() {
           onClose={closeSheet}
           footer={
             <div className="sheet-footer-stack">
-              {(mecStorageUri || mecError) && (
+              {(mecStorageUri || mecWarning || mecError) && (
                 <div className="sheet-footer-meta">
                   {mecError ? (
                     <span className="error-text">{mecError}</span>
-                  ) : mecStorageUri ? (
-                    <span className="sheet-footer-uri">
-                      <span className="mono">{mecStorageUri}</span>
-                      <CopyButton value={mecStorageUri} label="Copy S3 URI" />
-                    </span>
-                  ) : null}
+                  ) : (
+                    <>
+                      {mecStorageUri ? (
+                        <span className="sheet-footer-uri">
+                          <span className="mono">{mecStorageUri}</span>
+                          <CopyButton value={mecStorageUri} label="Copy S3 URI" />
+                        </span>
+                      ) : null}
+                      {mecWarning ? (
+                        <span className="sheet-footer-warning">{mecWarning}</span>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               )}
               <div className="sheet-footer-inner">

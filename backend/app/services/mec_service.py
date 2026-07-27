@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from xml.etree.ElementTree import Element, SubElement, indent, tostring
 
+from app.config import settings
 from app.models.title import Title, TitleType
 from app.services import s3_service
 
@@ -97,9 +98,11 @@ class MecValidationError(ValueError):
 class MecGenerateResult:
     title_id: int
     filename: str
-    storage_uri: str
+    storage_uri: str | None
     content_type: str
     xml: str
+    stored: bool = True
+    warning: str | None = None
 
 
 def _core(title: Title) -> dict[str, str]:
@@ -380,18 +383,59 @@ def mec_filename(title: Title) -> str:
 
 
 def generate_and_store(title: Title) -> MecGenerateResult:
+    """Build MEC XML, store in ingest S3 when configured, always return XML for download."""
     xml_bytes = build_mec_xml(title)
     filename = mec_filename(title)
-    _key, uri = s3_service.put_bytes(
-        relative_prefix="mec",
-        filename=filename,
-        body=xml_bytes,
-        content_type="application/xml",
-    )
+    xml_text = xml_bytes.decode("utf-8")
+
+    bucket = (settings.ingest_s3_bucket or "").strip()
+    if not bucket:
+        logger.warning(
+            "MEC generate for title %s: INGEST_S3_BUCKET unset — returning download-only XML",
+            title.id,
+        )
+        return MecGenerateResult(
+            title_id=title.id,
+            filename=filename,
+            storage_uri=None,
+            content_type="application/xml",
+            xml=xml_text,
+            stored=False,
+            warning=(
+                "INGEST_S3_BUCKET is not configured on the API — XML was generated for "
+                "download only. Set INGEST_S3_BUCKET on Render (or local .env) to also "
+                "store under the ingest bucket."
+            ),
+        )
+
+    try:
+        _key, uri = s3_service.put_bytes(
+            relative_prefix="mec",
+            filename=filename,
+            body=xml_bytes,
+            content_type="application/xml",
+        )
+    except Exception:
+        logger.exception("MEC S3 put failed for title %s — returning download-only XML", title.id)
+        return MecGenerateResult(
+            title_id=title.id,
+            filename=filename,
+            storage_uri=None,
+            content_type="application/xml",
+            xml=xml_text,
+            stored=False,
+            warning=(
+                "Could not write MEC to S3 — XML was generated for download only. "
+                "Check AWS credentials and INGEST_S3_BUCKET."
+            ),
+        )
+
     return MecGenerateResult(
         title_id=title.id,
         filename=filename,
         storage_uri=uri,
         content_type="application/xml",
-        xml=xml_bytes.decode("utf-8"),
+        xml=xml_text,
+        stored=True,
+        warning=None,
     )

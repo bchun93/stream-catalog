@@ -106,7 +106,10 @@ class MecServiceTests(unittest.TestCase):
 
     def test_generate_and_store_puts_to_s3(self):
         title = _movie()
-        with patch("app.services.mec_service.s3_service.put_bytes") as put:
+        with patch("app.services.mec_service.settings") as settings_mock, patch(
+            "app.services.mec_service.s3_service.put_bytes"
+        ) as put:
+            settings_mock.ingest_s3_bucket = "stream-catalog-ingest"
             put.return_value = (
                 "deliveries/inbound/mec/cucamonga-2019-42-mec.xml",
                 "s3://stream-catalog-ingest/deliveries/inbound/mec/cucamonga-2019-42-mec.xml",
@@ -119,8 +122,23 @@ class MecServiceTests(unittest.TestCase):
         self.assertEqual(kwargs["content_type"], "application/xml")
         self.assertTrue(kwargs["body"].startswith(b"<?xml"))
         self.assertEqual(result.title_id, 42)
+        self.assertTrue(result.stored)
+        self.assertIsNone(result.warning)
         self.assertIn("Cucamonga", result.xml)
         self.assertTrue(result.storage_uri.startswith("s3://"))
+
+    def test_generate_download_only_when_bucket_missing(self):
+        title = _movie()
+        with patch("app.services.mec_service.settings") as settings_mock, patch(
+            "app.services.mec_service.s3_service.put_bytes"
+        ) as put:
+            settings_mock.ingest_s3_bucket = None
+            result = generate_and_store(title)
+        put.assert_not_called()
+        self.assertFalse(result.stored)
+        self.assertIsNone(result.storage_uri)
+        self.assertIn("INGEST_S3_BUCKET", result.warning or "")
+        self.assertIn("Cucamonga", result.xml)
 
 
 if __name__ == "__main__":

@@ -250,6 +250,8 @@ def generate_mec(
         storage_uri=result.storage_uri,
         content_type=result.content_type,
         xml=result.xml,
+        stored=result.stored,
+        warning=result.warning,
     )
 
 
