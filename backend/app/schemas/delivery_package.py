@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.delivery_package import DeliveryMode, MonetizationModel, PackageStatus
 from app.models.title import TitleType
+from app.schemas.delivery_profile import DeliveryProfileSummary
 
 
 class DeliveryPackageTitleSummary(BaseModel):
@@ -43,10 +44,11 @@ class DeliveryPackageBase(BaseModel):
 
 class DeliveryPackageCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+    profile_id: int = Field(description="Delivery profile that defines this package")
     buyer_slug: str | None = Field(default=None, max_length=120)
     deal_date: date | None = None
     delivery_mode: DeliveryMode = DeliveryMode.VOD
-    monetization: MonetizationModel = MonetizationModel.SVOD
+    monetization: MonetizationModel | None = None
     title_ids: list[int] = Field(default_factory=list, max_length=500)
 
 
@@ -55,6 +57,8 @@ class DeliveryPackageRead(DeliveryPackageBase):
 
     id: int
     slug: str
+    profile_id: int | None = None
+    profile: DeliveryProfileSummary | None = None
     created_at: datetime
     updated_at: datetime
     title_count: int = 0

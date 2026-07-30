@@ -1,7 +1,7 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, String
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -44,6 +44,12 @@ class DeliveryPackage(Base):
     status: Mapped[PackageStatus] = mapped_column(
         str_enum(PackageStatus), default=PackageStatus.DRAFT
     )
+    profile_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("delivery_profiles.id"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )
@@ -51,6 +57,10 @@ class DeliveryPackage(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+    profile: Mapped["DeliveryProfile | None"] = relationship(
+        "DeliveryProfile",
+        back_populates="packages",
+    )
     package_titles: Mapped[list["DeliveryPackageTitle"]] = relationship(
         "DeliveryPackageTitle",
         back_populates="package",

@@ -5,12 +5,15 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.delivery_package import DeliveryPackage, DeliveryMode, MonetizationModel, PackageStatus
 from app.models.delivery_package_title import DeliveryPackageTitle
+from app.models.delivery_profile import DeliveryProfile
 from app.models.title import Title, TitleType
 from app.schemas.delivery_package import (
     DeliveryPackageCreate,
     DeliveryPackageRead,
     DeliveryPackageTitleSummary,
 )
+from app.schemas.delivery_profile import DeliveryProfileSummary
+from app.services import delivery_profile_service
 
 _PACKAGE_TITLE_TYPES = {TitleType.MOVIE, TitleType.SERIES}
 
@@ -64,8 +67,25 @@ def _title_summaries(package: DeliveryPackage) -> list[DeliveryPackageTitleSumma
 def package_to_read(package: DeliveryPackage) -> DeliveryPackageRead:
     _normalize_package_enums(package)
     titles = _title_summaries(package)
+    profile_summary = None
+    if package.profile is not None:
+        profile_summary = DeliveryProfileSummary.model_validate(package.profile)
     read = DeliveryPackageRead.model_validate(package)
-    return read.model_copy(update={"titles": titles, "title_count": len(titles)})
+    return read.model_copy(
+        update={
+            "titles": titles,
+            "title_count": len(titles),
+            "profile": profile_summary,
+            "profile_id": package.profile_id,
+        }
+    )
+
+
+def _package_load_options():
+    return (
+        joinedload(DeliveryPackage.profile),
+        joinedload(DeliveryPackage.package_titles).joinedload(DeliveryPackageTitle.title),
+    )
 
 
 def list_packages(
@@ -76,11 +96,7 @@ def list_packages(
 ) -> list[DeliveryPackageRead]:
     packages = (
         db.query(DeliveryPackage)
-        .options(
-            joinedload(DeliveryPackage.package_titles).joinedload(
-                DeliveryPackageTitle.title
-            )
-        )
+        .options(*_package_load_options())
         .order_by(DeliveryPackage.updated_at.desc())
         .offset(skip)
         .limit(limit)
@@ -89,22 +105,47 @@ def list_packages(
     return [package_to_read(package) for package in packages]
 
 
+def get_package(db: Session, package_id: int) -> DeliveryPackageRead | None:
+    package = (
+        db.query(DeliveryPackage)
+        .options(*_package_load_options())
+        .filter(DeliveryPackage.id == package_id)
+        .first()
+    )
+    if not package:
+        return None
+    return package_to_read(package)
+
+
 def create_package(db: Session, payload: DeliveryPackageCreate) -> DeliveryPackageRead:
     name = payload.name.strip()
     if not name:
         raise ValueError("Package name is required")
+
+    profile = db.query(DeliveryProfile).filter(DeliveryProfile.id == payload.profile_id).first()
+    if not profile:
+        raise ValueError(f"Unknown delivery profile id: {payload.profile_id}")
+    if not profile.enabled:
+        raise ValueError(f"Delivery profile '{profile.slug}' is disabled")
+
     buyer_slug = payload.buyer_slug.strip() if payload.buyer_slug else None
     if buyer_slug:
         buyer_slug = _slugify(buyer_slug)
     slug = _unique_slug(db, _slugify(name))
+
+    monetization = payload.monetization
+    if monetization is None:
+        monetization = delivery_profile_service.channel_to_monetization(profile.channel)
+
     package = DeliveryPackage(
         name=name,
         slug=slug,
         buyer_slug=buyer_slug,
         deal_date=payload.deal_date,
         delivery_mode=payload.delivery_mode or DeliveryMode.VOD,
-        monetization=payload.monetization or MonetizationModel.SVOD,
+        monetization=monetization,
         status=PackageStatus.DRAFT,
+        profile_id=profile.id,
     )
     db.add(package)
     db.flush()
@@ -135,11 +176,7 @@ def create_package(db: Session, payload: DeliveryPackageCreate) -> DeliveryPacka
     db.refresh(package)
     package = (
         db.query(DeliveryPackage)
-        .options(
-            joinedload(DeliveryPackage.package_titles).joinedload(
-                DeliveryPackageTitle.title
-            )
-        )
+        .options(*_package_load_options())
         .filter(DeliveryPackage.id == package.id)
         .first()
     )

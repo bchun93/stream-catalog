@@ -13,6 +13,11 @@ from app.config import settings
 from app.database import Base, SessionLocal, check_database, engine
 from app.middleware.cors import EchoOriginCORSMiddleware
 from app.migrate import run_migrations
+from app.models import (  # noqa: F401 — register metadata for create_all
+    DeliveryPackage,
+    DeliveryPackageTitle,
+    DeliveryProfile,
+)
 from app.routers import (
     artwork_ai,
     delivery,

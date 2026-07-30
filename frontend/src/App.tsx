@@ -14,6 +14,7 @@ import { MetadataConfigPage } from "./pages/MetadataConfigPage";
 import { StoragePage } from "./pages/StoragePage";
 import { TitlesPage } from "./pages/TitlesPage";
 import { UploadPage } from "./pages/UploadPage";
+import { WelcomePage } from "./pages/WelcomePage";
 
 export default function App() {
   const [navOpen, setNavOpen] = useState(false);
@@ -64,6 +65,7 @@ export default function App() {
           <main className="main">
             <Routes>
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/welcome" element={<WelcomePage />} />
               <Route path="/titles" element={<TitlesPage />} />
               <Route path="/metadata-config" element={<MetadataConfigPage />} />
               <Route path="/assets" element={<AssetsPage />} />

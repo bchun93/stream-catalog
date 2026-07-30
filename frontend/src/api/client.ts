@@ -29,6 +29,9 @@ import type {
   TitleTree,
   TitleType,
   DeliveryPackage,
+  DeliveryProfile,
+  DeliveryProfileSummary,
+  PackageValidationResponse,
   DeliveryMode,
   MonetizationModel,
   PackageStatus,
@@ -621,8 +624,15 @@ export const rekognitionApi = {
 
 export const deliveryApi = {
   list: () => requestWithRetry<DeliveryPackage[]>("/delivery/packages"),
+  listProfiles: (enabledOnly = true) =>
+    requestWithRetry<DeliveryProfileSummary[]>(
+      `/delivery/profiles?enabled_only=${enabledOnly ? "true" : "false"}`
+    ),
+  getProfile: (id: number) =>
+    requestWithRetry<DeliveryProfile>(`/delivery/profiles/${id}`),
   create: (body: {
     name: string;
+    profile_id: number;
     buyer_slug?: string | null;
     deal_date?: string | null;
     delivery_mode?: DeliveryMode;
@@ -633,6 +643,10 @@ export const deliveryApi = {
     request<DeliveryPackage>("/delivery/packages", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  validate: (packageId: number) =>
+    request<PackageValidationResponse>(`/delivery/packages/${packageId}/validate`, {
+      method: "POST",
     }),
 };
 

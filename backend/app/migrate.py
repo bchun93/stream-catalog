@@ -36,6 +36,7 @@ _MEDIA_ASSET_COLUMNS = [
 _DELIVERY_PACKAGE_COLUMNS = [
     ("delivery_mode", "VARCHAR(32)", "'vod'"),
     ("monetization", "VARCHAR(32)", "'svod'"),
+    ("profile_id", "INTEGER", "NULL"),
 ]
 
 # Legacy Postgres enum type names (from early deploys).
@@ -264,6 +265,105 @@ def _seed_default_ingest_manifest(conn) -> None:
             "enabled": True,
         },
     )
+
+
+def _seed_delivery_profiles(conn) -> None:
+    """Load YAML delivery profiles from app/data/delivery_profiles into the DB."""
+    try:
+        from app.services.delivery_profile_service import load_profile_documents
+    except Exception:
+        logger.exception("Could not import delivery profile loader")
+        return
+
+    for doc in load_profile_documents():
+        slug = str(doc.get("slug") or "").strip()
+        version = int(doc.get("version") or 1)
+        if not slug:
+            continue
+        existing = conn.execute(
+            text(
+                "SELECT id FROM delivery_profiles WHERE slug = :slug AND version = :version LIMIT 1"
+            ),
+            {"slug": slug, "version": version},
+        ).fetchone()
+        # Strip header fields from stored spec (keep full doc for validator convenience)
+        spec = dict(doc)
+        name = str(doc.get("name") or slug)
+        platform = str(doc.get("platform") or "unknown")
+        channel = str(doc.get("channel") or "svod").lower()
+        description = doc.get("description")
+        if isinstance(description, str):
+            description = description.strip() or None
+        else:
+            description = None
+        spec_json = json.dumps(spec)
+        if existing:
+            conn.execute(
+                text(
+                    """
+                    UPDATE delivery_profiles
+                    SET name = :name,
+                        platform = :platform,
+                        channel = :channel,
+                        description = :description,
+                        spec_json = :spec_json,
+                        enabled = TRUE,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "id": existing[0],
+                    "name": name,
+                    "platform": platform,
+                    "channel": channel,
+                    "description": description,
+                    "spec_json": spec_json,
+                },
+            )
+            profile_id = existing[0]
+        else:
+            result = conn.execute(
+                text(
+                    """
+                    INSERT INTO delivery_profiles
+                    (slug, name, platform, channel, version, description, spec_json, enabled, created_at, updated_at)
+                    VALUES
+                    (:slug, :name, :platform, :channel, :version, :description, :spec_json, TRUE,
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """
+                ),
+                {
+                    "slug": slug,
+                    "name": name,
+                    "platform": platform,
+                    "channel": channel,
+                    "version": version,
+                    "description": description,
+                    "spec_json": spec_json,
+                },
+            )
+            row = conn.execute(
+                text(
+                    "SELECT id FROM delivery_profiles WHERE slug = :slug AND version = :version LIMIT 1"
+                ),
+                {"slug": slug, "version": version},
+            ).fetchone()
+            profile_id = row[0] if row else None
+            _ = result  # insert executed
+
+        # Attach profile to any packages missing profile_id (prefer Amazon SVOD seed)
+        if profile_id and slug == "amazon-prime-video-svod":
+            conn.execute(
+                text(
+                    """
+                    UPDATE delivery_packages
+                    SET profile_id = :profile_id
+                    WHERE profile_id IS NULL
+                    """
+                ),
+                {"profile_id": profile_id},
+            )
 
 
 def _seed_default_metadata_config(conn) -> None:
@@ -542,6 +642,8 @@ def run_migrations() -> None:
                 _seed_default_ingest_manifest(conn)
             if "metadata_field_configs" in tables:
                 _seed_default_metadata_config(conn)
+            if "delivery_profiles" in tables:
+                _seed_delivery_profiles(conn)
     else:
         with engine.begin() as conn:
             _ensure_title_internal_ids(conn)
@@ -552,3 +654,5 @@ def run_migrations() -> None:
                 _seed_default_ingest_manifest(conn)
             if "metadata_field_configs" in tables:
                 _seed_default_metadata_config(conn)
+            if "delivery_profiles" in tables:
+                _seed_delivery_profiles(conn)

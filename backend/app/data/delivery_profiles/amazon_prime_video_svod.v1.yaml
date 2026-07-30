@@ -1,0 +1,80 @@
+# Amazon Prime Video — SVOD delivery profile (v1)
+# Authoring source; seeded into delivery_profiles.spec_json on migrate.
+
+slug: amazon-prime-video-svod
+name: Amazon Prime Video — SVOD
+platform: amazon_prime_video
+channel: svod
+version: 1
+description: >
+  Technical acceptance rules for Amazon Prime Video SVOD deliveries.
+  Used to validate package assets and (later) drive transform targets.
+
+video:
+  codec:
+    type: enum
+    values: [ProRes422HQ, H264, HEVC, DNxHR_HQX]
+    preferred: ProRes422HQ
+  mov_codec_constraint:
+    if_ext: mov
+    require_codec: ProRes
+  disallowed_codecs: [ProRes444XQ]
+  scan_type:
+    type: enum
+    values: [progressive]
+  resolution:
+    type: enum
+    values: ["1920x1080", "3840x2160"]
+  hd_min:
+    rule: "width>=1280 OR height>=720"
+  sd_min:
+    rule: "width>=640 AND height>=260"
+  upscaled:
+    require: false
+  frame_rate:
+    type: enum
+    values: [23.976, 24, 25, 29.97, 59.94]
+  frame_rate_mode:
+    type: enum
+    values: [CFR]
+  sdr_color_space:
+    value: Rec709
+  hdr_format:
+    value: HDR10
+    requires_metadata: true
+
+audio:
+  codec:
+    type: enum
+    values: [AAC, AC3, EAC3]
+  sample_rate_hz:
+    value: 48000
+  bitrate_min_kbps:
+    stereo: 192
+    surround_5_1: 384
+    atmos: 640
+  atmos_requires_5_1: true
+  disabled_tracks:
+    require: absent
+  me_mos_tracks:
+    require: absent
+
+loudness:
+  standard: ITU-R_BS.1770
+  integrated_lkfs:
+    type: range
+    min: -26
+    max: -24
+
+integrity:
+  av_duration_match:
+    tolerance_frames: 1
+  checksum:
+    required: true
+  non_program_content:
+    require: absent
+
+manifest:
+  every_file_in_inventory: true
+  no_dangling_inventory_refs: true
+  ratings_per_territory: required

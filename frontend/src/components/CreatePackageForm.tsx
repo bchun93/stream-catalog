@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import type { DeliveryMode, MonetizationModel, Title, TitleType } from "../types";
+import type {
+  DeliveryMode,
+  DeliveryProfileSummary,
+  MonetizationModel,
+  Title,
+  TitleType,
+} from "../types";
 import { TypeBadge } from "./ui/Badge";
 import { slugify, suggestPackageName, todayIsoDate } from "../utils/slug";
 
@@ -17,6 +23,7 @@ export const MONETIZATION_OPTIONS: { value: MonetizationModel; label: string }[]
 
 export interface CreatePackagePayload {
   name: string;
+  profile_id: number;
   buyer_slug: string;
   deal_date: string;
   delivery_mode: DeliveryMode;
@@ -26,6 +33,8 @@ export interface CreatePackagePayload {
 
 interface CreatePackageFormProps {
   titles: Title[];
+  profiles: DeliveryProfileSummary[];
+  profilesLoading?: boolean;
   titlesLoading?: boolean;
   onCancel: () => void;
   onSubmit: (data: CreatePackagePayload) => Promise<void>;
@@ -53,12 +62,23 @@ function displayTitleId(title: Pick<Title, "internal_id" | "slug">): string {
   return title.internal_id?.trim() || title.slug;
 }
 
+function channelToMonetization(channel: string): MonetizationModel {
+  const value = channel.toLowerCase();
+  if (value === "avod" || value === "tvod" || value === "fast" || value === "svod") {
+    return value;
+  }
+  return "svod";
+}
+
 export function CreatePackageForm({
   titles,
+  profiles,
+  profilesLoading = false,
   titlesLoading = false,
   onCancel,
   onSubmit,
 }: CreatePackageFormProps) {
+  const [profileId, setProfileId] = useState<number | "">("");
   const [buyerSlug, setBuyerSlug] = useState("");
   const [dealDate, setDealDate] = useState(todayIsoDate);
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("vod");
@@ -73,6 +93,11 @@ export function CreatePackageForm({
   const recommendation = suggestPackageName(buyerSlug, dealDate);
   const normalizedSearch = titleSearch.trim().toLowerCase();
 
+  const selectedProfile = useMemo(
+    () => profiles.find((profile) => profile.id === profileId) ?? null,
+    [profiles, profileId]
+  );
+
   const filteredTitles = useMemo(() => {
     const eligible = titles.filter(isPackagePickerTitle);
     const sorted = [...eligible].sort((a, b) => a.name.localeCompare(b.name));
@@ -85,6 +110,17 @@ export function CreatePackageForm({
       setName(recommendation);
     }
   }, [recommendation, nameTouched]);
+
+  useEffect(() => {
+    if (profileId === "" && profiles.length === 1) {
+      setProfileId(profiles[0].id);
+    }
+  }, [profiles, profileId]);
+
+  useEffect(() => {
+    if (!selectedProfile) return;
+    setMonetization(channelToMonetization(selectedProfile.channel));
+  }, [selectedProfile]);
 
   const toggleTitle = (titleId: number) => {
     setSelectedTitleIds((current) => {
@@ -119,11 +155,16 @@ export function CreatePackageForm({
       setError("Package name is required.");
       return;
     }
+    if (profileId === "") {
+      setError("Select a delivery profile.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       await onSubmit({
         name: trimmedName,
+        profile_id: profileId,
         buyer_slug: slugify(buyerSlug || "buyer"),
         deal_date: dealDate,
         delivery_mode: deliveryMode,
@@ -144,15 +185,43 @@ export function CreatePackageForm({
 
       <div className="form-grid">
         <label className="form-span-2">
+          Delivery profile
+          <select
+            value={profileId === "" ? "" : String(profileId)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setProfileId(value ? Number(value) : "");
+            }}
+            required
+            disabled={profilesLoading || profiles.length === 0}
+            autoFocus
+          >
+            <option value="">
+              {profilesLoading ? "Loading profiles…" : "Select a profile…"}
+            </option>
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name} (v{profile.version})
+              </option>
+            ))}
+          </select>
+          <span className="field-hint">
+            Profiles define the platform/channel technical contract for this package
+            {selectedProfile?.description
+              ? ` — ${selectedProfile.description}`
+              : "."}
+          </span>
+        </label>
+
+        <label className="form-span-2">
           Buyer slug
           <input
             value={buyerSlug}
             onChange={(e) => setBuyerSlug(e.target.value)}
             placeholder="acme-streaming"
-            autoFocus
           />
           <span className="field-hint">
-            Short identifier for the buyer (letters, numbers, hyphens).
+            Optional deal/org label (letters, numbers, hyphens).
           </span>
         </label>
 
@@ -191,6 +260,7 @@ export function CreatePackageForm({
               </option>
             ))}
           </select>
+          <span className="field-hint">Prefills from the selected profile channel.</span>
         </label>
 
         <label className="form-span-2">

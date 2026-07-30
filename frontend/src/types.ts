@@ -220,10 +220,55 @@ export interface DeliveryPackage {
   delivery_mode: DeliveryMode;
   monetization: MonetizationModel;
   status: PackageStatus;
+  profile_id?: number | null;
+  profile?: DeliveryProfileSummary | null;
   title_count: number;
   titles: DeliveryPackageTitleSummary[];
   created_at: string;
   updated_at: string;
+}
+
+export interface DeliveryProfileSummary {
+  id: number;
+  slug: string;
+  name: string;
+  platform: string;
+  channel: string;
+  version: number;
+  description?: string | null;
+  enabled: boolean;
+}
+
+export interface DeliveryProfile extends DeliveryProfileSummary {
+  spec: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ValidationFindingStatus = "pass" | "fail" | "skip";
+export type PackageValidationSummary = "pass" | "fail" | "incomplete";
+
+export interface ValidationFinding {
+  rule_id: string;
+  section: string;
+  status: ValidationFindingStatus;
+  message: string;
+  title_id?: number | null;
+  title_name?: string | null;
+  asset_id?: number | null;
+  observed?: string | null;
+  expected?: string | null;
+}
+
+export interface PackageValidationResponse {
+  package_id: number;
+  profile_id: number;
+  profile_slug: string;
+  summary: PackageValidationSummary;
+  pass_count: number;
+  fail_count: number;
+  skip_count: number;
+  findings: ValidationFinding[];
 }
 
 export interface IngestManifestRule {

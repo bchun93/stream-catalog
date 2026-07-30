@@ -1,6 +1,7 @@
 /** Sidebar nav items. Set `hidden: true` to hide without removing routes or pages. */
 export const NAV_ITEMS = [
   { path: "/", label: "Overview", end: true },
+  { path: "/welcome", label: "Welcome", hidden: true },
   { path: "/titles", label: "Titles" },
   { path: "/metadata-config", label: "Metadata config", hidden: true },
   { path: "/assets", label: "Media assets" },
