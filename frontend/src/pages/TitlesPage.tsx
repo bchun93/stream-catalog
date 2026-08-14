@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, Film, Plus, Search } from "lucide-react";
+import { ChevronRight, Eye, Film, Plus, Search } from "lucide-react";
 import { apiBaseUrl, titlesApi } from "../api/client";
 import { StatusBadge, TypeBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -9,6 +9,7 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { Sheet } from "../components/ui/Sheet";
 import { TableSkeleton } from "../components/ui/TableSkeleton";
 import { TitleForm } from "../components/TitleForm";
+import { TitlePreviewOverlay } from "../components/TitlePreviewOverlay";
 import { TitleRowPoster } from "../components/TitleRowPoster";
 import type { Title, TitleTree } from "../types";
 
@@ -129,6 +130,7 @@ function TitleMobileRow({
   forceExpanded,
   onToggle,
   onEdit,
+  onPreview,
 }: {
   node: TitleTree;
   depth?: number;
@@ -139,6 +141,7 @@ function TitleMobileRow({
   forceExpanded: boolean;
   onToggle: (id: number) => void;
   onEdit: (title: Title, tab?: "details" | "artwork") => void;
+  onPreview: (title: Title) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const expanded = hasChildren && (forceExpanded || expandedIds.has(node.id));
@@ -190,6 +193,17 @@ function TitleMobileRow({
               </div>
             </div>
           </button>
+          <Button
+            variant="ghost"
+            className="title-row-preview-btn"
+            icon={<Eye size={15} />}
+            disabled={opening}
+            title={`Preview ${displayName}`}
+            aria-label={`Preview ${displayName}`}
+            onClick={() => onPreview(node)}
+          >
+            Preview
+          </Button>
         </div>
       </div>
       {expanded &&
@@ -205,6 +219,7 @@ function TitleMobileRow({
             forceExpanded={forceExpanded}
             onToggle={onToggle}
             onEdit={onEdit}
+            onPreview={onPreview}
           />
         ))}
     </>
@@ -221,6 +236,7 @@ function TitleTableRow({
   forceExpanded,
   onToggle,
   onEdit,
+  onPreview,
 }: {
   node: TitleTree;
   depth?: number;
@@ -231,6 +247,7 @@ function TitleTableRow({
   forceExpanded: boolean;
   onToggle: (id: number) => void;
   onEdit: (title: Title, tab?: "details" | "artwork") => void;
+  onPreview: (title: Title) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const expanded = hasChildren && (forceExpanded || expandedIds.has(node.id));
@@ -303,6 +320,24 @@ function TitleTableRow({
             {node.studio ?? "—"}
           </span>
         </td>
+        <td className="actions-cell">
+          <div className="row-actions">
+            <Button
+              variant="ghost"
+              className="title-row-preview-btn"
+              icon={<Eye size={15} />}
+              disabled={opening}
+              title={`Preview ${displayName} as streaming info page`}
+              aria-label={`Preview ${displayName}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview(node);
+              }}
+            >
+              Preview
+            </Button>
+          </div>
+        </td>
       </tr>
       {expanded &&
         node.children.map((child) => (
@@ -317,6 +352,7 @@ function TitleTableRow({
             forceExpanded={forceExpanded}
             onToggle={onToggle}
             onEdit={onEdit}
+            onPreview={onPreview}
           />
         ))}
     </>
@@ -342,6 +378,7 @@ export function TitlesPage() {
   const [mecWarning, setMecWarning] = useState<string | null>(null);
   const [mecError, setMecError] = useState<string | null>(null);
   const [formSessionKey, setFormSessionKey] = useState(0);
+  const [previewTitleId, setPreviewTitleId] = useState<number | null>(null);
   const requestSeq = useRef(0);
 
   useEffect(() => {
@@ -421,6 +458,10 @@ export function TitlesPage() {
     } finally {
       setMecGenerating(false);
     }
+  };
+
+  const openPreview = (t: Title) => {
+    setPreviewTitleId(t.id);
   };
 
   const filteredTree = filterTree(tree, debouncedSearch, typeFilter);
@@ -567,6 +608,7 @@ export function TitlesPage() {
                   forceExpanded={forceExpanded}
                   onToggle={toggleExpanded}
                   onEdit={openEdit}
+                  onPreview={openPreview}
                 />
               ))}
             </div>
@@ -580,6 +622,7 @@ export function TitlesPage() {
                     <th>Status</th>
                     <th className="num">Year</th>
                     <th>Studio</th>
+                    <th>Preview</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -592,6 +635,7 @@ export function TitlesPage() {
                       forceExpanded={forceExpanded}
                       onToggle={toggleExpanded}
                       onEdit={openEdit}
+                      onPreview={openPreview}
                     />
                   ))}
                 </tbody>
@@ -697,6 +741,13 @@ export function TitlesPage() {
           />
         </Sheet>
       )}
+
+      {previewTitleId != null ? (
+        <TitlePreviewOverlay
+          titleId={previewTitleId}
+          onClose={() => setPreviewTitleId(null)}
+        />
+      ) : null}
     </>
   );
 }

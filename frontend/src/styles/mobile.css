@@ -340,6 +340,11 @@
     padding: var(--space-2) var(--space-3) var(--space-2) 0;
   }
 
+  .title-mobile-card-main .title-row-preview-btn {
+    flex-shrink: 0;
+    margin-right: var(--space-1);
+  }
+
   .title-mobile-card {
     flex: 1;
     display: flex;

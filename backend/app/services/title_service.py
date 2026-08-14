@@ -7,6 +7,8 @@ from datetime import date
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.models.artwork_ai import ArtworkClassification, ArtworkTrainingExample
+from app.models.delivery_package_title import DeliveryPackageTitle
 from app.models.media_asset import AssetType, MediaAsset
 from app.models.ingest_job import IngestItem, IngestJob
 from app.models.title import Title, TitleStatus, TitleType
@@ -531,7 +533,16 @@ def _title_ids_postorder(db: Session, root_id: int) -> list[int]:
 
 
 def delete_title(db: Session, title: Title) -> None:
+    """Delete a title and its subtree.
+
+    Neon/Postgres enforces FKs that SQLite often ignores. Clear dependent rows
+    explicitly before deleting titles — ORM relationship cascades alone miss
+    artwork_ai / delivery join tables and can still 503 with a generic DB error.
+    """
     title_ids = _title_ids_postorder(db, title.id)
+    if not title_ids:
+        return
+
     for tid in title_ids:
         job_ids = [
             row[0] for row in db.query(IngestJob.id).filter(IngestJob.title_id == tid).all()
@@ -543,11 +554,27 @@ def delete_title(db: Session, title: Title) -> None:
         db.query(IngestJob).filter(IngestJob.title_id == tid).delete(
             synchronize_session=False
         )
+
+    # Bulk cleanup for tables that reference titles without ORM cascade.
+    db.query(ArtworkClassification).filter(
+        ArtworkClassification.title_id.in_(title_ids)
+    ).delete(synchronize_session=False)
+    db.query(ArtworkTrainingExample).filter(
+        ArtworkTrainingExample.title_id.in_(title_ids)
+    ).delete(synchronize_session=False)
+    db.query(DeliveryPackageTitle).filter(
+        DeliveryPackageTitle.title_id.in_(title_ids)
+    ).delete(synchronize_session=False)
+    db.query(MediaAsset).filter(MediaAsset.title_id.in_(title_ids)).delete(
+        synchronize_session=False
+    )
+
     for tid in title_ids:
         row = db.query(Title).filter(Title.id == tid).first()
         if row:
             db.delete(row)
     db.commit()
+    logger.info("Deleted title subtree root_id=%s ids=%s", title.id, title_ids)
 
 
 def annotate_series_hierarchy_preview(

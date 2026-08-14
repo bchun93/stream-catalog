@@ -736,31 +736,31 @@
 
 .titles-table {
   table-layout: fixed;
-  min-width: 860px;
+  min-width: 940px;
 }
 
 .titles-table th:nth-child(1),
 .titles-table td:nth-child(1) {
-  width: 32%;
-  max-width: 320px;
+  width: 30%;
+  max-width: 300px;
   padding-right: var(--space-2);
 }
 
 .titles-table th:nth-child(2),
 .titles-table td:nth-child(2) {
-  width: 118px;
+  width: 110px;
   padding-left: var(--space-2);
   padding-right: var(--space-3);
 }
 
 .titles-table th:nth-child(3),
 .titles-table td:nth-child(3) {
-  width: 88px;
+  width: 84px;
 }
 
 .titles-table th:nth-child(4),
 .titles-table td:nth-child(4) {
-  width: 104px;
+  width: 100px;
 }
 
 .titles-table th:nth-child(5),
@@ -770,7 +770,34 @@
 
 .titles-table th:nth-child(6),
 .titles-table td:nth-child(6) {
-  width: auto;
+  width: 18%;
+  max-width: 180px;
+}
+
+.titles-table th:nth-child(7),
+.titles-table td:nth-child(7) {
+  width: 108px;
+  min-width: 108px;
+  text-align: right;
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--bg-surface, var(--surface, #12161e));
+  box-shadow: -8px 0 12px -8px rgba(0, 0, 0, 0.45);
+}
+
+.titles-table thead th:nth-child(7) {
+  z-index: 2;
+  background: var(--bg-overlay, var(--surface-2, #171c26));
+}
+
+.titles-table tbody tr:hover td:nth-child(7) {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.03));
+}
+
+.title-row-preview-btn {
+  white-space: nowrap;
+  font-weight: 600;
 }
 
 /* Asset row */

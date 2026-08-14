@@ -284,5 +284,18 @@ def delete_title(
     title = title_service.get_title(db, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
-    title_service.delete_title(db, title)
+    try:
+        title_service.delete_title(db, title)
+    except SQLAlchemyError as exc:
+        # Avoid the generic Neon 503 — log the real constraint and return 409.
+        logger.exception("delete_title failed for title_id=%s", title_id)
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot delete this title because related catalog rows still "
+                "reference it (assets, artwork AI, packages, or ingest). "
+                f"Database detail: {exc.__class__.__name__}"
+            ),
+        ) from exc
     return None
