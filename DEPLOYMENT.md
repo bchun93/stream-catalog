@@ -71,6 +71,19 @@ Or set **Root Directory** to `backend` and Dockerfile to `Dockerfile` there.
 
 Add env vars: `DATABASE_URL`, `TMDB_API_KEY`, `SEED_ON_STARTUP`.
 
+For **Upload / S3** on Render, also set:
+
+| Name | Notes |
+|------|--------|
+| `INGEST_S3_BUCKET` | e.g. `stream-catalog-ingest` |
+| `AWS_ACCESS_KEY_ID` | IAM user with S3 put/get on the ingest bucket |
+| `AWS_SECRET_ACCESS_KEY` | Matching secret |
+| `AWS_REGION` | Bucket region (e.g. `ap-northeast-1`) |
+| `INGEST_OPERATOR_TOKEN` | Required in production when Upload/S3 is enabled; protects presign routes |
+| `ADMIN_API_KEY` | Protects mutating title/admin routes |
+
+Without `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or a working default AWS credential chain / instance role), Upload fails with a credentials error (botocore `Unable to locate credentials`, or Relay’s clearer “AWS credentials are not configured for S3” message).
+
 Do **not** set `PORT` manually — Render injects it (often `10000`). The container must listen on `$PORT`.
 
 If logs show `HEAD / HTTP/1.1" 404`, the health check path is wrong or the deploy is on an old build without the `/` route fix.

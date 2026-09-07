@@ -100,16 +100,30 @@ def s3_client():
     except Exception as exc:
         raise RuntimeError("boto3 is required for S3 integration.") from exc
 
+    access_key = (settings.aws_access_key_id or "").strip() or None
+    secret_key = (settings.aws_secret_access_key or "").strip() or None
+    profile = (settings.aws_profile or "").strip() or None
+
     session_kwargs: dict[str, str] = {"region_name": settings.aws_region}
-    if settings.aws_profile:
-        session_kwargs["profile_name"] = settings.aws_profile
-    if settings.aws_access_key_id and settings.aws_secret_access_key:
-        session_kwargs["aws_access_key_id"] = settings.aws_access_key_id
-        session_kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+    if profile:
+        session_kwargs["profile_name"] = profile
+    if access_key and secret_key:
+        session_kwargs["aws_access_key_id"] = access_key
+        session_kwargs["aws_secret_access_key"] = secret_key
+    # Otherwise fall through to boto3's default chain (env, ~/.aws/credentials,
+    # instance/task role) — same resolution order as aws_clients._session().
     client_kwargs: dict[str, str] = {}
     if settings.aws_endpoint_url:
         client_kwargs["endpoint_url"] = settings.aws_endpoint_url
-    return boto3.Session(**session_kwargs).client("s3", **client_kwargs)
+    session = boto3.Session(**session_kwargs)
+    if session.get_credentials() is None:
+        raise RuntimeError(
+            "AWS credentials are not configured for S3. On Render, set "
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in the service Environment. "
+            "Locally, set those in backend/.env, set AWS_PROFILE, or use the default "
+            "AWS credential chain / instance role."
+        )
+    return session.client("s3", **client_kwargs)
 
 
 def list_all_objects(relative_prefix: str, *, max_keys: int) -> list[S3ObjectRow]:

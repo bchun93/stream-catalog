@@ -16,9 +16,15 @@ def _normalize_database_url(value: str) -> str:
     return text
 
 
+def _backend_env_file() -> Path:
+    return Path(__file__).resolve().parent.parent / ".env"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Absolute path so AWS keys load even if the process cwd is the repo root.
+        env_file=_backend_env_file(),
+        env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,
     )

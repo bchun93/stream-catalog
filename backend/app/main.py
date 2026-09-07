@@ -65,6 +65,26 @@ async def lifespan(app: FastAPI):
             "TMDB_API_KEY is not set on this service — metadata search and import will fail"
         )
 
+    # Make Settings AWS keys visible to boto3's default chain (and any code that
+    # does not pass explicit Session kwargs). Never log secret values.
+    if (settings.aws_access_key_id or "").strip() and (
+        settings.aws_secret_access_key or ""
+    ).strip():
+        os.environ.setdefault("AWS_ACCESS_KEY_ID", settings.aws_access_key_id.strip())
+        os.environ.setdefault(
+            "AWS_SECRET_ACCESS_KEY", settings.aws_secret_access_key.strip()
+        )
+        os.environ.setdefault("AWS_REGION", settings.aws_region)
+        logger.info("AWS access keys loaded for S3 (region=%s)", settings.aws_region)
+    elif (settings.aws_profile or "").strip():
+        os.environ.setdefault("AWS_PROFILE", settings.aws_profile.strip())
+        logger.info("AWS_PROFILE=%s for S3", settings.aws_profile.strip())
+    elif (settings.ingest_s3_bucket or "").strip():
+        logger.warning(
+            "INGEST_S3_BUCKET is set but no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY "
+            "or AWS_PROFILE — Upload/presign will fail until credentials are configured"
+        )
+
     if app.state.db_ready and settings.seed_on_startup:
         try:
             seed()
