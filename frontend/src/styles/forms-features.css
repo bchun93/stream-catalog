@@ -205,6 +205,51 @@
   }
 }
 
+.token-dialog-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 70%);
+}
+
+.token-dialog {
+  width: min(100%, 460px);
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 45%);
+}
+
+.token-dialog h2 {
+  margin: 0 0 0.5rem;
+}
+
+.token-dialog p {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.token-dialog input {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.token-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .empty {
   padding: 2rem;
   text-align: center;

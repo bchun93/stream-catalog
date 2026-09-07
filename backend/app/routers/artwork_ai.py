@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import require_db
+from app.deps import require_admin_token, require_db
 from app.schemas.artwork_ai import (
     ArtworkAutoAssignRequest,
     ArtworkAutoAssignResponse,
@@ -25,6 +25,7 @@ async def classify_title_artwork(
     threshold: float = Query(0.9, ge=0.0, le=1.0),
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     title = title_service.get_title(db, title_id)
     if not title:
@@ -53,6 +54,7 @@ async def auto_assign_title_artwork(
     payload: ArtworkAutoAssignRequest | None = None,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     title = title_service.get_title(db, title_id)
     if not title:
@@ -89,6 +91,7 @@ def record_artwork_label(
     payload: ArtworkLabelRequest,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     if payload.title_id and not title_service.get_title(db, payload.title_id):
         raise HTTPException(status_code=404, detail="Title not found")

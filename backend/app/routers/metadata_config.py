@@ -3,7 +3,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import require_db
+from app.deps import require_admin_token, require_db
 from app.schemas.metadata_config import MetadataConfigRead, MetadataConfigUpdate
 from app.services import metadata_config_service
 
@@ -26,6 +26,7 @@ def update_metadata_config(
     payload: MetadataConfigUpdate,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     try:
         return metadata_config_service.update_config(db, payload.settings)

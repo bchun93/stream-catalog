@@ -326,7 +326,10 @@ Do **not** set `AWS_ENDPOINT_URL` in production.
 | Variable | Notes |
 |----------|-------|
 | `VITE_API_URL` | Render API URL |
-| `VITE_ADMIN_API_KEY` | Same value as `ADMIN_API_KEY` (existing app pattern) |
+
+Do not publish `ADMIN_API_KEY` or `INGEST_OPERATOR_TOKEN` as `VITE_*`
+variables. Relay requests the corresponding Render token at runtime and keeps
+it only in the current browser tab.
 
 ### GitHub Actions — scheduled consumer
 
@@ -385,7 +388,7 @@ Tests unset `AWS_ENDPOINT_URL` internally so they do not hit MinIO.
 | Drain → 0 processed | Empty queue or wrong queue URL | Confirm `REKOGNITION_SQS_QUEUE_URL`; check SNS subscription in AWS console |
 | AccessDenied on Start* | IAM / PassRole | Re-run IAM sections in `REKOGNITION_AWS_SETUP.md`; ensure app user has `iam:PassRole` on the service role |
 | S3 picker empty | MinIO not running or wrong bucket | Start `./scripts/dev.sh`; check `INGEST_S3_BUCKET` and operator token |
-| Admin actions fail | Token mismatch | `VITE_ADMIN_API_KEY` must equal `ADMIN_API_KEY`; restart Vite after `.env.local` change |
+| Admin actions fail | Missing or stale runtime token | Enter Render’s `ADMIN_API_KEY` when Relay prompts, then retry the action |
 
 ### Inspect the SQS queue
 
@@ -405,7 +408,7 @@ See section 8 of [`REKOGNITION_AWS_SETUP.md`](./REKOGNITION_AWS_SETUP.md) for re
 
 | Variable | Required for Analyze | Required for Drain/Consume | Browser |
 |----------|---------------------|---------------------------|---------|
-| `ADMIN_API_KEY` | Yes | Yes (Drain now) | via `VITE_ADMIN_API_KEY` |
+| `ADMIN_API_KEY` | Yes | Yes (Drain now) | Runtime prompt; current browser tab only |
 | `REKOGNITION_CONSUMER_SECRET` | No | Yes (cron / consume endpoint) | Never |
 | `REKOGNITION_ROLE_ARN` | Yes | No | No |
 | `REKOGNITION_SNS_TOPIC_ARN` | Yes | No | No |

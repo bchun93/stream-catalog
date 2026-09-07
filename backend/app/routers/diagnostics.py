@@ -46,7 +46,8 @@ def _hints(
         hints.append("INGEST_S3_BUCKET is not set. Ingest jobs cannot read delivery files yet.")
     if not ingest_token_required:
         hints.append(
-            "INGEST_OPERATOR_TOKEN is not set. Ingest endpoints are currently unprotected."
+            "INGEST_OPERATOR_TOKEN is not set. S3 ingest endpoints remain unavailable "
+            "until it is configured."
         )
     hints.append(
         "Amplify VITE_API_URL is baked in at build time — changing it in Amplify requires a full redeploy."

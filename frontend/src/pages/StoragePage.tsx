@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 
 import { storageApi } from "../api/client";
 import { OperatorTokenPrompt } from "../components/OperatorTokenPrompt";
@@ -141,6 +142,16 @@ export function StoragePage() {
           </p>
         </div>
         <div className="storage-header-actions">
+          {prefix && (
+            <button
+              className="btn btn-ghost"
+              disabled={loading}
+              onClick={() => void loadBrowse("")}
+            >
+              <ArrowLeft size={16} aria-hidden />
+              Back to S3 root
+            </button>
+          )}
           <button
             className="btn btn-primary"
             disabled={uploading || loading}

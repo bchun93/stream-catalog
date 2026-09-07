@@ -106,9 +106,13 @@ export function UploadPage() {
               storageUri: presigned.storage_uri,
             });
           } catch (e) {
+            const message = e instanceof Error ? e.message : "Upload failed";
+            if (message.toLowerCase().includes("ingest operator token")) {
+              setConfigError(message);
+            }
             updateItem(item.id, {
               status: "error",
-              error: e instanceof Error ? e.message : "Upload failed",
+              error: message,
             });
           }
         }

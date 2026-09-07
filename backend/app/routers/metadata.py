@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.deps import require_db
+from app.deps import require_admin_token, require_db
 from app.models.title import TitleType
 from app.schemas.metadata import (
     MetadataSearchResult,
@@ -109,6 +109,7 @@ async def metadata_import_hierarchy_apply(
     external_id: str = Query(..., description="TMDB id, e.g. tmdb:tv:90296"),
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
+    __: None = Depends(require_admin_token),
 ):
     media_type, tmdb_id = parse_external_id(external_id)
     if media_type != "tv":

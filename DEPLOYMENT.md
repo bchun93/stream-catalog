@@ -104,9 +104,10 @@ Render was building from the repo root but looking for `Dockerfile` there. The r
 |------|--------|
 | `VITE_API_URL` | `https://stream-catalog.onrender.com` (your Render URL, no trailing slash) |
 
-Do **not** add `INGEST_OPERATOR_TOKEN` as a `VITE_*` Amplify variable: Vite
-embeds those values in public JavaScript. Upload, Storage, and Ingest prompt
-for the Render token at runtime and keep it only in the current browser tab.
+Do **not** add `INGEST_OPERATOR_TOKEN` or `ADMIN_API_KEY` as `VITE_*` Amplify
+variables: Vite embeds those values in public JavaScript. The UI prompts for
+the corresponding Render token at runtime and keeps it only in the current
+browser tab.
 
 4. Deploy. Build **fails** if `VITE_API_URL` is missing (by design).
 

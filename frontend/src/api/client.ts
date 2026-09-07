@@ -45,13 +45,17 @@ const REQUEST_TIMEOUT_MS = IS_PROD ? 90000 : 30000;
 const WAKE_ATTEMPT_TIMEOUT_MS = IS_PROD ? 12000 : 8000;
 const WAKE_POLL_INTERVAL_MS = 2000;
 const WAKE_MAX_ATTEMPTS = IS_PROD ? 25 : 8;
-const BUILD_TIME_INGEST_OPERATOR_TOKEN = (
-  import.meta.env.VITE_INGEST_OPERATOR_TOKEN as string | undefined
-)?.trim();
+const BUILD_TIME_INGEST_OPERATOR_TOKEN = import.meta.env.DEV
+  ? (import.meta.env.VITE_INGEST_OPERATOR_TOKEN as string | undefined)?.trim()
+  : undefined;
 const INGEST_OPERATOR_TOKEN_STORAGE_KEY = "relay.ingestOperatorToken";
-const ADMIN_API_KEY = (
-  import.meta.env.VITE_ADMIN_API_KEY as string | undefined
-)?.trim();
+const BUILD_TIME_ADMIN_API_KEY = import.meta.env.DEV
+  ? (import.meta.env.VITE_ADMIN_API_KEY as string | undefined)?.trim()
+  : undefined;
+const ADMIN_API_KEY_STORAGE_KEY = "relay.adminApiKey";
+export const ADMIN_TOKEN_REQUIRED_EVENT = "relay:admin-token-required";
+let memoryIngestOperatorToken = "";
+let memoryAdminApiKey = "";
 
 function rootUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
@@ -136,16 +140,18 @@ export function getIngestOperatorToken(): string {
   try {
     return (
       sessionStorage.getItem(INGEST_OPERATOR_TOKEN_STORAGE_KEY)?.trim() ||
+      memoryIngestOperatorToken ||
       BUILD_TIME_INGEST_OPERATOR_TOKEN ||
       ""
     );
   } catch {
-    return BUILD_TIME_INGEST_OPERATOR_TOKEN || "";
+    return memoryIngestOperatorToken || BUILD_TIME_INGEST_OPERATOR_TOKEN || "";
   }
 }
 
 export function setIngestOperatorToken(token: string): void {
   const value = token.trim();
+  memoryIngestOperatorToken = value;
   try {
     if (value) {
       sessionStorage.setItem(INGEST_OPERATOR_TOKEN_STORAGE_KEY, value);
@@ -154,6 +160,33 @@ export function setIngestOperatorToken(token: string): void {
     }
   } catch {
     // Requests can still use the build-time local-development fallback.
+  }
+}
+
+export function getAdminApiKey(): string {
+  try {
+    return (
+      sessionStorage.getItem(ADMIN_API_KEY_STORAGE_KEY)?.trim() ||
+      memoryAdminApiKey ||
+      BUILD_TIME_ADMIN_API_KEY ||
+      ""
+    );
+  } catch {
+    return memoryAdminApiKey || BUILD_TIME_ADMIN_API_KEY || "";
+  }
+}
+
+export function setAdminApiKey(token: string): void {
+  const value = token.trim();
+  memoryAdminApiKey = value;
+  try {
+    if (value) {
+      sessionStorage.setItem(ADMIN_API_KEY_STORAGE_KEY, value);
+    } else {
+      sessionStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY);
+    }
+  } catch {
+    // The in-memory value remains available for this page session.
   }
 }
 
@@ -200,8 +233,9 @@ function buildHeaders(init?: RequestInit): HeadersInit {
   if (hasBody && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (ADMIN_API_KEY && method !== "GET" && method !== "HEAD") {
-    headers.set("X-Admin-Token", ADMIN_API_KEY);
+  const adminApiKey = getAdminApiKey();
+  if (adminApiKey && method !== "GET" && method !== "HEAD") {
+    headers.set("X-Admin-Token", adminApiKey);
   }
   return headers;
 }
@@ -271,6 +305,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         "API route not found. Redeploy Render from latest main and verify /api/v1 is live."
       );
     }
+    if (res.status === 403 && detail.toLowerCase().includes("admin token")) {
+      window.dispatchEvent(new Event(ADMIN_TOKEN_REQUIRED_EVENT));
+    }
     throw new Error(formatApiError(path, res.status, detail));
   }
   if (res.status === 204) return undefined as T;
@@ -314,10 +351,7 @@ function formatApiError(path: string, status: number, detail: string): string {
   }
 
   if (status === 403 && lower.includes("admin token")) {
-    return (
-      "Admin API key required. Set ADMIN_API_KEY on Render and VITE_ADMIN_API_KEY " +
-      "in Amplify (same value), then redeploy both."
-    );
+    return "Admin API key required. Enter the ADMIN_API_KEY from Render, then retry.";
   }
 
   if (

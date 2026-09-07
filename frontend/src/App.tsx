@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Menu } from "lucide-react";
 import { Route, Routes, useLocation } from "react-router-dom";
+import { ADMIN_TOKEN_REQUIRED_EVENT } from "./api/client";
+import { AdminTokenPrompt } from "./components/AdminTokenPrompt";
 import { ApiWakeBanner } from "./components/ApiWakeBanner";
 import { RelayMark } from "./components/brand/RelayMark";
 import { Sidebar } from "./components/layout/Sidebar";
@@ -17,6 +19,7 @@ import { UploadPage } from "./pages/UploadPage";
 
 export default function App() {
   const [navOpen, setNavOpen] = useState(false);
+  const [adminTokenRequired, setAdminTokenRequired] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -28,9 +31,19 @@ export default function App() {
     return () => document.body.classList.remove("nav-open");
   }, [navOpen]);
 
+  useEffect(() => {
+    const showAdminTokenPrompt = () => setAdminTokenRequired(true);
+    window.addEventListener(ADMIN_TOKEN_REQUIRED_EVENT, showAdminTokenPrompt);
+    return () =>
+      window.removeEventListener(ADMIN_TOKEN_REQUIRED_EVENT, showAdminTokenPrompt);
+  }, []);
+
   return (
     <ApiWakeProvider>
       <div className="app-shell">
+        {adminTokenRequired && (
+          <AdminTokenPrompt onClose={() => setAdminTokenRequired(false)} />
+        )}
         <button
           type="button"
           className={`sidebar-backdrop${navOpen ? " visible" : ""}`}

@@ -6,7 +6,7 @@ export const NAV_ITEMS = [
   { path: "/assets", label: "Media assets" },
   { path: "/delivery", label: "Delivery" },
   { path: "/upload", label: "Upload" },
-  { path: "/storage", label: "Storage", hidden: true },
+  { path: "/storage", label: "S3 Browser" },
   { path: "/ai-training", label: "AI training", hidden: true },
 ] as const;
 

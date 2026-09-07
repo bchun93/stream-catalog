@@ -1,5 +1,13 @@
 import { NavLink } from "react-router-dom";
-import { Film, HardDrive, LayoutDashboard, Package, Upload, X } from "lucide-react";
+import {
+  Film,
+  FolderOpen,
+  HardDrive,
+  LayoutDashboard,
+  Package,
+  Upload,
+  X,
+} from "lucide-react";
 import { RelayMark } from "../brand/RelayMark";
 import { VISIBLE_NAV_ITEMS } from "../../navConfig";
 import { ApiStatus } from "../ApiStatus";
@@ -10,6 +18,7 @@ const NAV_ICONS: Record<string, typeof LayoutDashboard> = {
   "/assets": HardDrive,
   "/delivery": Package,
   "/upload": Upload,
+  "/storage": FolderOpen,
 };
 
 interface SidebarProps {
