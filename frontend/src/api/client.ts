@@ -45,9 +45,10 @@ const REQUEST_TIMEOUT_MS = IS_PROD ? 90000 : 30000;
 const WAKE_ATTEMPT_TIMEOUT_MS = IS_PROD ? 12000 : 8000;
 const WAKE_POLL_INTERVAL_MS = 2000;
 const WAKE_MAX_ATTEMPTS = IS_PROD ? 25 : 8;
-const INGEST_OPERATOR_TOKEN = (
+const BUILD_TIME_INGEST_OPERATOR_TOKEN = (
   import.meta.env.VITE_INGEST_OPERATOR_TOKEN as string | undefined
 )?.trim();
+const INGEST_OPERATOR_TOKEN_STORAGE_KEY = "relay.ingestOperatorToken";
 const ADMIN_API_KEY = (
   import.meta.env.VITE_ADMIN_API_KEY as string | undefined
 )?.trim();
@@ -131,8 +132,34 @@ export function ensureApiWarm(): Promise<ApiHealth> {
   return warmPromise;
 }
 
+export function getIngestOperatorToken(): string {
+  try {
+    return (
+      sessionStorage.getItem(INGEST_OPERATOR_TOKEN_STORAGE_KEY)?.trim() ||
+      BUILD_TIME_INGEST_OPERATOR_TOKEN ||
+      ""
+    );
+  } catch {
+    return BUILD_TIME_INGEST_OPERATOR_TOKEN || "";
+  }
+}
+
+export function setIngestOperatorToken(token: string): void {
+  const value = token.trim();
+  try {
+    if (value) {
+      sessionStorage.setItem(INGEST_OPERATOR_TOKEN_STORAGE_KEY, value);
+    } else {
+      sessionStorage.removeItem(INGEST_OPERATOR_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // Requests can still use the build-time local-development fallback.
+  }
+}
+
 function operatorHeaders(): HeadersInit {
-  return INGEST_OPERATOR_TOKEN ? { "X-Ingest-Token": INGEST_OPERATOR_TOKEN } : {};
+  const token = getIngestOperatorToken();
+  return token ? { "X-Ingest-Token": token } : {};
 }
 
 function isArtworkRouteDatabaseError(message: string): boolean {

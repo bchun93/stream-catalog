@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { storageApi } from "../api/client";
+import { OperatorTokenPrompt } from "../components/OperatorTokenPrompt";
 import type { StorageBrowse, StorageConfig, StorageObject } from "../types";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"]);
@@ -127,6 +128,8 @@ export function StoragePage() {
       ? `s3://${config.bucket}/${config.root_prefix}/`
       : `s3://${config.bucket}/`
     : "S3 bucket";
+  const needsOperatorToken =
+    error?.toLowerCase().includes("ingest operator token") ?? false;
 
   return (
     <>
@@ -162,14 +165,12 @@ export function StoragePage() {
         </div>
       </header>
 
-      {error && <div className="error-banner">{error}</div>}
-      {uploadStatus && <div className="storage-status-banner">{uploadStatus}</div>}
-      {config?.token_required && !import.meta.env.VITE_INGEST_OPERATOR_TOKEN && (
-        <div className="error-banner">
-          Set <code>VITE_INGEST_OPERATOR_TOKEN</code> in <code>frontend/.env.local</code> to match
-          Render <code>INGEST_OPERATOR_TOKEN</code>.
-        </div>
+      {needsOperatorToken ? (
+        <OperatorTokenPrompt onSaved={() => void loadBrowse(prefix)} />
+      ) : (
+        error && <div className="error-banner">{error}</div>
       )}
+      {uploadStatus && <div className="storage-status-banner">{uploadStatus}</div>}
 
       <div className="storage-layout">
         <section className="card storage-browser-card">
