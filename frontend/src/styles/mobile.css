@@ -550,4 +550,34 @@
   .tree-item {
     flex-wrap: wrap;
   }
+
+  .arch-topo {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .arch-connector {
+    padding-top: 0;
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+
+  .arch-flow {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+
+  .arch-chain {
+    flex-direction: column;
+  }
+
+  .arch-chain-item {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .arch-chain-arrow {
+    transform: rotate(90deg);
+    align-self: center;
+  }
 }

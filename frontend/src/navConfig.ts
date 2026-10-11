@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
   { path: "/upload", label: "Upload" },
   { path: "/storage", label: "S3 Browser" },
   { path: "/ai-training", label: "AI training", hidden: true },
+  { path: "/architecture", label: "Architecture", hidden: true },
 ] as const;
 
 export const VISIBLE_NAV_ITEMS = NAV_ITEMS.filter(
