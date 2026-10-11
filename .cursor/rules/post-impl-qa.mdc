@@ -1,0 +1,28 @@
+---
+description: Mandatory QA handoff to qa-tester after implementing or fixing product code
+alwaysApply: true
+---
+
+# Post-implementation QA (mandatory)
+
+When you have **finished implementing or fixing** product code (new or changed files under `backend/app/` or `frontend/src/` except tests), you MUST complete this workflow **before** saying the task is done.
+
+Does **not** apply to plan-only work, questions, or docs-only changes. Does **not** replace pre-push review (code-reviewer + wolverine).
+
+## 1. Summarize the change
+Intended behavior in one short paragraph, plus affected routes or API endpoints.
+
+## 2. Launch qa-tester (required)
+Launch the **qa-tester** subagent (`subagent_type: qa-tester`) and pass:
+- The summary from step 1
+- Changed files / `git diff`
+- How to start the app if servers are not already running (`scripts/dev.sh`; UI `http://localhost:5173`, API `http://127.0.0.1:8000`)
+
+Wait for its report. Do not declare done while it is still running.
+
+## 3. Act on the report
+- **Fail / Blocking**: fix **product** code, keep any tests qa-tester added, then re-run qa-tester.
+- **Pass with notes**: address notes if quick; otherwise mention them when wrapping up.
+- **Pass**: you may say the task is complete.
+
+Do **not** declare done while blocking QA remains unless the user **explicitly** overrides after seeing the report.

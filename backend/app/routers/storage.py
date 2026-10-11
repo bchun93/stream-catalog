@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from botocore.exceptions import ClientError, EndpointConnectionError
 
 from app.config import settings
 from app.deps import require_ingest_operator_token
@@ -9,6 +10,8 @@ from app.schemas.storage import (
     StorageConfigRead,
     StorageFolderRead,
     StorageObjectRead,
+    StorageObjectMutationRead,
+    StorageObjectRenameRequest,
     StoragePresignDownloadRead,
     StoragePresignUploadRead,
     StoragePresignUploadRequest,
@@ -31,6 +34,7 @@ def _to_browse_read(result: s3_service.S3BrowseResult) -> StorageBrowseRead:
                 name=obj.name,
                 size_bytes=obj.size_bytes,
                 last_modified=obj.last_modified,
+                etag=obj.etag or "",
                 storage_uri=s3_service.storage_uri(obj.key),
             )
             for obj in result.objects
@@ -64,6 +68,15 @@ def browse_storage(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except EndpointConnectionError as exc:
+        logger.exception("browse_storage failed")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "S3 is unreachable from this API process (DNS or network). "
+                "Restart the backend after sleep, VPN, or Wi-Fi changes."
+            ),
+        ) from exc
     except Exception as exc:
         logger.exception("browse_storage failed")
         raise HTTPException(status_code=503, detail=f"S3 browse failed: {exc}") from exc
@@ -105,7 +118,7 @@ def presign_download(
     try:
         url = s3_service.presign_download(key)
     except ValueError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
@@ -116,3 +129,70 @@ def presign_download(
         key=key,
         storage_uri=s3_service.storage_uri(key),
     )
+
+
+def _raise_s3_mutation_error(operation: str, exc: ClientError) -> None:
+    code = str(exc.response.get("Error", {}).get("Code", ""))
+    status = 403 if code in {"AccessDenied", "AllAccessDisabled"} else 503
+    logger.exception("S3 %s failed with AWS error %s", operation, code or "unknown")
+    raise HTTPException(
+        status_code=status,
+        detail=(
+            f"S3 permission denied while attempting to {operation} the object."
+            if status == 403
+            else f"S3 {operation} failed. Retry or check the server logs."
+        ),
+    ) from exc
+
+
+@router.patch("/objects/rename", response_model=StorageObjectMutationRead)
+def rename_storage_object(
+    payload: StorageObjectRenameRequest,
+    _: None = Depends(require_ingest_operator_token),
+):
+    try:
+        key, uri = s3_service.rename_object(
+            payload.key,
+            payload.new_name,
+            payload.expected_etag,
+            payload.expected_size,
+        )
+        return StorageObjectMutationRead(key=key, storage_uri=uri)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except s3_service.StaleObjectError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ClientError as exc:
+        _raise_s3_mutation_error("rename", exc)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("rename_storage_object failed")
+        raise HTTPException(status_code=503, detail="S3 rename failed.") from exc
+
+
+@router.delete("/objects", status_code=204)
+def delete_storage_object(
+    key: str = Query(..., min_length=1),
+    expected_etag: str = Query(..., min_length=1),
+    _: None = Depends(require_ingest_operator_token),
+):
+    try:
+        s3_service.delete_object(key, expected_etag)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except s3_service.StaleObjectError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ClientError as exc:
+        _raise_s3_mutation_error("delete", exc)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("delete_storage_object failed")
+        raise HTTPException(status_code=503, detail="S3 delete failed.") from exc

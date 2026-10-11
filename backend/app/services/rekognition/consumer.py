@@ -24,7 +24,8 @@ from typing import TYPE_CHECKING, Any
 from app.config import settings
 from app.services.aws_clients import rekognition_client, sqs_client
 from app.services.rekognition import ddb
-from app.services.rekognition.constants import Feature, JobStatus
+from app.services.rekognition.constants import EVALUATION_FEATURES, Feature, JobStatus
+from app.services.rekognition.evaluate import Finding, evaluate
 
 if TYPE_CHECKING:
     from mypy_boto3_rekognition.client import RekognitionClient
@@ -100,14 +101,21 @@ def _identify(notification: dict[str, Any]) -> tuple[str, Feature] | None:
 
 def _collect_segments(
     rek: "RekognitionClient", job_id: str, asset_id: str
-) -> list[ddb.DetectionItem]:
+) -> tuple[list[ddb.DetectionItem], dict[str, Any] | None, dict[str, Any] | None]:
     items: list[ddb.DetectionItem] = []
     token: str | None = None
+    video_metadata: dict[str, Any] | None = None
+    audio_metadata: dict[str, Any] | None = None
+    first_page = True
     while True:
         kwargs: dict[str, Any] = {"JobId": job_id, "MaxResults": _PAGE_SIZE}
         if token:
             kwargs["NextToken"] = token
         resp = rek.get_segment_detection(**kwargs)
+        if first_page:
+            video_metadata = _first_metadata(resp, "VideoMetadata")
+            audio_metadata = _first_metadata(resp, "AudioMetadata")
+            first_page = False
         for seg in resp.get("Segments", []):
             seg_type = seg.get("Type")
             start_ms = seg.get("StartTimestampMillis")
@@ -131,6 +139,53 @@ def _collect_segments(
                     confidence=confidence,
                     start_ms=start_ms,
                     end_ms=end_ms,
+                    start_timecode=seg.get("StartTimecodeSMPTE"),
+                    end_timecode=seg.get("EndTimecodeSMPTE"),
+                    job_id=job_id,
+                    created_at=_now_iso(),
+                )
+            )
+        token = resp.get("NextToken")
+        if not token:
+            break
+    return items, video_metadata, audio_metadata
+
+
+def _first_metadata(resp: dict[str, Any], key: str) -> dict[str, Any] | None:
+    values = resp.get(key) or []
+    if values and isinstance(values[0], dict):
+        return values[0]
+    return None
+
+
+def _collect_text(
+    rek: "RekognitionClient", job_id: str, asset_id: str
+) -> list[ddb.DetectionItem]:
+    items: list[ddb.DetectionItem] = []
+    token: str | None = None
+    while True:
+        kwargs: dict[str, Any] = {"JobId": job_id, "MaxResults": _PAGE_SIZE}
+        if token:
+            kwargs["NextToken"] = token
+        resp = rek.get_text_detection(**kwargs)
+        for entry in resp.get("TextDetections", []):
+            ts = entry.get("Timestamp")
+            det = entry.get("TextDetection") or {}
+            text = det.get("DetectedText") or ""
+            kind = det.get("Type") or "text"
+            geometry = det.get("Geometry") or {}
+            bbox = geometry.get("BoundingBox")
+            seed = f"{kind}|{text}|{ts}"
+            items.append(
+                ddb.DetectionItem(
+                    asset_id=asset_id,
+                    sk=ddb.build_detection_sk(Feature.TEXT, ts, seed),
+                    feature=Feature.TEXT.value,
+                    kind=kind,
+                    name=text,
+                    confidence=det.get("Confidence"),
+                    timestamp_ms=ts,
+                    bounding_box=bbox,
                     job_id=job_id,
                     created_at=_now_iso(),
                 )
@@ -214,9 +269,9 @@ def _collect_labels(
 
 
 _COLLECTORS = {
-    Feature.SEGMENT: _collect_segments,
     Feature.MODERATION: _collect_moderation,
     Feature.LABELS: _collect_labels,
+    Feature.TEXT: _collect_text,
 }
 
 
@@ -253,18 +308,124 @@ def process_completion(message_body: str) -> ProcessOutcome:
         return ProcessOutcome(ok=True, summary=f"ignored status {status} for {job_id}", job_id=job_id)
 
     rek = rekognition_client()
-    detections = _COLLECTORS[feature](rek, job_id, asset_id)
+    video_metadata = None
+    audio_metadata = None
+    if feature is Feature.SEGMENT:
+        detections, video_metadata, audio_metadata = _collect_segments(rek, job_id, asset_id)
+    else:
+        collector = _COLLECTORS.get(feature)
+        if collector is None:
+            return ProcessOutcome(
+                ok=True,
+                summary=f"ignored unsupported feature {feature.value}",
+                job_id=job_id,
+            )
+        detections = collector(rek, job_id, asset_id)
     written = ddb.batch_put_detections(detections)
-    ddb.update_job_status(asset_id=asset_id, feature=feature, status=JobStatus.SUCCEEDED)
+    ddb.update_job_status(
+        asset_id=asset_id,
+        feature=feature,
+        status=JobStatus.SUCCEEDED,
+        video_metadata=video_metadata,
+        audio_metadata=audio_metadata,
+    )
+    finding_count = _maybe_evaluate(asset_id)
     logger.info(
         "rekognition job SUCCEEDED",
-        extra={"aws_job_id": job_id, "asset_id": asset_id, "feature": feature.value, "detections": written},
+        extra={
+            "aws_job_id": job_id,
+            "asset_id": asset_id,
+            "feature": feature.value,
+            "detections": written,
+            "findings": finding_count,
+        },
     )
+    extra = f", {finding_count} findings" if finding_count is not None else ""
     return ProcessOutcome(
         ok=True,
-        summary=f"{feature.value} job {job_id} SUCCEEDED, {written} detections",
+        summary=f"{feature.value} job {job_id} SUCCEEDED, {written} detections{extra}",
         job_id=job_id,
     )
+
+
+def _load_asset_qc_context(asset_id: str) -> tuple[float | None, str | None]:
+    try:
+        pk = int(asset_id)
+    except ValueError:
+        return None, None
+    try:
+        from app.database import SessionLocal
+        from app.models.media_asset import MediaAsset
+        from app.models.title import Title
+    except Exception:
+        logger.debug("asset QC context imports unavailable", exc_info=True)
+        return None, None
+    db = SessionLocal()
+    try:
+        asset = db.query(MediaAsset).filter(MediaAsset.id == pk).first()
+        if not asset:
+            return None, None
+        rating = None
+        if asset.title_id:
+            title = db.query(Title).filter(Title.id == asset.title_id).first()
+            rating = title.rating if title else None
+        duration = asset.duration_seconds
+        return (float(duration) if duration is not None else None), rating
+    except Exception:
+        logger.exception("asset QC context load failed for %s", asset_id)
+        return None, None
+    finally:
+        db.close()
+
+
+def _findings_to_items(asset_id: str, findings: list[Finding]) -> list[ddb.DetectionItem]:
+    now = _now_iso()
+    items: list[ddb.DetectionItem] = []
+    for finding in findings:
+        seed = f"{finding.rule_id}|{finding.start_ms}|{finding.message}"
+        items.append(
+            ddb.DetectionItem(
+                asset_id=asset_id,
+                sk=ddb.build_detection_sk(Feature.FINDING, finding.start_ms, seed),
+                feature=Feature.FINDING.value,
+                kind=finding.rule_id,
+                name=finding.severity,
+                rule_id=finding.rule_id,
+                severity=finding.severity,
+                message=finding.message,
+                start_ms=finding.start_ms,
+                end_ms=finding.end_ms,
+                evidence=finding.evidence,
+                created_at=now,
+            )
+        )
+    return items
+
+
+def _maybe_evaluate(asset_id: str) -> int | None:
+    jobs = {job.get("feature"): job for job in ddb.list_jobs_for_asset(asset_id)}
+    if any(
+        (jobs.get(feature.value) or {}).get("status") != JobStatus.SUCCEEDED.value
+        for feature in EVALUATION_FEATURES
+    ):
+        return None
+    detections = ddb.query_detections(asset_id=asset_id)
+    segment_job = jobs.get(Feature.SEGMENT.value) or {}
+    duration, rating = _load_asset_qc_context(asset_id)
+    findings = evaluate(
+        detections,
+        media_meta={
+            "video": segment_job.get("video_metadata"),
+            "audio": segment_job.get("audio_metadata"),
+        },
+        title_rating=rating,
+        asset_duration_seconds=duration,
+    )
+    items = _findings_to_items(asset_id, findings)
+    ddb.replace_feature_detections(
+        asset_id=asset_id, feature=Feature.FINDING, items=items
+    )
+    return len(items)
 
 
 def drain_queue(*, max_batches: int = 10, wait_time_seconds: int = 10) -> DrainResult:

@@ -16,7 +16,7 @@ Run in parallel:
 ## 2. Run both subagents (required)
 Launch **in parallel** (readonly):
 - **code-reviewer** — correctness, edge cases, conventions, production readiness
-- **security-auditor** — auth, secrets, injection, CORS, SSRF, trust boundaries
+- **wolverine** — auth, secrets, injection, CORS, SSRF, trust boundaries, DevTools/bundle exposure
 
 Pass each agent the full diff/commits to be pushed and relevant project context (FastAPI backend, React/Vite frontend, Neon PostgreSQL, Render + Amplify).
 

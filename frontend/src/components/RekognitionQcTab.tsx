@@ -14,9 +14,10 @@ import { RekognitionResults } from "./RekognitionResults";
 import { RekognitionVideoPicker } from "./RekognitionVideoPicker";
 
 const FEATURES: { key: RekognitionFeature; label: string; hint: string }[] = [
-  { key: "SEGMENT", label: "Segments", hint: "Technical cues & shots (QC markers)" },
-  { key: "MODERATION", label: "Moderation", hint: "Content compliance flags" },
+  { key: "SEGMENT", label: "Segments", hint: "Program structure on the proxy" },
+  { key: "MODERATION", label: "Moderation", hint: "Visual ratings / brand safety" },
   { key: "LABELS", label: "Labels", hint: "On-screen objects & scenes" },
+  { key: "TEXT", label: "Text", hint: "Burned-in titles, slates, captions" },
 ];
 
 function jobBadge(status?: string) {
@@ -107,8 +108,9 @@ export function RekognitionQcTab({ asset }: { asset: MediaAsset }) {
     <div className="reko-qc">
       <div className="reko-qc-intro">
         <p className="text-secondary">
-          Run Amazon Rekognition Video on the H.264 MP4 proxy. Jobs run asynchronously;
-          status updates arrive via the completion consumer (no polling).
+          Picture QC on the H.264 MP4/MOV proxy — program structure, on-screen text,
+          and visual ratings. This is not master, IMF, loudness, or audio QC. Jobs run
+          asynchronously; drain the queue or wait for the consumer.
         </p>
       </div>
 

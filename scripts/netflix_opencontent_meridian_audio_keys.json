@@ -1,0 +1,43 @@
+{
+  "source_bucket": "download.opencontent.netflix.com",
+  "dest_bucket": "stream-catalog-ingest",
+  "dest_prefix": "deliveries/inbound/netflix-opencontent",
+  "hard_ceiling_bytes": 21474836480,
+  "objects": [
+    {
+      "group": "audio_adm",
+      "title": "meridian",
+      "key": "Meridian/audio/DAMF/Meridian.atmos",
+      "size": 3174,
+      "etag": "c99e961c63e77c1dcaa19ced4b49ee11"
+    },
+    {
+      "group": "audio_adm",
+      "title": "meridian",
+      "key": "Meridian/audio/DAMF/Meridian.atmos.audio",
+      "size": 6339132076,
+      "etag": "4b87490362255474c1e599943c8b89dc-756"
+    },
+    {
+      "group": "audio_adm",
+      "title": "meridian",
+      "key": "Meridian/audio/DAMF/Meridian.atmos.metadata",
+      "size": 1911589,
+      "etag": "7e790dd51e4c8788f448f66ca3785714"
+    },
+    {
+      "group": "audio_adm",
+      "title": "meridian",
+      "key": "Meridian/audio/atmos/Meridian_ADMFromDAMF_JAN2021.wav",
+      "size": 6351523402,
+      "etag": "74486517dec3318f669b7f8c3dc32230-758"
+    },
+    {
+      "group": "audio_adm",
+      "title": "meridian",
+      "key": "TechblogAssets/Meridian/Meridian_Atmos/MERIDIAN_ATMOS.wav",
+      "size": 6013097448,
+      "etag": "87d56ac793e4f81441f7e5839604f6d2-359"
+    }
+  ]
+}

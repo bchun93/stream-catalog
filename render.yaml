@@ -27,6 +27,8 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
+      - key: S3_MUTATION_SECRET
+        sync: false
       - key: AWS_REGION
         sync: false
       - key: SEED_ON_STARTUP

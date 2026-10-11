@@ -19,6 +19,7 @@ class StorageObjectRead(BaseModel):
     name: str
     size_bytes: int | None = None
     last_modified: datetime | None = None
+    etag: str
     storage_uri: str
 
 
@@ -47,5 +48,17 @@ class StoragePresignUploadRead(BaseModel):
 
 class StoragePresignDownloadRead(BaseModel):
     download_url: str
+    key: str
+    storage_uri: str
+
+
+class StorageObjectRenameRequest(BaseModel):
+    key: str = Field(min_length=1)
+    new_name: str = Field(min_length=1, max_length=255)
+    expected_etag: str = Field(min_length=1)
+    expected_size: int = Field(ge=0)
+
+
+class StorageObjectMutationRead(BaseModel):
     key: str
     storage_uri: str

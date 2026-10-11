@@ -1559,3 +1559,95 @@
   padding: 1px 6px;
   font-size: 0.6875rem;
 }
+.reko-report-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.reko-report-head h3 {
+  margin: 0 0 var(--space-1);
+  font-size: 0.9375rem;
+}
+.reko-report-head p {
+  margin: 0;
+}
+.reko-report-stats {
+  display: flex;
+  gap: var(--space-4);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.reko-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+.reko-meta dt {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+.reko-meta dd {
+  margin: 2px 0 0;
+  font-size: 0.8125rem;
+}
+.reko-outcome {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+}
+.reko-outcome-pass {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.reko-outcome-warning {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.reko-outcome-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.reko-sev {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  text-transform: lowercase;
+  background: var(--bg-inset);
+}
+.reko-sev-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.reko-sev-warning {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.reko-sev-info {
+  background: var(--info-bg);
+  color: var(--info);
+}
+.reko-timecode-btn {
+  background: none;
+  border: none;
+  color: var(--text-link, var(--info));
+  cursor: pointer;
+  padding: 0;
+}
+.reko-timecode-btn:hover {
+  text-decoration: underline;
+}
+.reko-timeline-focus {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+}

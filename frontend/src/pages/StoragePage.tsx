@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink, Pencil, Trash2 } from "lucide-react";
 
 import { storageApi } from "../api/client";
 import { OperatorTokenPrompt } from "../components/OperatorTokenPrompt";
 import type { StorageBrowse, StorageConfig, StorageObject } from "../types";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "m4v", "webm"]);
+const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "aac", "wav", "ogg", "flac"]);
 
 function formatBytes(n?: number | null) {
   if (!n) return "—";
@@ -21,18 +23,28 @@ function formatTimestamp(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-function isImageFile(name: string) {
+function previewKind(name: string): "image" | "video" | "audio" | "other" {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  return IMAGE_EXTENSIONS.has(ext);
+  if (IMAGE_EXTENSIONS.has(ext)) return "image";
+  if (VIDEO_EXTENSIONS.has(ext)) return "video";
+  if (AUDIO_EXTENSIONS.has(ext)) return "audio";
+  return "other";
 }
 
 export function StoragePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const previewRequestRef = useRef(0);
   const [config, setConfig] = useState<StorageConfig | null>(null);
   const [browse, setBrowse] = useState<StorageBrowse | null>(null);
   const [prefix, setPrefix] = useState("");
   const [selected, setSelected] = useState<StorageObject | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [renameName, setRenameName] = useState("");
+  const [checkedKeys, setCheckedKeys] = useState<Set<string>>(() => new Set());
+  const [mutating, setMutating] = useState<"rename" | "delete" | "bulk-delete" | null>(null);
+  const [bulkProgress, setBulkProgress] = useState<{ completed: number; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -51,8 +63,13 @@ export function StoragePage() {
   }, [prefix]);
 
   const loadBrowse = useCallback(async (nextPrefix: string) => {
+    previewRequestRef.current += 1;
     setError(null);
     setLoading(true);
+    setPreviewLoading(false);
+    setSelected(null);
+    setCheckedKeys(new Set());
+    setPreviewUrl(null);
     try {
       const [loadedConfig, loadedBrowse] = await Promise.all([
         storageApi.getConfig(),
@@ -61,8 +78,6 @@ export function StoragePage() {
       setConfig(loadedConfig);
       setBrowse(loadedBrowse);
       setPrefix(nextPrefix);
-      setSelected(null);
-      setPreviewUrl(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load bucket");
     } finally {
@@ -75,19 +90,163 @@ export function StoragePage() {
   }, [loadBrowse]);
 
   const openFolder = (nextPrefix: string) => {
+    if (mutating || loading) return;
     void loadBrowse(nextPrefix);
   };
 
   const selectObject = async (object: StorageObject) => {
+    const requestId = ++previewRequestRef.current;
     setSelected(object);
+    setRenameName(object.name);
     setPreviewUrl(null);
-    if (!isImageFile(object.name)) return;
+    setPreviewLoading(true);
+    setError(null);
     try {
       const presigned = await storageApi.presignDownload(object.key);
-      setPreviewUrl(presigned.download_url);
+      if (previewRequestRef.current === requestId) {
+        setPreviewUrl(presigned.download_url);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load preview");
+      if (previewRequestRef.current === requestId) {
+        setError(e instanceof Error ? e.message : "Failed to load preview");
+      }
+    } finally {
+      if (previewRequestRef.current === requestId) {
+        setPreviewLoading(false);
+      }
     }
+  };
+
+  const openSelected = async () => {
+    if (!selected) return;
+    const newTab = window.open("", "_blank");
+    try {
+      const presigned = await storageApi.presignDownload(selected.key);
+      if (newTab) {
+        newTab.opener = null;
+        newTab.location.href = presigned.download_url;
+      } else {
+        window.location.assign(presigned.download_url);
+      }
+    } catch (e) {
+      newTab?.close();
+      setError(e instanceof Error ? e.message : "Failed to open object");
+    }
+  };
+
+  const renameSelected = async () => {
+    if (!selected || !renameName.trim() || renameName.trim() === selected.name) return;
+    if (selected.size_bytes == null) {
+      setError("Object size is unavailable. Refresh the browser and try again.");
+      return;
+    }
+    setMutating("rename");
+    setError(null);
+    setUploadStatus(null);
+    try {
+      const renamed = await storageApi.renameObject({
+        key: selected.key,
+        new_name: renameName.trim(),
+        expected_etag: selected.etag,
+        expected_size: selected.size_bytes,
+      });
+      setUploadStatus(`Renamed to ${renamed.key.split("/").pop()}.`);
+      await loadBrowse(prefix);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Rename failed");
+    } finally {
+      setMutating(null);
+    }
+  };
+
+  const deleteObject = async (object: StorageObject) => {
+    const confirmed = window.confirm(
+      `Permanently delete "${object.key}" from S3? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setMutating("delete");
+    setError(null);
+    setUploadStatus(null);
+    try {
+      await storageApi.deleteObject(object.key, object.etag);
+      setUploadStatus(`Deleted ${object.name}.`);
+      await loadBrowse(prefix);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setMutating(null);
+    }
+  };
+
+  const deleteCheckedObjects = async () => {
+    const objects = browse?.objects.filter((object) => checkedKeys.has(object.key)) ?? [];
+    if (!objects.length) return;
+    const names = objects
+      .slice(0, 5)
+      .map((object) => `• ${object.name}`)
+      .join("\n");
+    const remaining = objects.length > 5 ? `\n• …and ${objects.length - 5} more` : "";
+    const scope = prefix || "S3 root";
+    const confirmationMessage =
+      `Permanently delete ${objects.length} object${objects.length === 1 ? "" : "s"} ` +
+      `from "${scope}"?\n\n${names}${remaining}\n\nThis cannot be undone.`;
+    const confirmed =
+      objects.length >= 10
+        ? window.prompt(
+            `${confirmationMessage}\n\nType DELETE ${objects.length} to confirm.`,
+          ) === `DELETE ${objects.length}`
+        : window.confirm(confirmationMessage);
+    if (!confirmed) return;
+
+    setMutating("bulk-delete");
+    setBulkProgress({ completed: 0, total: objects.length });
+    setError(null);
+    setUploadStatus(null);
+    let deleted = 0;
+    const failures: string[] = [];
+    const failedKeys = new Set<string>();
+    for (const object of objects) {
+      try {
+        await storageApi.deleteObject(object.key, object.etag);
+        deleted += 1;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Delete failed";
+        failures.push(`${object.name}: ${message}`);
+        failedKeys.add(object.key);
+      }
+      setBulkProgress({ completed: deleted + failures.length, total: objects.length });
+    }
+
+    try {
+      await loadBrowse(prefix);
+      setCheckedKeys(failedKeys);
+      if (deleted) {
+        setUploadStatus(`Deleted ${deleted} object${deleted === 1 ? "" : "s"}.`);
+      }
+      if (failures.length) {
+        setError(
+          `${failures.length} object${failures.length === 1 ? "" : "s"} could not be deleted: ${failures.join("; ")}`,
+        );
+      }
+    } finally {
+      setMutating(null);
+      setBulkProgress(null);
+    }
+  };
+
+  const toggleChecked = (key: string) => {
+    setCheckedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAllVisible = () => {
+    const objects = browse?.objects ?? [];
+    const allSelected = objects.length > 0 && objects.every((object) => checkedKeys.has(object.key));
+    setCheckedKeys(allSelected ? new Set() : new Set(objects.map((object) => object.key)));
   };
 
   const handleUpload = async (files: FileList | null) => {
@@ -131,6 +290,18 @@ export function StoragePage() {
     : "S3 bucket";
   const needsOperatorToken =
     error?.toLowerCase().includes("ingest operator token") ?? false;
+  const selectedPreviewKind = selected ? previewKind(selected.name) : "other";
+  const visibleObjects = browse?.objects ?? [];
+  const allVisibleChecked =
+    visibleObjects.length > 0 && visibleObjects.every((object) => checkedKeys.has(object.key));
+  const someVisibleChecked =
+    !allVisibleChecked && visibleObjects.some((object) => checkedKeys.has(object.key));
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleChecked;
+    }
+  }, [someVisibleChecked]);
 
   return (
     <>
@@ -145,7 +316,7 @@ export function StoragePage() {
           {prefix && (
             <button
               className="btn btn-ghost"
-              disabled={loading}
+              disabled={loading || Boolean(mutating)}
               onClick={() => void loadBrowse("")}
             >
               <ArrowLeft size={16} aria-hidden />
@@ -154,14 +325,14 @@ export function StoragePage() {
           )}
           <button
             className="btn btn-primary"
-            disabled={uploading || loading}
+            disabled={uploading || loading || Boolean(mutating)}
             onClick={() => fileInputRef.current?.click()}
           >
             {uploading ? "Uploading…" : "Upload files"}
           </button>
           <button
             className="btn btn-ghost"
-            disabled={loading}
+            disabled={loading || Boolean(mutating)}
             onClick={() => void loadBrowse(prefix)}
           >
             Refresh
@@ -179,9 +350,13 @@ export function StoragePage() {
       {needsOperatorToken ? (
         <OperatorTokenPrompt onSaved={() => void loadBrowse(prefix)} />
       ) : (
-        error && <div className="error-banner">{error}</div>
+        error && <div className="error-banner" role="alert">{error}</div>
       )}
-      {uploadStatus && <div className="storage-status-banner">{uploadStatus}</div>}
+      {uploadStatus && (
+        <div className="storage-status-banner" role="status" aria-live="polite">
+          {uploadStatus}
+        </div>
+      )}
 
       <div className="storage-layout">
         <section className="card storage-browser-card">
@@ -202,7 +377,7 @@ export function StoragePage() {
                 <button
                   type="button"
                   className="storage-breadcrumb-link"
-                  disabled={loading || crumb.prefix === prefix}
+                  disabled={loading || Boolean(mutating) || crumb.prefix === prefix}
                   onClick={() => openFolder(crumb.prefix)}
                 >
                   {crumb.label}
@@ -210,6 +385,33 @@ export function StoragePage() {
               </span>
             ))}
           </nav>
+
+          {checkedKeys.size > 0 && (
+            <div className="storage-bulk-actions">
+              <span>
+                {checkedKeys.size} object{checkedKeys.size === 1 ? "" : "s"} selected
+              </span>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={Boolean(mutating) || loading}
+                onClick={() => void deleteCheckedObjects()}
+              >
+                <Trash2 size={16} aria-hidden />
+                {mutating === "bulk-delete" && bulkProgress
+                  ? `Deleting ${bulkProgress.completed}/${bulkProgress.total}…`
+                  : "Delete selected"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={Boolean(mutating) || loading}
+                onClick={() => setCheckedKeys(new Set())}
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
           {loading ? (
             <p className="empty">Loading bucket…</p>
@@ -221,10 +423,22 @@ export function StoragePage() {
             <table>
               <thead>
                 <tr>
+                  <th className="storage-select-cell">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      aria-label="Select all objects in this folder"
+                      aria-checked={someVisibleChecked ? "mixed" : allVisibleChecked}
+                      checked={allVisibleChecked}
+                      disabled={visibleObjects.length === 0 || Boolean(mutating) || loading}
+                      onChange={toggleAllVisible}
+                    />
+                  </th>
                   <th>Name</th>
                   <th>Type</th>
                   <th>Size</th>
                   <th>Modified</th>
+                  <th className="storage-actions-cell">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -234,6 +448,7 @@ export function StoragePage() {
                     className="storage-folder-row"
                     onClick={() => openFolder(folder.prefix)}
                   >
+                    <td className="storage-select-cell" />
                     <td>
                       <button
                         type="button"
@@ -249,6 +464,7 @@ export function StoragePage() {
                     <td>folder</td>
                     <td>—</td>
                     <td>—</td>
+                    <td className="storage-actions-cell" />
                   </tr>
                 ))}
                 {browse.objects.map((object) => (
@@ -257,10 +473,37 @@ export function StoragePage() {
                     className={`storage-file-row ${selected?.key === object.key ? "selected" : ""}`}
                     onClick={() => void selectObject(object)}
                   >
+                    <td
+                      className="storage-select-cell"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${object.name}`}
+                        checked={checkedKeys.has(object.key)}
+                        disabled={Boolean(mutating) || loading}
+                        onChange={() => toggleChecked(object.key)}
+                      />
+                    </td>
                     <td className="mono">{object.name}</td>
                     <td>file</td>
                     <td>{formatBytes(object.size_bytes)}</td>
                     <td>{formatTimestamp(object.last_modified)}</td>
+                    <td
+                      className="storage-actions-cell"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        className="storage-row-delete"
+                        title={`Delete ${object.name}`}
+                        aria-label={`Delete ${object.name}`}
+                        disabled={Boolean(mutating) || loading}
+                        onClick={() => void deleteObject(object)}
+                      >
+                        <Trash2 size={16} aria-hidden />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -293,29 +536,78 @@ export function StoragePage() {
                 </div>
               </div>
 
-              {previewUrl ? (
+              {previewUrl && selectedPreviewKind === "image" ? (
                 <img src={previewUrl} alt={selected.name} className="storage-preview-image" />
-              ) : isImageFile(selected.name) ? (
+              ) : previewUrl && selectedPreviewKind === "video" ? (
+                <video
+                  src={previewUrl}
+                  className="storage-preview-media"
+                  controls
+                  preload="metadata"
+                />
+              ) : previewUrl && selectedPreviewKind === "audio" ? (
+                <audio src={previewUrl} className="storage-preview-audio" controls preload="metadata" />
+              ) : previewLoading ? (
                 <p className="empty">Loading preview…</p>
               ) : (
                 <p className="storage-muted">
-                  Preview is available for image files. Use download for other asset types.
+                  Inline preview is unavailable for this file type. Open it in a new tab to view
+                  or download it.
                 </p>
               )}
 
-              <button
-                className="btn btn-ghost"
-                onClick={async () => {
-                  try {
-                    const presigned = await storageApi.presignDownload(selected.key);
-                    window.open(presigned.download_url, "_blank", "noopener,noreferrer");
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : "Download failed");
-                  }
+              <div className="storage-object-actions">
+                <button
+                  className="btn btn-ghost"
+                  disabled={Boolean(mutating)}
+                  onClick={() => void openSelected()}
+                >
+                  <ExternalLink size={16} aria-hidden />
+                  Open object
+                </button>
+                <button
+                  className="btn btn-danger"
+                  disabled={Boolean(mutating)}
+                  onClick={() => void deleteObject(selected)}
+                >
+                  <Trash2 size={16} aria-hidden />
+                  {mutating === "delete" ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+
+              <form
+                className="storage-rename-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void renameSelected();
                 }}
               >
-                Download
-              </button>
+                <label htmlFor="storage-object-name">Object name</label>
+                <div>
+                  <input
+                    id="storage-object-name"
+                    value={renameName}
+                    maxLength={255}
+                    disabled={Boolean(mutating)}
+                    onChange={(event) => setRenameName(event.target.value)}
+                  />
+                  <button
+                    className="btn btn-ghost"
+                    type="submit"
+                    disabled={
+                      Boolean(mutating) ||
+                      !renameName.trim() ||
+                      renameName.trim() === selected.name
+                    }
+                  >
+                    <Pencil size={16} aria-hidden />
+                    {mutating === "rename" ? "Renaming…" : "Rename"}
+                  </button>
+                </div>
+                <span className="storage-muted">
+                  Renaming copies the object to a new S3 key, then removes the old key.
+                </span>
+              </form>
             </div>
           )}
         </section>

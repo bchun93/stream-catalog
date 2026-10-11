@@ -71,6 +71,9 @@ class Settings(BaseSettings):
         default=None, validation_alias="AWS_SECRET_ACCESS_KEY"
     )
     aws_endpoint_url: str | None = Field(default=None, validation_alias="AWS_ENDPOINT_URL")
+    s3_mutation_secret: str | None = Field(
+        default=None, validation_alias="S3_MUTATION_SECRET"
+    )
 
     # --- Amazon Rekognition Video integration ---
     s3_analysis_bucket: str | None = Field(

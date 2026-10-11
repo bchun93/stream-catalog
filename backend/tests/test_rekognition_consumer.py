@@ -23,12 +23,32 @@ class _FakeRekognitionGet:
 
     def get_segment_detection(self, **_):
         return {
+            "VideoMetadata": [
+                {
+                    "Codec": "h264",
+                    "FrameWidth": 1920,
+                    "FrameHeight": 1080,
+                    "FrameRate": 23.976,
+                    "DurationMillis": 5000,
+                }
+            ],
+            "AudioMetadata": [
+                {"Codec": "aac", "NumberOfChannels": 2, "SampleRate": 48000, "DurationMillis": 5000}
+            ],
             "Segments": [
                 {
                     "Type": "TECHNICAL_CUE",
                     "StartTimestampMillis": 0,
                     "EndTimestampMillis": 1200,
+                    "StartTimecodeSMPTE": "00:00:00:00",
+                    "EndTimecodeSMPTE": "00:00:01:05",
                     "TechnicalCueSegment": {"Type": "BlackFrames", "Confidence": 99.1},
+                },
+                {
+                    "Type": "TECHNICAL_CUE",
+                    "StartTimestampMillis": 1200,
+                    "EndTimestampMillis": 5000,
+                    "TechnicalCueSegment": {"Type": "Content", "Confidence": 99.0},
                 },
                 {
                     "Type": "SHOT",
@@ -36,6 +56,21 @@ class _FakeRekognitionGet:
                     "EndTimestampMillis": 5000,
                     "ShotSegment": {"Index": 0, "Confidence": 98.0},
                 },
+            ],
+        }
+
+    def get_text_detection(self, **_):
+        return {
+            "TextDetections": [
+                {
+                    "Timestamp": 2000,
+                    "TextDetection": {
+                        "DetectedText": "HELLO",
+                        "Type": "LINE",
+                        "Confidence": 91.0,
+                        "Geometry": {"BoundingBox": {"Width": 0.2, "Height": 0.1}},
+                    },
+                }
             ]
         }
 
@@ -166,14 +201,16 @@ class ConsumerTests(unittest.TestCase):
             outcome = self.consumer.process_completion(msg)
         self.assertTrue(outcome.ok)
         rows = self.ddb.query_detections(asset_id="5", feature=self.Feature.SEGMENT)
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 3)
         kinds = {r["kind"] for r in rows}
-        self.assertEqual(kinds, {"BlackFrames", "Shot"})
-        # Time-ordered by sk: BlackFrames (0) before Shot (1200).
+        self.assertEqual(kinds, {"BlackFrames", "Content", "Shot"})
+        # Time-ordered by sk: BlackFrames (0) before Content/Shot (1200).
         self.assertEqual(rows[0]["start_ms"], 0)
-        self.assertEqual(rows[1]["start_ms"], 1200)
+        self.assertEqual(rows[0]["start_timecode"], "00:00:00:00")
         job = self.ddb.get_job(asset_id="5", feature=self.Feature.SEGMENT)
         self.assertEqual(job["status"], "SUCCEEDED")
+        self.assertEqual(job["video_metadata"]["Codec"], "h264")
+        self.assertEqual(job["audio_metadata"]["NumberOfChannels"], 2)
 
     def test_labels_success_with_bounding_box(self) -> None:
         self._seed_job(self.Feature.LABELS, "lab-1")
@@ -208,7 +245,7 @@ class ConsumerTests(unittest.TestCase):
             self.consumer.process_completion(msg)
             self.consumer.process_completion(msg)  # redelivery
         rows = self.ddb.query_detections(asset_id="5", feature=self.Feature.SEGMENT)
-        self.assertEqual(len(rows), 2)  # not 4
+        self.assertEqual(len(rows), 3)  # not 6
 
     def test_unidentifiable_message_left_for_retry(self) -> None:
         msg = _sns_envelope({"JobId": "ghost", "Status": "SUCCEEDED"})
@@ -261,6 +298,55 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(result.received, 1)
         self.assertEqual(result.deleted, 0)
         self.assertEqual(result.failed, 1)
+
+    def test_text_success_maps(self) -> None:
+        self._seed_job(self.Feature.TEXT, "txt-1")
+        msg = _sns_envelope({"JobId": "txt-1", "Status": "SUCCEEDED", "JobTag": "5:TEXT"})
+        with patch.object(self.consumer, "rekognition_client", return_value=_FakeRekognitionGet()):
+            self.consumer.process_completion(msg)
+        rows = self.ddb.query_detections(asset_id="5", feature=self.Feature.TEXT)
+        self.assertEqual(rows[0]["name"], "HELLO")
+        self.assertEqual(rows[0]["kind"], "LINE")
+        self.assertEqual(rows[0]["timestamp_ms"], 2000)
+
+    def test_findings_written_when_required_jobs_succeed(self) -> None:
+        self._seed_job(self.Feature.SEGMENT, "seg-f")
+        self._seed_job(self.Feature.MODERATION, "mod-f")
+        self._seed_job(self.Feature.TEXT, "txt-f")
+        fake = _FakeRekognitionGet()
+        with patch.object(self.consumer, "rekognition_client", return_value=fake):
+            self.consumer.process_completion(
+                _sns_envelope({"JobId": "seg-f", "Status": "SUCCEEDED", "JobTag": "5:SEGMENT"})
+            )
+            self.assertEqual(
+                len(self.ddb.query_detections(asset_id="5", feature=self.Feature.FINDING)),
+                0,
+            )
+            self.consumer.process_completion(
+                _sns_envelope({"JobId": "mod-f", "Status": "SUCCEEDED", "JobTag": "5:MODERATION"})
+            )
+            self.consumer.process_completion(
+                _sns_envelope({"JobId": "txt-f", "Status": "SUCCEEDED", "JobTag": "5:TEXT"})
+            )
+        findings = self.ddb.query_detections(asset_id="5", feature=self.Feature.FINDING)
+        self.assertGreater(len(findings), 0)
+        rules = {row.get("rule_id") or row.get("kind") for row in findings}
+        self.assertIn("REKO_NONPROGRAM_PRESENT", rules)
+        self.assertIn("REKO_BURNED_IN_TEXT", rules)
+        first_count = len(findings)
+        with patch.object(self.consumer, "rekognition_client", return_value=fake):
+            self.consumer.process_completion(
+                _sns_envelope({"JobId": "txt-f", "Status": "SUCCEEDED", "JobTag": "5:TEXT"})
+            )
+        again = self.ddb.query_detections(asset_id="5", feature=self.Feature.FINDING)
+        self.assertEqual(len(again), first_count)
+        import app.services.rekognition.report as report_mod
+
+        importlib.reload(report_mod)
+        built = report_mod.build_report(5)
+        self.assertTrue(built.ready)
+        self.assertGreater(len(built.findings), 0)
+        self.assertEqual(built.video_metadata["Codec"], "h264")
 
 
 if __name__ == "__main__":

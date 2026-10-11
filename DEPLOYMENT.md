@@ -78,11 +78,19 @@ For **Upload / S3** on Render, also set:
 | `INGEST_S3_BUCKET` | e.g. `stream-catalog-ingest` |
 | `AWS_ACCESS_KEY_ID` | IAM user with S3 put/get on the ingest bucket |
 | `AWS_SECRET_ACCESS_KEY` | Matching secret |
+| `S3_MUTATION_SECRET` | Random 32+ character server-only secret used to authenticate resumable rename state |
 | `AWS_REGION` | Bucket region (e.g. `ap-northeast-1`) |
 | `INGEST_OPERATOR_TOKEN` | Required in production when Upload/S3 is enabled; protects presign routes |
 | `ADMIN_API_KEY` | Protects mutating title/admin routes |
 
 Without `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or a working default AWS credential chain / instance role), Upload fails with a credentials error (botocore `Unable to locate credentials`, or Relay’s clearer “AWS credentials are not configured for S3” message).
+
+The IAM identity needs `s3:ListBucket` on the bucket and `s3:GetObject`,
+`s3:PutObject`, `s3:DeleteObject`, and `s3:AbortMultipartUpload` on the
+configured ingest prefix. Rename uses conditional multipart copy-then-delete,
+supports large objects, and never overwrites an existing key.
+Generate `S3_MUTATION_SECRET` with `openssl rand -hex 32`; changing it while a
+rename is partially complete prevents automatic reconciliation of that rename.
 
 Do **not** set `PORT` manually — Render injects it (often `10000`). The container must listen on `$PORT`.
 

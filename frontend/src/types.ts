@@ -446,6 +446,7 @@ export interface StorageObject {
   name: string;
   size_bytes?: number | null;
   last_modified?: string | null;
+  etag: string;
   storage_uri: string;
 }
 
@@ -472,6 +473,11 @@ export interface StoragePresignDownload {
   storage_uri: string;
 }
 
+export interface StorageObjectMutation {
+  key: string;
+  storage_uri: string;
+}
+
 export interface MecGenerateResponse {
   title_id: number;
   filename: string;
@@ -483,8 +489,9 @@ export interface MecGenerateResponse {
 }
 
 // --- Amazon Rekognition Video ---
-export type RekognitionFeature = "SEGMENT" | "MODERATION" | "LABELS";
+export type RekognitionFeature = "SEGMENT" | "MODERATION" | "LABELS" | "TEXT" | "FINDING";
 export type RekognitionJobStatus = "IN_PROGRESS" | "SUCCEEDED" | "FAILED";
+export type PictureQcOutcome = "pending" | "pass" | "warning" | "error";
 
 export interface RekognitionJob {
   asset_id: string;
@@ -494,6 +501,8 @@ export interface RekognitionJob {
   error?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  video_metadata?: Record<string, unknown> | null;
+  audio_metadata?: Record<string, unknown> | null;
 }
 
 export interface RekognitionFeatureResult {
@@ -529,9 +538,30 @@ export interface RekognitionDetection {
   timestamp_ms?: number | null;
   start_ms?: number | null;
   end_ms?: number | null;
+  start_timecode?: string | null;
+  end_timecode?: string | null;
   bounding_box?: Record<string, number> | null;
+  message?: string | null;
+  severity?: string | null;
+  rule_id?: string | null;
+  evidence?: Record<string, unknown> | null;
   job_id?: string | null;
   created_at?: string | null;
+}
+
+export interface PictureQcReport {
+  asset_id: number;
+  ready: boolean;
+  pending_features: string[];
+  summary: {
+    error: number;
+    warning: number;
+    info: number;
+    outcome: PictureQcOutcome;
+  };
+  video_metadata?: Record<string, unknown> | null;
+  audio_metadata?: Record<string, unknown> | null;
+  findings: RekognitionDetection[];
 }
 
 export const ARTWORK_TYPES: ArtworkType[] = [

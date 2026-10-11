@@ -12,6 +12,7 @@ import type {
   MetadataConfig,
   MetadataDisplaySettings,
   MetadataSearchResult,
+  PictureQcReport,
   RekognitionAnalyzeResponse,
   RekognitionConsumeResult,
   RekognitionDetection,
@@ -22,6 +23,7 @@ import type {
   MecGenerateResponse,
   StorageBrowse,
   StorageConfig,
+  StorageObjectMutation,
   StoragePresignDownload,
   StoragePresignUpload,
   Title,
@@ -671,6 +673,8 @@ export const rekognitionApi = {
     }),
   listJobs: (assetId: number) =>
     requestWithRetry<RekognitionJob[]>(`/assets/${assetId}/rekognition/jobs`),
+  getReport: (assetId: number) =>
+    requestWithRetry<PictureQcReport>(`/assets/${assetId}/rekognition/report`),
   listDetections: (assetId: number, feature?: RekognitionFeature, limit?: number) => {
     const q = new URLSearchParams();
     if (feature) q.set("feature", feature);
@@ -717,6 +721,26 @@ function operatorRequest<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set(key, value);
   }
   return requestWithRetry<T>(path, { ...init, headers });
+}
+
+async function operatorMutationRequest<T>(
+  path: string,
+  init: RequestInit,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  const headers = new Headers(init.headers);
+  for (const [key, value] of Object.entries(operatorHeaders())) {
+    headers.set(key, value);
+  }
+  // S3 mutations use ETag preconditions and must not be retried after an
+  // ambiguous network failure.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await request<T>(path, { ...init, headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export const ingestApi = {
@@ -770,6 +794,21 @@ export const storageApi = {
   presignDownload: (key: string) =>
     operatorRequest<StoragePresignDownload>(
       `/storage/presign-download?${new URLSearchParams({ key })}`
+    ),
+  renameObject: (body: {
+    key: string;
+    new_name: string;
+    expected_etag: string;
+    expected_size: number;
+  }) =>
+    operatorMutationRequest<StorageObjectMutation>("/storage/objects/rename", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }, 10 * 60 * 1000),
+  deleteObject: (key: string, expectedEtag: string) =>
+    operatorMutationRequest<void>(
+      `/storage/objects?${new URLSearchParams({ key, expected_etag: expectedEtag })}`,
+      { method: "DELETE" },
     ),
 };
 

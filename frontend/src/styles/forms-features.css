@@ -1450,6 +1450,64 @@
   cursor: default;
 }
 
+.storage-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 0.85rem;
+}
+
+.storage-bulk-actions span {
+  margin-right: auto;
+  font-weight: 600;
+}
+
+.storage-select-cell {
+  width: 42px;
+  text-align: center;
+}
+
+.storage-select-cell input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.storage-actions-cell {
+  width: 64px;
+  text-align: right;
+}
+
+.storage-row-delete {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.storage-row-delete:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  background: var(--danger-bg);
+}
+
+.storage-row-delete:disabled,
+.storage-select-cell input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .storage-folder-row,
 .storage-file-row {
   cursor: pointer;
@@ -1503,9 +1561,71 @@
   background: #080a0e;
 }
 
+.storage-preview-media {
+  width: 100%;
+  max-height: 360px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #080a0e;
+}
+
+.storage-preview-audio {
+  width: 100%;
+}
+
+.storage-object-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.storage-rename-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.storage-rename-form label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.storage-rename-form > div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.storage-rename-form input {
+  min-width: 0;
+  flex: 1;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
 @media (max-width: 960px) {
   .storage-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .storage-bulk-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .storage-bulk-actions span {
+    margin-right: 0;
+  }
+
+  .storage-rename-form > div {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

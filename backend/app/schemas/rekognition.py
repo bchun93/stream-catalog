@@ -38,6 +38,8 @@ class RekognitionJobRead(BaseModel):
     error: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+    video_metadata: dict[str, Any] | None = None
+    audio_metadata: dict[str, Any] | None = None
 
 
 class DetectionRead(BaseModel):
@@ -49,9 +51,32 @@ class DetectionRead(BaseModel):
     timestamp_ms: int | None = None
     start_ms: int | None = None
     end_ms: int | None = None
+    start_timecode: str | None = None
+    end_timecode: str | None = None
     bounding_box: dict[str, Any] | None = None
+    message: str | None = None
+    severity: str | None = None
+    rule_id: str | None = None
+    evidence: dict[str, Any] | None = None
     job_id: str | None = None
     created_at: str | None = None
+
+
+class PictureQcSummary(BaseModel):
+    error: int = 0
+    warning: int = 0
+    info: int = 0
+    outcome: str = "pending"
+
+
+class PictureQcReport(BaseModel):
+    asset_id: int
+    ready: bool
+    pending_features: list[str] = Field(default_factory=list)
+    summary: PictureQcSummary
+    video_metadata: dict[str, Any] | None = None
+    audio_metadata: dict[str, Any] | None = None
+    findings: list[DetectionRead] = Field(default_factory=list)
 
 
 class ConsumeResponse(BaseModel):
