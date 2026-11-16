@@ -12,6 +12,7 @@ from app.schemas.rekognition import (
     ConsumeResponse,
     DetectionRead,
     FeatureResultRead,
+    PictureQcReport,
     RekognitionJobRead,
 )
 from app.services import media_service
@@ -125,6 +126,19 @@ def list_detections(
             status_code=503, detail="Could not load detections; check server logs."
         ) from exc
     return [DetectionRead(**row) for row in rows]
+
+
+@router.get("/assets/{asset_id}/rekognition/report", response_model=PictureQcReport)
+def picture_qc_report(asset_id: int):
+    try:
+        from app.services.rekognition.report import build_report
+
+        return build_report(asset_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("picture_qc_report failed for asset %s", asset_id)
+        raise HTTPException(
+            status_code=503, detail="Could not load the picture QC report; check server logs."
+        ) from exc
 
 
 def _drain_to_response(result: DrainResult) -> ConsumeResponse:

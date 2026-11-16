@@ -292,7 +292,7 @@ echo "REKOGNITION_ROLE_ARN=$REKOGNITION_ROLE_ARN"
 
 ## 6. IAM identity #2 — Relay app credentials (used by the backend)
 
-Least-privilege for the three `Start*` + three `Get*` ops, SQS consume, S3 read of the proxy,
+Least-privilege for the four `Start*` + four `Get*` ops, SQS consume, S3 read of the proxy,
 and the DynamoDB access patterns (incl. the jobs-table GSI index ARN; the detections table has
 no GSI so no `index/*` grant is needed there).
 
@@ -320,9 +320,11 @@ cat > /tmp/relay-app-perms.json <<EOF
         "rekognition:StartSegmentDetection",
         "rekognition:StartContentModeration",
         "rekognition:StartLabelDetection",
+        "rekognition:StartTextDetection",
         "rekognition:GetSegmentDetection",
         "rekognition:GetContentModeration",
-        "rekognition:GetLabelDetection"
+        "rekognition:GetLabelDetection",
+        "rekognition:GetTextDetection"
       ],
       "Resource": "*"
     },

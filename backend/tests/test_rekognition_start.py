@@ -32,6 +32,9 @@ class _FakeRekognition:
     def start_label_detection(self, **kwargs):
         return self._job("labels", **kwargs)
 
+    def start_text_detection(self, **kwargs):
+        return self._job("text", **kwargs)
+
 
 @unittest.skipUnless(_HAS_MOTO, "moto required")
 class StartAnalysisTests(unittest.TestCase):
@@ -109,32 +112,34 @@ class StartAnalysisTests(unittest.TestCase):
         defaults.update(over)
         return self.MediaAsset(**defaults)
 
-    def test_starts_three_jobs_and_writes_rows(self) -> None:
+    def test_starts_four_jobs_and_writes_rows(self) -> None:
         fake = _FakeRekognition()
         with patch.object(self.start, "rekognition_client", return_value=fake):
             result = self.start.start_analysis(self._asset())
-        self.assertEqual(len(result.results), 3)
+        self.assertEqual(len(result.results), 4)
         self.assertTrue(all(r.started for r in result.results))
-        self.assertEqual(len(fake.calls), 3)
+        self.assertEqual(len(fake.calls), 4)
         # Every Start* carried NotificationChannel + idempotency token + JobTag.
         for _, kwargs in fake.calls:
             self.assertIn("SNSTopicArn", kwargs["NotificationChannel"])
             self.assertIn("RoleArn", kwargs["NotificationChannel"])
-            self.assertRegex(kwargs["ClientRequestToken"], r"^1_(SEGMENT|MODERATION|LABELS)$")
-            self.assertRegex(kwargs["JobTag"], r"^1:(SEGMENT|MODERATION|LABELS)$")
-        # 3 rows persisted IN_PROGRESS.
+            self.assertRegex(
+                kwargs["ClientRequestToken"], r"^1_(SEGMENT|MODERATION|LABELS|TEXT)$"
+            )
+            self.assertRegex(kwargs["JobTag"], r"^1:(SEGMENT|MODERATION|LABELS|TEXT)$")
         jobs = self.ddb.list_jobs_for_asset("1")
-        self.assertEqual(len(jobs), 3)
+        self.assertEqual(len(jobs), 4)
         self.assertTrue(all(j["status"] == "IN_PROGRESS" for j in jobs))
+        self.assertTrue(any(op == "text" for op, _ in fake.calls))
 
     def test_reclick_does_not_restart(self) -> None:
         fake = _FakeRekognition()
         with patch.object(self.start, "rekognition_client", return_value=fake):
             self.start.start_analysis(self._asset())
-            self.assertEqual(len(fake.calls), 3)
+            self.assertEqual(len(fake.calls), 4)
             again = self.start.start_analysis(self._asset())
         # No new Start* calls; all reported as skipped.
-        self.assertEqual(len(fake.calls), 3)
+        self.assertEqual(len(fake.calls), 4)
         self.assertTrue(all(not r.started for r in again.results))
 
     def test_rejects_non_h264_codec(self) -> None:
@@ -186,7 +191,7 @@ class StartAnalysisTests(unittest.TestCase):
         fake = _FakeRekognition()
         with patch.object(self.start, "rekognition_client", return_value=fake):
             result = self.start.start_analysis(self._asset(codec=None))
-        self.assertEqual(len(fake.calls), 3)
+        self.assertEqual(len(fake.calls), 4)
         self.assertTrue(any("unknown" in w.lower() for w in result.warnings))
 
 

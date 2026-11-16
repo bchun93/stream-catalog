@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListDestinationPrefix",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:ListBucketMultipartUploads"],
+      "Resource": "arn:aws:s3:::stream-catalog-ingest",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "deliveries/inbound/netflix-opencontent",
+            "deliveries/inbound/netflix-opencontent/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "WriteDestinationPrefix",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": "arn:aws:s3:::stream-catalog-ingest/deliveries/inbound/netflix-opencontent/*"
+    }
+  ]
+}

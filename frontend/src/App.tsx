@@ -8,6 +8,7 @@ import { RelayMark } from "./components/brand/RelayMark";
 import { Sidebar } from "./components/layout/Sidebar";
 import { ApiWakeProvider } from "./context/ApiWakeContext";
 import { AITrainingPage } from "./pages/AITrainingPage";
+import { ArchitecturePage } from "./pages/ArchitecturePage";
 import { AssetDetailPage } from "./pages/AssetDetailPage";
 import { AssetsPage } from "./pages/AssetsPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -85,6 +86,7 @@ export default function App() {
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/storage" element={<StoragePage />} />
               <Route path="/ai-training" element={<AITrainingPage />} />
+              <Route path="/architecture" element={<ArchitecturePage />} />
             </Routes>
           </main>
         </div>

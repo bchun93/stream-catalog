@@ -12,6 +12,7 @@ import type {
   MetadataConfig,
   MetadataDisplaySettings,
   MetadataSearchResult,
+  PictureQcReport,
   RekognitionAnalyzeResponse,
   RekognitionConsumeResult,
   RekognitionDetection,
@@ -22,6 +23,7 @@ import type {
   MecGenerateResponse,
   StorageBrowse,
   StorageConfig,
+  StorageObjectMutation,
   StoragePresignDownload,
   StoragePresignUpload,
   Title,
@@ -45,16 +47,12 @@ const REQUEST_TIMEOUT_MS = IS_PROD ? 90000 : 30000;
 const WAKE_ATTEMPT_TIMEOUT_MS = IS_PROD ? 12000 : 8000;
 const WAKE_POLL_INTERVAL_MS = 2000;
 const WAKE_MAX_ATTEMPTS = IS_PROD ? 25 : 8;
-const BUILD_TIME_INGEST_OPERATOR_TOKEN = import.meta.env.DEV
-  ? (import.meta.env.VITE_INGEST_OPERATOR_TOKEN as string | undefined)?.trim()
-  : undefined;
-const INGEST_OPERATOR_TOKEN_STORAGE_KEY = "relay.ingestOperatorToken";
 const BUILD_TIME_ADMIN_API_KEY = import.meta.env.DEV
   ? (import.meta.env.VITE_ADMIN_API_KEY as string | undefined)?.trim()
   : undefined;
 const ADMIN_API_KEY_STORAGE_KEY = "relay.adminApiKey";
 export const ADMIN_TOKEN_REQUIRED_EVENT = "relay:admin-token-required";
-let memoryIngestOperatorToken = "";
+export const ADMIN_TOKEN_SAVED_EVENT = "relay:admin-token-saved";
 let memoryAdminApiKey = "";
 
 function rootUrl(path: string): string {
@@ -136,33 +134,6 @@ export function ensureApiWarm(): Promise<ApiHealth> {
   return warmPromise;
 }
 
-export function getIngestOperatorToken(): string {
-  try {
-    return (
-      sessionStorage.getItem(INGEST_OPERATOR_TOKEN_STORAGE_KEY)?.trim() ||
-      memoryIngestOperatorToken ||
-      BUILD_TIME_INGEST_OPERATOR_TOKEN ||
-      ""
-    );
-  } catch {
-    return memoryIngestOperatorToken || BUILD_TIME_INGEST_OPERATOR_TOKEN || "";
-  }
-}
-
-export function setIngestOperatorToken(token: string): void {
-  const value = token.trim();
-  memoryIngestOperatorToken = value;
-  try {
-    if (value) {
-      sessionStorage.setItem(INGEST_OPERATOR_TOKEN_STORAGE_KEY, value);
-    } else {
-      sessionStorage.removeItem(INGEST_OPERATOR_TOKEN_STORAGE_KEY);
-    }
-  } catch {
-    // Requests can still use the build-time local-development fallback.
-  }
-}
-
 export function getAdminApiKey(): string {
   try {
     return (
@@ -188,11 +159,9 @@ export function setAdminApiKey(token: string): void {
   } catch {
     // The in-memory value remains available for this page session.
   }
-}
-
-function operatorHeaders(): HeadersInit {
-  const token = getIngestOperatorToken();
-  return token ? { "X-Ingest-Token": token } : {};
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(ADMIN_TOKEN_SAVED_EVENT));
+  }
 }
 
 function isArtworkRouteDatabaseError(message: string): boolean {
@@ -438,7 +407,7 @@ export const titlesApi = {
   delete: (id: number) =>
     request<void>(`/titles/${id}`, { method: "DELETE" }),
   generateMec: (id: number) =>
-    operatorRequest<MecGenerateResponse>(`/titles/${id}/mec/generate`, {
+    request<MecGenerateResponse>(`/titles/${id}/mec/generate`, {
       method: "POST",
     }),
   listArtwork: async (id: number) => {
@@ -671,6 +640,8 @@ export const rekognitionApi = {
     }),
   listJobs: (assetId: number) =>
     requestWithRetry<RekognitionJob[]>(`/assets/${assetId}/rekognition/jobs`),
+  getReport: (assetId: number) =>
+    requestWithRetry<PictureQcReport>(`/assets/${assetId}/rekognition/report`),
   listDetections: (assetId: number, feature?: RekognitionFeature, limit?: number) => {
     const q = new URLSearchParams();
     if (feature) q.set("feature", feature);
@@ -711,17 +682,34 @@ export const deliveryApi = {
     }),
 };
 
-function operatorRequest<T>(path: string, init?: RequestInit): Promise<T> {
+function adminProtectedRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  for (const [key, value] of Object.entries(operatorHeaders())) {
-    headers.set(key, value);
+  const adminApiKey = getAdminApiKey();
+  if (adminApiKey) {
+    headers.set("X-Admin-Token", adminApiKey);
   }
   return requestWithRetry<T>(path, { ...init, headers });
 }
 
+async function storageMutationRequest<T>(
+  path: string,
+  init: RequestInit,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  // S3 mutations use ETag preconditions and must not be retried after an
+  // ambiguous network failure.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await request<T>(path, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export const ingestApi = {
   listManifests: (enabledOnly = true) =>
-    operatorRequest<IngestManifest[]>(
+    adminProtectedRequest<IngestManifest[]>(
       `/ingest/manifests?enabled_only=${enabledOnly ? "true" : "false"}`
     ),
   validateManifest: (body: {
@@ -729,7 +717,7 @@ export const ingestApi = {
     source_prefix?: string;
     max_keys?: number;
   }) =>
-    operatorRequest<IngestManifestValidateResponse>("/ingest/manifests/validate", {
+    request<IngestManifestValidateResponse>("/ingest/manifests/validate", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -741,7 +729,7 @@ export const ingestApi = {
     dry_run?: boolean;
     max_keys?: number;
   }) =>
-    operatorRequest<IngestJob>("/ingest/jobs", {
+    request<IngestJob>("/ingest/jobs", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -749,27 +737,42 @@ export const ingestApi = {
     const q = new URLSearchParams();
     if (params?.title_id) q.set("title_id", String(params.title_id));
     if (params?.limit) q.set("limit", String(params.limit));
-    return operatorRequest<IngestJob[]>(`/ingest/jobs${q.toString() ? `?${q}` : ""}`);
+    return adminProtectedRequest<IngestJob[]>(`/ingest/jobs${q.toString() ? `?${q}` : ""}`);
   },
-  getJob: (id: number) => operatorRequest<IngestJob>(`/ingest/jobs/${id}`),
+  getJob: (id: number) => adminProtectedRequest<IngestJob>(`/ingest/jobs/${id}`),
 };
 
 export const storageApi = {
-  getConfig: () => operatorRequest<StorageConfig>("/storage/config"),
+  getConfig: () => adminProtectedRequest<StorageConfig>("/storage/config"),
   browse: (prefix = "", maxKeys = 500) => {
     const q = new URLSearchParams();
     if (prefix) q.set("prefix", prefix);
     q.set("max_keys", String(maxKeys));
-    return operatorRequest<StorageBrowse>(`/storage/browse?${q}`);
+    return adminProtectedRequest<StorageBrowse>(`/storage/browse?${q}`);
   },
   presignUpload: (body: { prefix?: string; filename: string; content_type?: string }) =>
-    operatorRequest<StoragePresignUpload>("/storage/presign-upload", {
+    request<StoragePresignUpload>("/storage/presign-upload", {
       method: "POST",
       body: JSON.stringify(body),
     }),
   presignDownload: (key: string) =>
-    operatorRequest<StoragePresignDownload>(
+    adminProtectedRequest<StoragePresignDownload>(
       `/storage/presign-download?${new URLSearchParams({ key })}`
+    ),
+  renameObject: (body: {
+    key: string;
+    new_name: string;
+    expected_etag: string;
+    expected_size: number;
+  }) =>
+    storageMutationRequest<StorageObjectMutation>("/storage/objects/rename", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }, 10 * 60 * 1000),
+  deleteObject: (key: string, expectedEtag: string) =>
+    storageMutationRequest<void>(
+      `/storage/objects?${new URLSearchParams({ key, expected_etag: expectedEtag })}`,
+      { method: "DELETE" },
     ),
 };
 

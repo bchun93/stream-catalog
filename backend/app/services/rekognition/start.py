@@ -30,6 +30,8 @@ from app.services.rekognition.constants import (
     MODERATION_MIN_CONFIDENCE,
     SEGMENT_SHOT_MIN_CONFIDENCE,
     SEGMENT_TECHNICAL_CUE_MIN_CONFIDENCE,
+    STARTABLE_FEATURES,
+    TEXT_MIN_CONFIDENCE,
     Feature,
     JobStatus,
 )
@@ -175,6 +177,11 @@ def _start_feature(
             MinConfidence=MODERATION_MIN_CONFIDENCE,
             **common,  # type: ignore[arg-type]
         )
+    elif feature is Feature.TEXT:
+        resp = rek.start_text_detection(
+            Filters={"WordFilter": {"MinConfidence": TEXT_MIN_CONFIDENCE}},
+            **common,  # type: ignore[arg-type]
+        )
     else:  # Feature.LABELS
         resp = rek.start_label_detection(
             MinConfidence=LABEL_MIN_CONFIDENCE,
@@ -227,7 +234,7 @@ def start_analysis(
     asset_id = str(asset.id)
     results: list[FeatureResult] = []
 
-    for feature in Feature:
+    for feature in STARTABLE_FEATURES:
         existing = ddb.get_job(asset_id=asset_id, feature=feature)
         if existing and existing.get("status") in (
             JobStatus.IN_PROGRESS.value,

@@ -46,7 +46,7 @@ Read proposed changes and report what is wrong or risky. **Never edit files.** O
 ### Frontend
 - API errors surfaced clearly; no silent failures on save/delete.
 - Confirm dialogs on destructive actions (delete title, remove artwork, clear catalog).
-- No secrets in `VITE_*` except truly public config; flag `VITE_INGEST_OPERATOR_TOKEN` exposure.
+- No secrets in `VITE_*` except truly public config; flag `VITE_ADMIN_API_KEY` exposure in production builds.
 - Loading/error states on data fetches; race conditions on rapid navigation.
 
 ### Production readiness

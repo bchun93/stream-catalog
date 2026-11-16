@@ -7,14 +7,6 @@ REGION="${AWS_REGION:-us-east-1}"
 ENDPOINT="${AWS_ENDPOINT_URL:-http://127.0.0.1:9000}"
 ACCESS_KEY="${MINIO_ROOT_USER:-streamcatalog}"
 SECRET_KEY="${MINIO_ROOT_PASSWORD:-streamcatalog-dev-secret}"
-TOKEN_FILE="$ROOT/backend/.env"
-
-if [[ -f "$TOKEN_FILE" ]] && grep -q '^INGEST_OPERATOR_TOKEN=' "$TOKEN_FILE"; then
-  TOKEN="$(grep '^INGEST_OPERATOR_TOKEN=' "$TOKEN_FILE" | cut -d= -f2-)"
-else
-  TOKEN="$(openssl rand -hex 24)"
-fi
-
 source "$HOME/.local/bin/env" 2>/dev/null || true
 
 if ! command -v minio >/dev/null 2>&1; then
@@ -88,11 +80,12 @@ AWS_ENDPOINT_URL=${ENDPOINT}
 INGEST_S3_BUCKET=${BUCKET}
 INGEST_S3_PREFIX=deliveries
 ASPERA_DROP_PREFIX=inbound
-INGEST_OPERATOR_TOKEN=${TOKEN}
+ADMIN_API_KEY=change-me-long-random-string
 EOF
 
 cat >"$ROOT/frontend/.env.local" <<EOF
-VITE_INGEST_OPERATOR_TOKEN=${TOKEN}
+# Local-dev convenience only. Do not publish this as an Amplify VITE_* value.
+VITE_ADMIN_API_KEY=change-me-long-random-string
 EOF
 
 echo ""

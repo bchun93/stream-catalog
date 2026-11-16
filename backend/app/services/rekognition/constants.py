@@ -10,11 +10,29 @@ import enum
 
 
 class Feature(str, enum.Enum):
-    """The three v1 analysis features. Value doubles as the DynamoDB sort-key prefix."""
+    """Analysis features plus FINDING (derived). Value is the DynamoDB sort-key prefix."""
 
     SEGMENT = "SEGMENT"
     MODERATION = "MODERATION"
     LABELS = "LABELS"
+    TEXT = "TEXT"
+    FINDING = "FINDING"
+
+
+# Start* APIs only. FINDING is derived after SEGMENT + MODERATION + TEXT succeed.
+STARTABLE_FEATURES: tuple[Feature, ...] = (
+    Feature.SEGMENT,
+    Feature.MODERATION,
+    Feature.LABELS,
+    Feature.TEXT,
+)
+
+# Jobs that must succeed before picture-QC rules run. LABELS is evidence-only.
+EVALUATION_FEATURES: tuple[Feature, ...] = (
+    Feature.SEGMENT,
+    Feature.MODERATION,
+    Feature.TEXT,
+)
 
 
 class JobStatus(str, enum.Enum):
@@ -26,8 +44,12 @@ class JobStatus(str, enum.Enum):
 # --- Confidence thresholds (configurable constants, not magic numbers) ---
 MODERATION_MIN_CONFIDENCE: float = 60.0
 LABEL_MIN_CONFIDENCE: float = 70.0
+TEXT_MIN_CONFIDENCE: float = 80.0
 SEGMENT_TECHNICAL_CUE_MIN_CONFIDENCE: float = 80.0
 SEGMENT_SHOT_MIN_CONFIDENCE: float = 80.0
+FEATURE_LENGTH_MS: int = 20 * 60 * 1000
+PROGRAM_TAIL_MS: int = 3000
+DURATION_MISMATCH_SECONDS: float = 1.0
 
 # Zero-pad width for time in the detections sort key so lexicographic == chronological.
 # 12 digits covers up to ~31 years in milliseconds — far beyond the 6h Rekognition cap.

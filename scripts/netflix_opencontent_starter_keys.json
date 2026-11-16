@@ -1,0 +1,505 @@
+{
+  "source_bucket": "download.opencontent.netflix.com",
+  "dest_bucket": "stream-catalog-ingest",
+  "dest_prefix": "deliveries/inbound/netflix-opencontent",
+  "hard_ceiling_bytes": 24696061952,
+  "objects": [
+    {
+      "group": "imf_packages",
+      "title": "sol-levante",
+      "key": "SolLevante/imf/SolLevante_IMF_DolbyVision_PQP3D65_UHD_24fps/ASSETMAP.xml",
+      "size": 2439,
+      "etag": "0e3b3c76aa42f155040d0e12bfb3e131"
+    },
+    {
+      "group": "imf_packages",
+      "title": "sol-levante",
+      "key": "SolLevante/imf/SolLevante_IMF_DolbyVision_PQP3D65_UHD_24fps/AUDIO_4467fc2f-2536-44ba-b1f9-010e0ae3f6b1.mxf",
+      "size": 76034824,
+      "etag": "167cba5b85114e6f66854e921159697a-10"
+    },
+    {
+      "group": "imf_packages",
+      "title": "sol-levante",
+      "key": "SolLevante/imf/SolLevante_IMF_DolbyVision_PQP3D65_UHD_24fps/AUDIO_c2d618d0-b775-47c2-ac45-8eccb9afc40a.mxf",
+      "size": 227570824,
+      "etag": "a8073a5d7bd569bac80b380ae7e60af7-28"
+    },
+    {
+      "group": "imf_packages",
+      "title": "sol-levante",
+      "key": "SolLevante/imf/SolLevante_IMF_DolbyVision_PQP3D65_UHD_24fps/CPL_0a207596-a0f5-458a-811e-a97a4286d00c.xml",
+      "size": 21589,
+      "etag": "49807df5a509623c9a7497b1da281140"
+    },
+    {
+      "group": "imf_packages",
+      "title": "sol-levante",
+      "key": "SolLevante/imf/SolLevante_IMF_DolbyVision_PQP3D65_UHD_24fps/OPL_0a39a10c-d1da-4e53-b32c-1ceab7d94cf0.xml",
+      "size": 699,
+      "etag": "111d1bcc192b4e3a95fac70aa2ac59a7"
+    },
+    {
+      "group": "imf_packages",
+      "title": "sol-levante",
+      "key": "SolLevante/imf/SolLevante_IMF_DolbyVision_PQP3D65_UHD_24fps/PKL_51e5f3c5-44b3-4001-9c90-9a19087982d3.xml",
+      "size": 2578,
+      "etag": "59df588cf3b020cb33acd1edb85ff370"
+    },
+    {
+      "group": "imf_packages",
+      "title": "sol-levante",
+      "key": "SolLevante/imf/SolLevante_IMF_DolbyVision_PQP3D65_UHD_24fps/VIDEO_e4da5fcd-5ffc-4713-bcdd-95ea579d790b.mxf",
+      "size": 18521903620,
+      "etag": "73bfc294d54768b4593974ea1918e3e6-2208"
+    },
+    {
+      "group": "imf_packages",
+      "title": "sol-levante",
+      "key": "SolLevante/imf/SolLevante_IMF_DolbyVision_PQP3D65_UHD_24fps/VOLINDEX.xml",
+      "size": 140,
+      "etag": "79130de9a0798875998e90d203a8de16"
+    },
+    {
+      "group": "license",
+      "title": "cosmos-laundromat",
+      "key": "CosmosLaundromat/creative-commons-attribution-4-intl-public-license.txt",
+      "size": 105020,
+      "etag": "118a301e5fe5ab37cbd71189c1befcbb"
+    },
+    {
+      "group": "license",
+      "title": "meridian",
+      "key": "Meridian/creative-commons-attribution-4-intl-public-license.txt",
+      "size": 105020,
+      "etag": "118a301e5fe5ab37cbd71189c1befcbb"
+    },
+    {
+      "group": "license",
+      "title": "meridian",
+      "key": "TechblogAssets/Meridian/meridian_license.txt",
+      "size": 663,
+      "etag": "3679258591cfeb045f3e3cb131c5b8b4"
+    },
+    {
+      "group": "license",
+      "title": "sol-levante",
+      "key": "SolLevante/creative-commons-attribution-4-intl-public-license.txt",
+      "size": 105020,
+      "etag": "118a301e5fe5ab37cbd71189c1befcbb"
+    },
+    {
+      "group": "video_masters",
+      "title": "cosmos-laundromat",
+      "key": "CosmosLaundromat/CosmosLaundromat_2k24p_HDR_P3PQ.mp4",
+      "size": 729482878,
+      "etag": "0ecf875fd2c1cc92eab29282a99376e8-87"
+    },
+    {
+      "group": "video_masters",
+      "title": "cosmos-laundromat",
+      "key": "TechblogAssets/CosmosLaundromat/encodes/CosmosLaundromat_2048x858_24fps_SDR.mp4",
+      "size": 491245034,
+      "etag": "3653a5d87eca0967d79d243857b19bbd-30"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "Meridian/Meridian_UHD4k5994_HDR_P3PQ.mp4",
+      "size": 850587087,
+      "etag": "959e3cc54e2b941ca7de8c0d8b95236b-102"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "TechblogAssets/Meridian/encodes/Meridian_3840x2160_5994fps_SDR.mp4",
+      "size": 1299914020,
+      "etag": "49e34619d2f5719453096ea882145189-78"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_11872-12263__3840_2160__qp15__vmaf96.87__psnr42.77__kbps303579.53__fps59.94.mp4",
+      "size": 248135210,
+      "etag": "9187124704ff2d29b292f43fab69640e-30"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_11872-12263__3840_2160__qp23__vmaf93.83__psnr40.03__kbps85643.62__fps59.94.mp4",
+      "size": 69999853,
+      "etag": "9fb6ac45d581ae97dfe2503108b6bc78-9"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_11872-12263__3840_2160__qp31__vmaf90.45__psnr38.74__kbps14823.12__fps59.94.mp4",
+      "size": 12112939,
+      "etag": "7121cc1d67c613cba9d4841956d63098-2"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_11872-12263__3840_2160__qp39__vmaf87.34__psnr38.21__kbps6099.04__fps59.94.mp4",
+      "size": 4982098,
+      "etag": "3906079e2c0b035e5c9efac8cfab9d82"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_11872-12263__3840_2160__qp47__vmaf82.90__psnr37.53__kbps2740.98__fps59.94.mp4",
+      "size": 2237302,
+      "etag": "e0ab7e9e1f38b1e92a3f3e28db1f434d"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_11872-12263__3840_2160__qp55__vmaf76.52__psnr36.60__kbps1413.56__fps59.94.mp4",
+      "size": 1152303,
+      "etag": "ab5d5b2dfdff5d0b2631e1087c0c5425"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_11872-12263__3840_2160__qp63__vmaf67.23__psnr35.28__kbps613.05__fps59.94.mp4",
+      "size": 497983,
+      "etag": "33f159e79a261007baa22fe6941f8fc4"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_12264-12745__3840_2160__qp15__vmaf98.70__psnr44.09__kbps191420.55__fps59.94.mp4",
+      "size": 192397593,
+      "etag": "9df7d8f03ce50007f90178fedd92788b-23"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_12264-12745__3840_2160__qp23__vmaf97.43__psnr41.76__kbps55400.30__fps59.94.mp4",
+      "size": 55680234,
+      "etag": "ac13ad8689942a95795da8dedc83fe73-7"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_12264-12745__3840_2160__qp31__vmaf95.86__psnr40.55__kbps10059.59__fps59.94.mp4",
+      "size": 10107160,
+      "etag": "d446b4f577f4dc730876f5ae5e415d5f-2"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_12264-12745__3840_2160__qp39__vmaf94.43__psnr40.08__kbps3535.52__fps59.94.mp4",
+      "size": 3549647,
+      "etag": "41aead119cf7662c2a0af5e5f50df678"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_12264-12745__3840_2160__qp47__vmaf92.24__psnr39.56__kbps1502.02__fps59.94.mp4",
+      "size": 1505727,
+      "etag": "3d41ed457a47bc128b6f48643482d050"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_12264-12745__3840_2160__qp55__vmaf88.96__psnr38.83__kbps789.72__fps59.94.mp4",
+      "size": 789777,
+      "etag": "dfe7b861d764c85be6b22522bec9c104"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_12264-12745__3840_2160__qp63__vmaf83.12__psnr37.60__kbps369.96__fps59.94.mp4",
+      "size": 367864,
+      "etag": "d250b8a429f47ac63b776f721ac10d35"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_15932-16309__3840_2160__qp15__vmaf94.90__psnr44.01__kbps201140.69__fps59.94.mp4",
+      "size": 158546184,
+      "etag": "1617877bdeb8c0ab426551ef62582a8b-19"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_15932-16309__3840_2160__qp23__vmaf92.00__psnr41.62__kbps65029.30__fps59.94.mp4",
+      "size": 51256380,
+      "etag": "ca0fff44c4c9c5993f5805f613626f20-7"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_15932-16309__3840_2160__qp31__vmaf88.30__psnr40.17__kbps11798.92__fps59.94.mp4",
+      "size": 9297530,
+      "etag": "97eda3f88670bb9c389af2e2a45debc6-2"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_15932-16309__3840_2160__qp39__vmaf85.08__psnr39.61__kbps2336.31__fps59.94.mp4",
+      "size": 1838627,
+      "etag": "8fcb80c9aa49ca482f1abd8dd609dba6"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_15932-16309__3840_2160__qp47__vmaf81.57__psnr39.18__kbps852.28__fps59.94.mp4",
+      "size": 668846,
+      "etag": "bcc8abcbfffe6a000e44a1459197896d"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_15932-16309__3840_2160__qp55__vmaf76.87__psnr38.66__kbps416.40__fps59.94.mp4",
+      "size": 325260,
+      "etag": "abad971e1b9934231c1d5f8a0b836794"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_15932-16309__3840_2160__qp63__vmaf69.01__psnr37.88__kbps193.71__fps59.94.mp4",
+      "size": 149723,
+      "etag": "23c53c59cd10a43ee2a27f116fdfb9d2"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_1782-2163__3840_2160__qp15__vmaf97.64__psnr42.42__kbps272952.91__fps59.94.mp4",
+      "size": 217438107,
+      "etag": "eb1ac7a8f0b5070232e9324c7626a894-26"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_1782-2163__3840_2160__qp23__vmaf96.26__psnr40.06__kbps74969.73__fps59.94.mp4",
+      "size": 59719753,
+      "etag": "284e94b9033b2a602efda985ce914bc7-8"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_1782-2163__3840_2160__qp31__vmaf94.28__psnr38.91__kbps10284.11__fps59.94.mp4",
+      "size": 8189570,
+      "etag": "e6725d3a206b86a5f0e9613d172fcbb8"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_1782-2163__3840_2160__qp39__vmaf92.06__psnr38.60__kbps3748.52__fps59.94.mp4",
+      "size": 2983156,
+      "etag": "93cc402b4f2c5e0c5a99230a3b18f424"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_1782-2163__3840_2160__qp47__vmaf89.02__psnr38.25__kbps1451.80__fps59.94.mp4",
+      "size": 1153536,
+      "etag": "7b2a0b4a5c6c84227d99a10d58d2042a"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_1782-2163__3840_2160__qp55__vmaf84.66__psnr37.76__kbps740.08__fps59.94.mp4",
+      "size": 586563,
+      "etag": "1b1fdb01bb73645964d85fc2e267012a"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_1782-2163__3840_2160__qp63__vmaf77.20__psnr36.90__kbps328.78__fps59.94.mp4",
+      "size": 258909,
+      "etag": "30b23cfdbc27b4ea3050091ac30966af"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_20988-21412__3840_2160__qp15__vmaf96.78__psnr43.47__kbps95597.52__fps59.94.mp4",
+      "size": 84719860,
+      "etag": "f70a9b4b7d356ee2f87543073266acb8-11"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_20988-21412__3840_2160__qp23__vmaf95.18__psnr41.91__kbps14969.83__fps59.94.mp4",
+      "size": 13263581,
+      "etag": "6125b6bacfdb802598eaeb6a70237a99-2"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_20988-21412__3840_2160__qp31__vmaf93.58__psnr41.24__kbps3284.97__fps59.94.mp4",
+      "size": 2907869,
+      "etag": "2075528bce2a8e8ccf7dfccde270c8f2"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_20988-21412__3840_2160__qp39__vmaf91.60__psnr40.67__kbps1336.70__fps59.94.mp4",
+      "size": 1181220,
+      "etag": "6e0a1c2993e40ef273e89b82ef87d7ea"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_20988-21412__3840_2160__qp47__vmaf88.78__psnr39.82__kbps598.42__fps59.94.mp4",
+      "size": 526916,
+      "etag": "f973c5c256e6ff5da094b633564569aa"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_20988-21412__3840_2160__qp55__vmaf83.23__psnr38.52__kbps313.44__fps59.94.mp4",
+      "size": 274353,
+      "etag": "4aa8b55ce42bc721aea3054a14e8b331"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_20988-21412__3840_2160__qp63__vmaf72.21__psnr36.90__kbps150.12__fps59.94.mp4",
+      "size": 129609,
+      "etag": "b2131de7e1e3aefdecf40eb5fac2ec74"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_22412-22738__3840_2160__qp15__vmaf98.65__psnr43.04__kbps311983.25__fps59.94.mp4",
+      "size": 212731126,
+      "etag": "e651b7273cea60cbd7e9bfc201697a20-26"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_22412-22738__3840_2160__qp23__vmaf96.96__psnr40.62__kbps134883.53__fps59.94.mp4",
+      "size": 91971243,
+      "etag": "a7ac677aa0f28735543ab4194f90a3b2-11"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_22412-22738__3840_2160__qp31__vmaf94.49__psnr38.84__kbps53104.94__fps59.94.mp4",
+      "size": 36208465,
+      "etag": "8e8ea39f8674d7efc8973d1134db0805-5"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_22412-22738__3840_2160__qp39__vmaf90.65__psnr37.47__kbps23785.85__fps59.94.mp4",
+      "size": 16216510,
+      "etag": "e9aea5ebe8e07351a4d891a47133723f-2"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_22412-22738__3840_2160__qp47__vmaf85.20__psnr36.09__kbps10974.99__fps59.94.mp4",
+      "size": 7481106,
+      "etag": "d418dec28ccf5a69f6cd7e106ec7513e"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_22412-22738__3840_2160__qp55__vmaf77.70__psnr34.62__kbps5073.58__fps59.94.mp4",
+      "size": 3457084,
+      "etag": "d1bd3785013f6d660714e3efde9d7033"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_22412-22738__3840_2160__qp63__vmaf64.70__psnr32.67__kbps1643.36__fps59.94.mp4",
+      "size": 1118103,
+      "etag": "a80c52c989433311d4de4c0bc852eac4"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_24058-24550__3840_2160__qp15__vmaf98.11__psnr43.14__kbps177909.36__fps59.94.mp4",
+      "size": 182886708,
+      "etag": "066e55ffab69b166de1dee3dd8634cc6-22"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_24058-24550__3840_2160__qp23__vmaf97.01__psnr41.15__kbps44453.89__fps59.94.mp4",
+      "size": 45694504,
+      "etag": "ad8ef5612a3d98bcf933938b75233192-6"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_24058-24550__3840_2160__qp31__vmaf95.61__psnr40.27__kbps6104.79__fps59.94.mp4",
+      "size": 6271622,
+      "etag": "bd027533a1c202120536c2da6d16e65a"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_24058-24550__3840_2160__qp39__vmaf93.73__psnr40.03__kbps2221.27__fps59.94.mp4",
+      "size": 2279363,
+      "etag": "a6b092271f54108da0eb0fa40987570c"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_24058-24550__3840_2160__qp47__vmaf90.82__psnr39.71__kbps820.77__fps59.94.mp4",
+      "size": 839652,
+      "etag": "2d103d7ff7d7312f323e89a58042aa8b"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_24058-24550__3840_2160__qp55__vmaf86.65__psnr39.22__kbps440.88__fps59.94.mp4",
+      "size": 449126,
+      "etag": "563174d27fa0d78a18ba56edd9f151b3"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "aom_test_materials/rd_curves/meridian/meridian_aom_sdr_24058-24550__3840_2160__qp63__vmaf79.58__psnr38.37__kbps215.87__fps59.94.mp4",
+      "size": 217817,
+      "etag": "7e6f28b59ac4e00c9936ded5b31d051b"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "av2ctc/ra/rd_plots/a2_2k/Meridian_talk_sdr_1080p_10bit__1920_1080__qp23__vmaf95.17__psnr42.75__kbps2075.74__fps59.94.mp4",
+      "size": 1653071,
+      "etag": "b4ead613fa81333c0f0e292acf23551d"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "av2ctc/ra/rd_plots/a2_2k/Meridian_talk_sdr_1080p_10bit__1920_1080__qp31__vmaf93.47__psnr42.14__kbps944.57__fps59.94.mp4",
+      "size": 751950,
+      "etag": "cbd52673388d2cbb65a60b38d4886610"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "av2ctc/ra/rd_plots/a2_2k/Meridian_talk_sdr_1080p_10bit__1920_1080__qp39__vmaf90.82__psnr41.42__kbps381.62__fps59.94.mp4",
+      "size": 303487,
+      "etag": "cb61e0924270901fc57521f37ead16fc"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "av2ctc/ra/rd_plots/a2_2k/Meridian_talk_sdr_1080p_10bit__1920_1080__qp47__vmaf86.54__psnr40.47__kbps196.01__fps59.94.mp4",
+      "size": 155624,
+      "etag": "1f856c07ddbd4e2e6f6c7847f19a53da"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "av2ctc/ra/rd_plots/a2_2k/Meridian_talk_sdr_1080p_10bit__1920_1080__qp55__vmaf79.78__psnr39.25__kbps105.84__fps59.94.mp4",
+      "size": 83789,
+      "etag": "23db96bd76bdde39aa9dfa6158b2a188"
+    },
+    {
+      "group": "video_masters",
+      "title": "meridian",
+      "key": "av2ctc/ra/rd_plots/a2_2k/Meridian_talk_sdr_1080p_10bit__1920_1080__qp63__vmaf68.68__psnr37.59__kbps53.73__fps59.94.mp4",
+      "size": 42276,
+      "etag": "97a5147f6aeb1446f20fac10ed77a5a5"
+    }
+  ]
+}

@@ -13,13 +13,13 @@ def _token_matches(provided: str | None, expected: str) -> bool:
 
 
 def require_admin_token(x_admin_token: str | None = Header(default=None)) -> None:
-    """Mutating routes require a configured ADMIN_API_KEY and matching header."""
+    """Privileged routes require a configured ADMIN_API_KEY and matching header."""
     expected = (settings.admin_api_key or "").strip()
     if not expected:
         raise HTTPException(
             status_code=503,
             detail=(
-                "ADMIN_API_KEY is required for mutating routes. "
+                "ADMIN_API_KEY is required for privileged routes. "
                 "Set it in the service environment and restart the API."
             ),
         )
@@ -27,25 +27,6 @@ def require_admin_token(x_admin_token: str | None = Header(default=None)) -> Non
         raise HTTPException(
             status_code=403,
             detail="Missing or invalid admin token.",
-        )
-
-
-def require_ingest_operator_token(x_ingest_token: str | None = Header(default=None)) -> None:
-    token = (settings.ingest_operator_token or "").strip()
-    if not token:
-        if (settings.ingest_s3_bucket or "").strip():
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "INGEST_OPERATOR_TOKEN is required when S3 ingest is enabled. "
-                    "Set it in the service environment and restart the API."
-                ),
-            )
-        return
-    if not _token_matches(x_ingest_token, token):
-        raise HTTPException(
-            status_code=403,
-            detail="Missing or invalid ingest operator token.",
         )
 
 

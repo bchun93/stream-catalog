@@ -26,7 +26,7 @@ def _hints(
     migration_error: str | None,
     tmdb: bool,
     ingest_bucket_configured: bool,
-    ingest_token_required: bool,
+    admin_configured: bool,
 ) -> list[str]:
     hints: list[str] = []
     if not db_ready:
@@ -44,10 +44,10 @@ def _hints(
         hints.append("TMDB_API_KEY is missing or still a placeholder on Render.")
     if not ingest_bucket_configured:
         hints.append("INGEST_S3_BUCKET is not set. Ingest jobs cannot read delivery files yet.")
-    if not ingest_token_required:
+    if ingest_bucket_configured and not admin_configured:
         hints.append(
-            "INGEST_OPERATOR_TOKEN is not set. S3 ingest endpoints remain unavailable "
-            "until it is configured."
+            "ADMIN_API_KEY is not set. S3 browse, upload, ingest, and other mutating "
+            "routes remain unavailable until it is configured."
         )
     hints.append(
         "Amplify VITE_API_URL is baked in at build time — changing it in Amplify requires a full redeploy."
@@ -93,9 +93,6 @@ def get_diagnostics(request: Request):
             "bucket": settings.ingest_s3_bucket,
             "s3_prefix": settings.ingest_s3_prefix,
             "aspera_drop_prefix": settings.aspera_drop_prefix,
-            "operator_token_required": bool(
-                (settings.ingest_operator_token or "").strip()
-            ),
             "manifest_count": ingest_manifest_count,
             "enabled_manifest_count": ingest_enabled_count,
         },
@@ -105,6 +102,6 @@ def get_diagnostics(request: Request):
             migration_error=migration_error,
             tmdb=settings.tmdb_configured,
             ingest_bucket_configured=bool((settings.ingest_s3_bucket or "").strip()),
-            ingest_token_required=bool((settings.ingest_operator_token or "").strip()),
+            admin_configured=bool((settings.admin_api_key or "").strip()),
         ),
     }

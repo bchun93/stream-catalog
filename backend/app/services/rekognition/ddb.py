@@ -49,6 +49,8 @@ class JobItem(TypedDict, total=False):
     error: str | None
     created_at: str
     updated_at: str
+    video_metadata: dict[str, Any]
+    audio_metadata: dict[str, Any]
 
 
 class DetectionItem(TypedDict, total=False):
@@ -61,7 +63,13 @@ class DetectionItem(TypedDict, total=False):
     timestamp_ms: int | None
     start_ms: int | None
     end_ms: int | None
+    start_timecode: str | None
+    end_timecode: str | None
     bounding_box: dict[str, Any] | None
+    message: str | None
+    severity: str | None
+    rule_id: str | None
+    evidence: dict[str, Any] | None
     job_id: str
     created_at: str
 
@@ -187,14 +195,23 @@ def update_job_status(
     feature: Feature,
     status: JobStatus,
     error: str | None = None,
+    video_metadata: dict[str, Any] | None = None,
+    audio_metadata: dict[str, Any] | None = None,
 ) -> None:
+    names = {"#st": "status", "#e": "error"}
+    values: dict[str, Any] = {":s": status.value, ":e": error, ":u": _now_iso()}
+    expr = "SET #st = :s, #e = :e, updated_at = :u"
+    if video_metadata is not None:
+        expr += ", video_metadata = :vm"
+        values[":vm"] = video_metadata
+    if audio_metadata is not None:
+        expr += ", audio_metadata = :am"
+        values[":am"] = audio_metadata
     jobs_table().update_item(
         Key={"asset_id": asset_id, "feature": feature.value},
-        UpdateExpression="SET #st = :s, #e = :e, updated_at = :u",
-        ExpressionAttributeNames={"#st": "status", "#e": "error"},
-        ExpressionAttributeValues=_to_ddb(
-            {":s": status.value, ":e": error, ":u": _now_iso()}
-        ),
+        UpdateExpression=expr,
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=_to_ddb(values),
     )
     logger.info(
         "rekognition job status updated",
@@ -294,3 +311,53 @@ def query_detections(
             break
 
     return [_from_ddb(i) for i in items[:cap]]  # type: ignore[return-value]
+
+
+def batch_delete_detections(items: Iterable[DetectionItem]) -> int:
+    """Delete detections by (asset_id, sk). Same 25-item / UnprocessedItems rules as put."""
+    table_name = settings.ddb_detections_table
+    ddb = dynamodb_resource()
+    materialized = [it for it in items if it.get("asset_id") and it.get("sk")]
+    deleted = 0
+
+    for chunk in _chunks(materialized, _MAX_BATCH):
+        request_items: dict[str, Any] = {
+            table_name: [
+                {
+                    "DeleteRequest": {
+                        "Key": {"asset_id": it["asset_id"], "sk": it["sk"]}
+                    }
+                }
+                for it in chunk
+            ]
+        }
+        backoff = 0.2
+        for attempt in range(_BATCH_RETRY_ATTEMPTS):
+            resp = ddb.batch_write_item(RequestItems=request_items)
+            unprocessed = resp.get("UnprocessedItems") or {}
+            if not unprocessed:
+                break
+            request_items = unprocessed
+            if attempt == _BATCH_RETRY_ATTEMPTS - 1:
+                remaining = sum(len(v) for v in unprocessed.values())
+                raise RuntimeError(
+                    f"DynamoDB batch delete left {remaining} unprocessed item(s) "
+                    f"after {_BATCH_RETRY_ATTEMPTS} attempts."
+                )
+            time.sleep(backoff)
+            backoff *= 2
+        deleted += len(chunk)
+    return deleted
+
+
+def replace_feature_detections(
+    *,
+    asset_id: str,
+    feature: Feature,
+    items: Iterable[DetectionItem],
+) -> int:
+    """Idempotently replace every row for ``feature`` on an asset."""
+    existing = query_detections(asset_id=asset_id, feature=feature)
+    if existing:
+        batch_delete_detections(existing)
+    return batch_put_detections(items)
