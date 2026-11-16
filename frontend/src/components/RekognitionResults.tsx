@@ -107,7 +107,7 @@ export function RekognitionResults({
     const fromMeta = metaNumber(report?.video_metadata, "DurationMillis");
     const durationMs = asset.duration_seconds
       ? asset.duration_seconds * 1000
-      : fromMeta ?? maxMs || 1;
+      : fromMeta ?? (maxMs || 1);
     return { techCues, shots, moderation, labels, texts: textRows, durationMs };
   }, [detections, asset.duration_seconds, report?.video_metadata]);
 

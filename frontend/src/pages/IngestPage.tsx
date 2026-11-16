@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ingestApi, titlesApi } from "../api/client";
+import { ADMIN_TOKEN_SAVED_EVENT, ingestApi, titlesApi } from "../api/client";
 import { Badge } from "../components/Badge";
-import { OperatorTokenPrompt } from "../components/OperatorTokenPrompt";
 import type {
   IngestJob,
   IngestManifest,
@@ -31,8 +30,6 @@ export function IngestPage() {
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit = Boolean(titleId && manifestId);
-  const needsOperatorToken =
-    error?.toLowerCase().includes("ingest operator token") ?? false;
 
   const load = useCallback(async () => {
     setError(null);
@@ -54,6 +51,12 @@ export function IngestPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const retry = () => void load();
+    window.addEventListener(ADMIN_TOKEN_SAVED_EVENT, retry);
+    return () => window.removeEventListener(ADMIN_TOKEN_SAVED_EVENT, retry);
   }, [load]);
 
   const titleMap = useMemo(
@@ -142,11 +145,7 @@ export function IngestPage() {
         </div>
       </header>
 
-      {needsOperatorToken ? (
-        <OperatorTokenPrompt onSaved={() => void load()} />
-      ) : (
-        error && <div className="error-banner">{error}</div>
-      )}
+      {error && <div className="error-banner">{error}</div>}
 
       <section className="card ingest-card">
         <h3>New ingest job</h3>

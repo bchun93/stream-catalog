@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { CheckCircle2, FileUp, Loader2, Upload, XCircle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { storageApi } from "../api/client";
-import { OperatorTokenPrompt } from "../components/OperatorTokenPrompt";
+import { ADMIN_TOKEN_SAVED_EVENT, storageApi } from "../api/client";
 import { PageHeader } from "../components/ui/PageHeader";
 import type { StorageConfig } from "../types";
 
@@ -64,6 +63,12 @@ export function UploadPage() {
 
   useEffect(() => loadConfig(), [loadConfig]);
 
+  useEffect(() => {
+    const retry = () => loadConfig();
+    window.addEventListener(ADMIN_TOKEN_SAVED_EVENT, retry);
+    return () => window.removeEventListener(ADMIN_TOKEN_SAVED_EVENT, retry);
+  }, [loadConfig]);
+
   const updateItem = useCallback((id: string, patch: Partial<UploadItem>) => {
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }, []);
@@ -107,9 +112,6 @@ export function UploadPage() {
             });
           } catch (e) {
             const message = e instanceof Error ? e.message : "Upload failed";
-            if (message.toLowerCase().includes("ingest operator token")) {
-              setConfigError(message);
-            }
             updateItem(item.id, {
               status: "error",
               error: message,
@@ -165,9 +167,6 @@ export function UploadPage() {
       ? `s3://${config.bucket}/${config.root_prefix}/`
       : `s3://${config.bucket}/`
     : null;
-  const needsOperatorToken =
-    configError?.toLowerCase().includes("ingest operator token") ?? false;
-
   return (
     <>
       <PageHeader
@@ -175,16 +174,7 @@ export function UploadPage() {
         description="Drop files into Amazon S3 (ingest bucket). They stay there until you process them later."
       />
 
-      {needsOperatorToken ? (
-        <OperatorTokenPrompt
-          onSaved={() => {
-            setConfigError(null);
-            loadConfig();
-          }}
-        />
-      ) : (
-        configError && <div className="error-banner">{configError}</div>
-      )}
+      {configError && <div className="error-banner">{configError}</div>}
 
       {bucketLabel && (
         <p className="upload-bucket-label mono">{bucketLabel}</p>

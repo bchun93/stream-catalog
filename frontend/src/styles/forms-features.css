@@ -153,58 +153,6 @@
   font-size: 0.9rem;
 }
 
-.operator-token-prompt {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.operator-token-prompt strong {
-  display: block;
-  margin-bottom: 0.25rem;
-}
-
-.operator-token-prompt p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.operator-token-controls {
-  display: flex;
-  flex: 1 1 360px;
-  max-width: 520px;
-  gap: 0.5rem;
-}
-
-.operator-token-controls input {
-  min-width: 0;
-  flex: 1;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-@media (max-width: 720px) {
-  .operator-token-prompt {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .operator-token-controls {
-    flex-basis: auto;
-    max-width: none;
-  }
-}
-
 .token-dialog-backdrop {
   position: fixed;
   z-index: 1000;

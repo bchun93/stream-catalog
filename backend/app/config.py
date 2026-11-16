@@ -59,9 +59,6 @@ class Settings(BaseSettings):
     ingest_s3_bucket: str | None = Field(default=None, validation_alias="INGEST_S3_BUCKET")
     ingest_s3_prefix: str = Field(default="", validation_alias="INGEST_S3_PREFIX")
     aspera_drop_prefix: str = Field(default="", validation_alias="ASPERA_DROP_PREFIX")
-    ingest_operator_token: str | None = Field(
-        default=None, validation_alias="INGEST_OPERATOR_TOKEN"
-    )
     admin_api_key: str | None = Field(default=None, validation_alias="ADMIN_API_KEY")
     ingest_max_keys: int = Field(default=1000, validation_alias="INGEST_MAX_KEYS")
     aws_profile: str | None = Field(default=None, validation_alias="AWS_PROFILE")

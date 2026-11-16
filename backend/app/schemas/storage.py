@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 class StorageConfigRead(BaseModel):
     bucket: str
     root_prefix: str
-    token_required: bool
 
 
 class StorageFolderRead(BaseModel):

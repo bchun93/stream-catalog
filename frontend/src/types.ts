@@ -433,7 +433,6 @@ export interface SeriesHierarchyApplyResult {
 export interface StorageConfig {
   bucket: string;
   root_prefix: string;
-  token_required: boolean;
 }
 
 export interface StorageFolder {

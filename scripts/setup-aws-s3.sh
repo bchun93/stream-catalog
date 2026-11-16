@@ -92,13 +92,8 @@ if [[ -n "$ASPERA_PREFIX" ]]; then
   printf '' | aws_cli s3 cp - "s3://${BUCKET}/${S3_PREFIX}/${ASPERA_PREFIX}/" 2>/dev/null || true
 fi
 
-TOKEN="$(openssl rand -hex 24)"
 BACKEND_ENV="$ROOT/backend/.env"
 FRONTEND_ENV="$ROOT/frontend/.env.local"
-
-if [[ -f "$BACKEND_ENV" ]] && grep -q '^INGEST_OPERATOR_TOKEN=' "$BACKEND_ENV"; then
-  TOKEN="$(grep '^INGEST_OPERATOR_TOKEN=' "$BACKEND_ENV" | cut -d= -f2-)"
-fi
 
 # Upsert a KEY=value line in an env file without wiping unrelated settings.
 upsert_env() {
@@ -134,6 +129,7 @@ if [[ -f "$BACKEND_ENV" ]]; then
     /^AWS_ENDPOINT_URL=/ { next }
     /^AWS_ACCESS_KEY_ID=streamcatalog$/ { next }
     /^AWS_SECRET_ACCESS_KEY=streamcatalog-dev-secret$/ { next }
+    /^INGEST_OPERATOR_TOKEN=/ { next }
     { print }
   ' "$BACKEND_ENV" >"$tmp"
   mv "$tmp" "$BACKEND_ENV"
@@ -144,10 +140,15 @@ upsert_env "$BACKEND_ENV" "AWS_REGION" "$REGION"
 upsert_env "$BACKEND_ENV" "INGEST_S3_BUCKET" "$BUCKET"
 upsert_env "$BACKEND_ENV" "INGEST_S3_PREFIX" "$S3_PREFIX"
 upsert_env "$BACKEND_ENV" "ASPERA_DROP_PREFIX" "$ASPERA_PREFIX"
-upsert_env "$BACKEND_ENV" "INGEST_OPERATOR_TOKEN" "$TOKEN"
 # Keep analysis bucket aligned with ingest for decision 1A unless already set.
 if ! grep -q '^S3_ANALYSIS_BUCKET=' "$BACKEND_ENV"; then
   upsert_env "$BACKEND_ENV" "S3_ANALYSIS_BUCKET" "$BUCKET"
+fi
+if grep -q '^ADMIN_API_KEY=.\+' "$BACKEND_ENV" 2>/dev/null; then
+  ADMIN_KEY="$(grep '^ADMIN_API_KEY=' "$BACKEND_ENV" | cut -d= -f2-)"
+else
+  ADMIN_KEY="$(openssl rand -hex 24)"
+  upsert_env "$BACKEND_ENV" "ADMIN_API_KEY" "$ADMIN_KEY"
 fi
 
 echo "==> Updating $FRONTEND_ENV"
@@ -157,7 +158,11 @@ if [[ ! -f "$FRONTEND_ENV" ]]; then
 # VITE_API_URL=
 EOF
 fi
-upsert_env "$FRONTEND_ENV" "VITE_INGEST_OPERATOR_TOKEN" "$TOKEN"
+if [[ -f "$FRONTEND_ENV" ]]; then
+  tmp="$(mktemp)"
+  grep -v -E '^VITE_INGEST_OPERATOR_TOKEN=' "$FRONTEND_ENV" >"$tmp" || true
+  mv "$tmp" "$FRONTEND_ENV"
+fi
 
 echo ""
 echo "Done. Upload/Storage now target Amazon S3 (not MinIO)."
@@ -169,3 +174,4 @@ echo ""
 echo "Restart the API so it picks up .env, then open:"
 echo "  Upload:  http://localhost:5173/upload"
 echo "  Storage: http://localhost:5173/storage"
+echo "  Auth:    enter ADMIN_API_KEY from backend/.env when Relay prompts (not a VITE_* value)."

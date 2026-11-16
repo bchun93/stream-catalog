@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, Pencil, Trash2 } from "lucide-react";
 
-import { storageApi } from "../api/client";
-import { OperatorTokenPrompt } from "../components/OperatorTokenPrompt";
+import { ADMIN_TOKEN_SAVED_EVENT, storageApi } from "../api/client";
 import type { StorageBrowse, StorageConfig, StorageObject } from "../types";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"]);
@@ -88,6 +87,12 @@ export function StoragePage() {
   useEffect(() => {
     void loadBrowse("");
   }, [loadBrowse]);
+
+  useEffect(() => {
+    const retry = () => void loadBrowse(prefix);
+    window.addEventListener(ADMIN_TOKEN_SAVED_EVENT, retry);
+    return () => window.removeEventListener(ADMIN_TOKEN_SAVED_EVENT, retry);
+  }, [loadBrowse, prefix]);
 
   const openFolder = (nextPrefix: string) => {
     if (mutating || loading) return;
@@ -288,8 +293,6 @@ export function StoragePage() {
       ? `s3://${config.bucket}/${config.root_prefix}/`
       : `s3://${config.bucket}/`
     : "S3 bucket";
-  const needsOperatorToken =
-    error?.toLowerCase().includes("ingest operator token") ?? false;
   const selectedPreviewKind = selected ? previewKind(selected.name) : "other";
   const visibleObjects = browse?.objects ?? [];
   const allVisibleChecked =
@@ -347,11 +350,7 @@ export function StoragePage() {
         </div>
       </header>
 
-      {needsOperatorToken ? (
-        <OperatorTokenPrompt onSaved={() => void loadBrowse(prefix)} />
-      ) : (
-        error && <div className="error-banner" role="alert">{error}</div>
-      )}
+      {error && <div className="error-banner" role="alert">{error}</div>}
       {uploadStatus && (
         <div className="storage-status-banner" role="status" aria-live="polite">
           {uploadStatus}

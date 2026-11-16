@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { File, Folder } from "lucide-react";
 
-import { storageApi } from "../api/client";
+import { ADMIN_TOKEN_SAVED_EVENT, storageApi } from "../api/client";
 import type { StorageBrowse, StorageObject } from "../types";
 import { formatBytes } from "../utils/format";
 import { Button } from "./ui/Button";
@@ -59,6 +59,12 @@ export function StorageObjectPicker({
   useEffect(() => {
     void load("");
   }, [load]);
+
+  useEffect(() => {
+    const retry = () => void load(prefix);
+    window.addEventListener(ADMIN_TOKEN_SAVED_EVENT, retry);
+    return () => window.removeEventListener(ADMIN_TOKEN_SAVED_EVENT, retry);
+  }, [load, prefix]);
 
   const breadcrumbs = useMemo(() => {
     const segments = prefix ? prefix.split("/").filter(Boolean) : [];

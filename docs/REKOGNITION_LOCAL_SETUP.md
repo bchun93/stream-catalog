@@ -126,13 +126,13 @@ AWS_REGION=us-east-1
 AWS_ENDPOINT_URL=http://127.0.0.1:9000
 INGEST_S3_BUCKET=stream-catalog-ingest
 INGEST_S3_PREFIX=deliveries
-INGEST_OPERATOR_TOKEN=<random-token>
+ADMIN_API_KEY=<same-as-VITE_ADMIN_API_KEY>
 ```
 
 And in `frontend/.env.local`:
 
 ```bash
-VITE_INGEST_OPERATOR_TOKEN=<same-token>
+VITE_ADMIN_API_KEY=<same-as-ADMIN_API_KEY>
 ```
 
 `./scripts/dev.sh` starts MinIO on port 9000 when `AWS_ENDPOINT_URL` is present.
@@ -327,9 +327,8 @@ Do **not** set `AWS_ENDPOINT_URL` in production.
 |----------|-------|
 | `VITE_API_URL` | Render API URL |
 
-Do not publish `ADMIN_API_KEY` or `INGEST_OPERATOR_TOKEN` as `VITE_*`
-variables. Relay requests the corresponding Render token at runtime and keeps
-it only in the current browser tab.
+Do not publish `ADMIN_API_KEY` as a `VITE_*` variable. Relay requests the
+Render admin key at runtime and keeps it only in the current browser tab.
 
 ### GitHub Actions — scheduled consumer
 
@@ -387,7 +386,7 @@ Tests unset `AWS_ENDPOINT_URL` internally so they do not hit MinIO.
 | Jobs SUCCEEDED but no results | Queue not drained | Click **Drain now** or run consume curl |
 | Drain → 0 processed | Empty queue or wrong queue URL | Confirm `REKOGNITION_SQS_QUEUE_URL`; check SNS subscription in AWS console |
 | AccessDenied on Start* | IAM / PassRole | Re-run IAM sections in `REKOGNITION_AWS_SETUP.md`; ensure app user has `iam:PassRole` on the service role |
-| S3 picker empty | MinIO not running or wrong bucket | Start `./scripts/dev.sh`; check `INGEST_S3_BUCKET` and operator token |
+| S3 picker empty | MinIO not running, wrong bucket, or missing admin key | Start `./scripts/dev.sh`; check `INGEST_S3_BUCKET` and enter `ADMIN_API_KEY` when prompted |
 | Admin actions fail | Missing or stale runtime token | Enter Render’s `ADMIN_API_KEY` when Relay prompts, then retry the action |
 
 ### Inspect the SQS queue

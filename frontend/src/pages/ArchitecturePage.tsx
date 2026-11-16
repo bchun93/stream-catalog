@@ -58,12 +58,12 @@ const FLOWS = [
   {
     name: "S3 ingest / upload",
     path: "UI → /api/v1/storage · /ingest → S3",
-    detail: "Browse, upload, and ingest jobs use the ingest operator token.",
+    detail: "Browse, upload, and ingest jobs use the admin token.",
   },
   {
     name: "MEC delivery",
     path: "UI → generate package → XML in S3",
-    detail: "Package records live in Postgres. Generated MEC XML is written to the ingest bucket.",
+    detail: "Package records live in Postgres. Generating MEC XML requires the admin token and writes to the ingest bucket.",
   },
   {
     name: "Rekognition QC",
@@ -81,12 +81,7 @@ const AUTH_TIERS = [
   {
     tier: "Admin",
     header: "X-Admin-Token",
-    protects: "Catalog mutations, artwork AI, Rekognition analyze / drain",
-  },
-  {
-    tier: "Ingest operator",
-    header: "X-Ingest-Token",
-    protects: "S3 browse, upload, object mutations, ingest jobs",
+    protects: "Catalog mutations, S3 browse/upload, ingest jobs, artwork AI, Rekognition analyze / drain",
   },
   {
     tier: "Rekognition consumer",

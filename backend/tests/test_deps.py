@@ -4,7 +4,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.config import settings
-from app.deps import require_admin_token, require_ingest_operator_token
+from app.deps import require_admin_token
+from app.routers import ingest, storage, titles
 
 
 def test_admin_token_fails_closed_when_not_configured():
@@ -22,27 +23,25 @@ def test_admin_token_requires_matching_header():
         require_admin_token("admin-secret")
 
 
-def test_ingest_token_fails_closed_when_s3_is_enabled():
-    with (
-        patch.object(settings, "ingest_operator_token", None),
-        patch.object(settings, "ingest_s3_bucket", "ingest-bucket"),
-    ):
-        with pytest.raises(HTTPException) as exc:
-            require_ingest_operator_token(None)
-    assert exc.value.status_code == 503
+def _requires_admin(route) -> bool:
+    return any(
+        getattr(dep, "call", None) is require_admin_token
+        for dep in route.dependant.dependencies
+    )
 
 
-def test_ingest_token_may_be_unset_when_s3_is_disabled():
-    with (
-        patch.object(settings, "ingest_operator_token", None),
-        patch.object(settings, "ingest_s3_bucket", None),
-    ):
-        require_ingest_operator_token(None)
+def test_storage_routes_require_admin_token():
+    assert storage.router.routes
+    for route in storage.router.routes:
+        assert _requires_admin(route), route.path
 
 
-def test_ingest_token_requires_matching_header():
-    with patch.object(settings, "ingest_operator_token", "ingest-secret"):
-        with pytest.raises(HTTPException) as exc:
-            require_ingest_operator_token("wrong")
-        assert exc.value.status_code == 403
-        require_ingest_operator_token("ingest-secret")
+def test_ingest_routes_require_admin_token():
+    assert ingest.router.routes
+    for route in ingest.router.routes:
+        assert _requires_admin(route), route.path
+
+
+def test_mec_generate_requires_admin_token():
+    route = next(r for r in titles.router.routes if r.path.endswith("/mec/generate"))
+    assert _requires_admin(route)

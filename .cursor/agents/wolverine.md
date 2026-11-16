@@ -25,7 +25,7 @@ Treat “portfolio” and “anyone can visit” as **reasons to be stricter**, 
 Assume the reviewer will, in this order:
 
 1. **Sources / JS bundle** — search deployed JS for `KEY`, `TOKEN`, `SECRET`, `AWS`, `TMDB`, `postgres`, `sk-`, `AKIA`, `VITE_`.
-2. **Network tab** — copy as cURL; inspect query strings, headers (`X-Ingest-Token`, `X-Admin-Key`, `Authorization`), request/response bodies.
+2. **Network tab** — copy as cURL; inspect query strings, headers (`X-Admin-Token`, `Authorization`), request/response bodies.
 3. **Application tab** — `localStorage`, `sessionStorage`, cookies, IndexedDB.
 4. **View source / HTML** — comments, inline config, leaked env.
 5. **Source maps** — production `.js.map` revealing server paths, comments, or secrets.
@@ -37,7 +37,7 @@ If any of those yields a secret, an internal URL, a credential, or an unauthenti
 ## Threat model
 
 - Public Amplify UI + public Render API. No security through obscurity.
-- Optional **ingest operator token** (`INGEST_OPERATOR_TOKEN` / `X-Ingest-Token`) and optional **admin API key** (`ADMIN_API_KEY`) — server-side only in production.
+- **Admin API key** (`ADMIN_API_KEY` / `X-Admin-Token`) — server-side only in production; required for catalog mutations, S3 browse/upload/ingest, and Rekognition analyze/drain.
 - **TMDB API key**, **DATABASE_URL**, **AWS credentials** are server secrets. The browser must never see them.
 - CORS currently allows Amplify/Render/localhost patterns and may echo Origin — audit as a real browser attacker would.
 - Frontend `VITE_*` values are **public by definition** (baked into the bundle). Only non-secret config (e.g. public API URL) may live there.
@@ -58,8 +58,7 @@ If asked for a **full audit**, review the whole repo security surface (backend, 
 Public **read/explore** may be unauthenticated. **Mutating, privileged, or data-exfiltrating** operations must not be.
 
 - Flag prod-facing POST/PATCH/PUT/DELETE, ingest, presign, S3 mutations, diagnostics that leak config, and admin-only reads with **no server-side auth**.
-- Ingest token: required in prod when ingest is enabled; constant-time compare; never logged; never in query strings.
-- Admin key: same rules. Missing server enforcement with a UI prompt is Critical.
+- Admin key: required for mutating and S3 ingest/storage routes; constant-time compare; never logged; never in query strings. Missing server enforcement with a UI prompt is Critical.
 - Flag auth that exists only as hidden buttons, client `if` checks, or “they won’t find the route.”
 - Tokens in `sessionStorage`/`localStorage` are visible in Application tab — acceptable only as a **user-typed session** after a prompt, never as a build-time `VITE_*` secret. Prefer not persisting production operator/admin secrets in web storage if a prompt-per-tab is viable.
 - If auth is added: validate on **every** mutating route; no trust in client-supplied user IDs or roles.
@@ -67,8 +66,8 @@ Public **read/explore** may be unauthenticated. **Mutating, privileged, or data-
 ### Secrets & configuration (bundle is public)
 
 - No hardcoded keys (TMDB, DB, AWS, ingest, admin) in source, tests fixtures that look real, or tracked files.
-- `TMDB_API_KEY`, `DATABASE_URL`, `AWS_*`, `INGEST_OPERATOR_TOKEN`, `ADMIN_API_KEY` — env-only on the **backend**.
-- **`VITE_INGEST_OPERATOR_TOKEN` or `VITE_ADMIN_API_KEY` in a production/Amplify build is Critical** (trivial DevTools extract). Local-dev-only `import.meta.env.DEV` gating is the maximum exception; still flag if the gate can ship to prod.
+- `TMDB_API_KEY`, `DATABASE_URL`, `AWS_*`, `ADMIN_API_KEY` — env-only on the **backend**.
+- **`VITE_ADMIN_API_KEY` in a production/Amplify build is Critical** (trivial DevTools extract). Local-dev-only `import.meta.env.DEV` gating is the maximum exception; still flag if the gate can ship to prod.
 - `VITE_*` may contain only public URLs and non-secret feature flags.
 - `.env` / credentials gitignored; flag accidental commits, example files with real-looking secrets, and docs that paste live tokens.
 - Diagnostics or health endpoints must not echo env values, token presence in a way that helps attackers, bucket names beyond what is needed, or stack internals.
@@ -111,7 +110,7 @@ Public **read/explore** may be unauthenticated. **Mutating, privileged, or data-
 
 - Prefix validation; no arbitrary bucket/key from the client.
 - Presigned URL scope, method, content-type, and expiry.
-- Operator token on **all** ingest mutations, including “just listing” if listing reveals keys/prefixes an outsider should not see.
+- Admin token on **all** ingest/storage routes, including listing, if listing reveals keys/prefixes an outsider should not see.
 
 ### Dependency & deployment
 

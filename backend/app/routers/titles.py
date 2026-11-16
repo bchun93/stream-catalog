@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db_repair import retry_after_enum_repair
 from app.database import get_db
-from app.deps import require_admin_token, require_db, require_ingest_operator_token
+from app.deps import require_admin_token, require_db
 from app.services.artwork_fetch import fetch_tmdb_artwork
 from app.models.media_asset import MediaAsset
 from app.models.title import Title, TitleType
@@ -226,7 +226,7 @@ def generate_mec(
     title_id: int,
     db: Session = Depends(get_db),
     _: None = Depends(require_db),
-    __: None = Depends(require_ingest_operator_token),
+    __: None = Depends(require_admin_token),
 ):
     """Build MovieLabs MEC XML for a movie, store it in the ingest bucket, return XML for download."""
     title = title_service.get_title(db, title_id)
